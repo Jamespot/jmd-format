@@ -77,10 +77,10 @@ try {
   ok((await p.eval('document.getElementById("hud").textContent')).includes('info') && !(await p.eval('document.getElementById("hud").textContent')).includes('linter'), 'the HUD offers I info, not L linter');
   await p.key('I');
   const card = await p.eval('document.getElementById("info").textContent');
-  ok(await p.eval('document.getElementById("info").classList.contains("is-open")') && card.includes('four-blocks') && card.includes('slides4') && card.includes('jamespot') && card.includes('jmd/1'), 'I opens the file card: name, slides, brand, format');
+  ok(await p.eval('document.getElementById("info").classList.contains("is-open")') && card.includes('four-blocks') && card.includes('slides4') && card.includes(ANY_BRAND) && card.includes('jmd/1'), 'I opens the file card: name, slides, brand, format');
   ok(card.includes('1 error') && await p.eval('document.getElementById("info-lint").classList.contains("is-err")'), 'the card ends with the linter line: a red light, "1 error"');
   await p.eval('document.getElementById("info-lint").click(); true');
-  ok(await p.eval('document.getElementById("info").classList.contains("is-report")') && (await p.eval('document.getElementById("info-report").textContent')).includes('content reaches') && (await p.eval('document.getElementById("info").textContent')).includes('jamespot'), 'clicking the light unfolds the readable report under the card — the card stays');
+  ok(await p.eval('document.getElementById("info").classList.contains("is-report")') && (await p.eval('document.getElementById("info-report").textContent')).includes('content reaches') && (await p.eval('document.getElementById("info").textContent')).includes(ANY_BRAND), 'clicking the light unfolds the readable report under the card — the card stays');
   await p.eval('document.getElementById("info-lint").click(); true');
   ok(!(await p.eval('document.getElementById("info").classList.contains("is-report")')), 'clicking it again folds the report');
   ok(/size\d+ KB · source \d+ KB/.test(await p.eval('document.getElementById("info").textContent')), 'the card gives the file size and the source size');
@@ -558,7 +558,7 @@ try {
   const acme = loadBrand(join(root, 'build/acme.yaml'));
   ok(acme.id === 'acme' && acme.accent === '#123456' && acme.logo === 'tri' && acme['card-marker'] === 'glyphs' && acme.fonts === 'fonts/system.css', 'a .yaml path is a brand; blanks take the neutral defaults');
   const { deckBrand } = await import('../tools/build.mjs');
-  ok(deckBrand('---\ntheme: ocean\n---\n') === 'ocean' && deckBrand('---\ntheme: jamespot\ntemplate: plum\n---\n') === 'plum' && deckBrand('---\ntheme: jamespot\n---\n') === null, 'frontmatter: template: is brand:, and theme: too unless it names an engine');
+  ok(deckBrand('---\ntheme: ocean\n---\n') === 'ocean' && deckBrand('---\ntheme: jamespot\ntemplate: plum\n---\n') === 'plum' && deckBrand('---\ntheme: mono\n---\n') === 'mono', 'frontmatter: brand:, template: and theme: are one key, and brand: wins');
   const inline = loadBrand('primary: "#0B2545"\naccent: "#F18F01"');
   ok(inline.id === 'custom' && inline.accent === '#F18F01' && inline.name === '', 'YAML text is a brand too (custom)');
   let err = ''; try { loadBrand('primary: blue'); } catch (e) { err = e.message; } ok(err.includes('#rrggbb'), 'a brand without a #hex primary is refused');

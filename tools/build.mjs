@@ -102,17 +102,16 @@ export function coreVersion() {
 
 /** Assemble the self-contained page. `jmd` empty → the bare runtime with the Open screen. */
 /** The brand a deck asks for in its frontmatter (`brand: name`), if any. */
-/** `brand:`, or its synonyms `template:` and — when it does not name a layout engine — `theme:` (users say all three). */
-export const ENGINES = ['jamespot', 'keynote', 'document'];
+/** `brand:`, or its synonyms `template:` and `theme:` — users say all three, and all three mean the look. */
 export function deckBrand(jmd) {
   const m = /^---\n([\s\S]*?)\n---/.exec(jmd || '');
   if (!m) return null;
   const val = key => { const l = m[1].split('\n').find(l => new RegExp('^' + key + ':\\s*\\S', 'i').test(l)); return l ? l.replace(/^[a-z]+:\s*/i, '').replace(/\s+#.*$/, '').trim() : null; }; // `Brand:` reads as `brand:`
-  const theme = val('theme'), v = val('brand') || val('template') || (theme && !ENGINES.includes(theme) ? theme : null);
+  const v = val('brand') || val('template') || val('theme');
   return v && /^[\w-]+$/.test(v) ? v.toLowerCase() : v; // an id is case-insensitive; a URL is left as written
 }
 
-/** `brand`: explicit name or object; omitted/null → the deck's frontmatter brand, else jamespot.
+/** `brand`: explicit name or object; omitted/null → the deck's frontmatter brand, else DEFAULT_BRAND (`mono`, or what JMD_DEFAULT_BRAND says).
     `edit`: the shared edit page (spec/espace.md §3) — the same runtime plus the room layer (runtime/vendor/collab.js: Yjs and the
     Hocuspocus provider, runtime/collab.js: the bridge), still one script, its own hash in the CSP; never in a delivered deck. */
 export function buildHtml({ jmd = '', name = '', brand = null, dir = null, assets = null, edit = false } = {}) {
