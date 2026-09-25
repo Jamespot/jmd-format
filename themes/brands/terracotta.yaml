@@ -1,0 +1,19 @@
+# Terracotta — neutral, warm editorial: dark brown, terracotta and a serif display face — culture, food, craft
+name: ""   # neutral: the lockup shows the mark alone
+logo: bar
+primary: "#3B2F2F"
+accent: "#C8553D"
+highlight: "#F2D492"
+ink: "#2B2222"
+secondary: "#8C6F5E"
+font-display: Georgia
+font-body: Helvetica Neue
+font-fallback: "Times New Roman", "Segoe UI", system-ui, serif
+type-scale: 0.94         # system faces run wider than the embedded ones
+fonts: fonts/system.css   # system fonts only — nothing embedded
+glyphs: 4
+watermark: mark
+card-marker: letter
+card-fill: plain
+card-shadow: none
+motion: soft

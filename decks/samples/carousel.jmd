@@ -1,0 +1,77 @@
+---
+format: jmd/1
+layout: story
+title: Five things we learned running on-call
+lang: en
+date: 2026-09-19
+---
+
+---
+intent: hook
+notes: The cover of the carousel: one line, the promise.
+---
+## Five things we learned running on-call for a year.
+Swipe →
+
+---
+intent: problem
+eyebrow: 01
+notes: The starting point: nobody knew who was on call.
+---
+## Nobody knew who was on call.
+
+::: metrics
+- 40 min | to find the right person | Measured on the twelve incidents of the first quarter. {.hero}
+:::
+
+---
+intent: explain
+eyebrow: 02
+notes: What changed, in three steps.
+---
+## We put the rota next to the runbooks.
+
+::: timeline
+- Week 1 | The rota moved out of the spreadsheet.
+- Week 2 | Every runbook got an owner and a last-reviewed date.
+- Week 3 | Handover notes at every shift change.
+:::
+
+---
+intent: reveal
+eyebrow: 03
+notes: The one number.
+---
+## Time to the right person, a year later.
+
+::: metrics
+- 40 min | before
+- 4 min | after {.hero}
+:::
+
+---
+intent: decide
+eyebrow: 04
+notes: The trade-off we made.
+---
+## A rota you edit, or a rota that edits you?
+
+::: compare
+### The spreadsheet
+- Free and familiar.
+- Out of date the day after.
+
+### The tool {.hero}
+- The rota, the runbooks and the requests are one thing.
+- The manager reads the week instead of asking about it.
+:::
+
+---
+intent: act
+eyebrow: 05
+notes: The call to action, one button.
+---
+## Run yours the same way.
+The full write-up, with the three runbooks we rewrote first.
+
+[Read the write-up →](https://example.com/on-call){.cta}

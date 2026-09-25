@@ -1,0 +1,66 @@
+---
+format: jmd/1
+layout: slide
+title: Northwind × Contoso — four blocks
+theme: jamespot
+lang: en
+date: 2026-09-12
+---
+
+---
+bg: white
+section: Who Northwind is
+eyebrow: Thirty years, in five steps
+notes: Stress the pivot: *a hard blow that forced us to reinvent ourselves, and made the company we are.*
+---
+## Product, bootstrap, and eight successful acquisitions.
+
+::: timeline
+- 1995 — Origins | Founded by two engineers, sold to a large group in 2003. Where the future partners met.
+- 2005 — The company | The hard early years. It takes time to find a market.
+- The search pivot | Delisted overnight. A blow that forces a reinvention, and makes the company we are.
+- The network, then bootstrap | The enterprise social network, first product. Then profitable growth, funded by the product.
+- Eight acquisitions, and Contoso | Eight companies joined, and every time the customers stayed. {.now}
+:::
+
+---
+bg: white
+eyebrow: Where we stand today
+notes: The middle number is the message: *250,000 people use the product every day*.
+---
+## Northwind in three numbers.
+
+::: metrics
+- 200+ | customers | Sixty percent private sector, forty percent public.
+- 250,000 | users | The installed base, all customers combined. The one asset nobody can copy. {.hero}
+- €4.8M | ARR, growing 12% | Profitable, continuous growth, funded by the product.
+:::
+
+---
+bg: lavender
+notes: The landing point of part one. Mark a pause after it.
+---
+::: statement
+We are a product company that took twenty years to build, and we recognize the same thing in you.
+:::
+
+---
+bg: white
+section: What changes for you
+notes: On the right column, own the discomfort: *I don't promise every day will be smooth. I promise we'll do it with respect, on both sides.*
+---
+## What I know, what I don't know yet.
+
+::: compare
+### What I know
+- We acquire to build. The value of Contoso is the craft and the people.
+- Team retention equals customer trust. Customers trust your teams; keeping them is serving them.
+- With customers, we move at everyone's pace and honor every contract. A progressive integration.
+- We become a platform organized by domains: Mail and Security, Collaboration, AI. It clarifies who does what.
+- The executive committee is set. You know today who decides, and on what.
+
+### What I don't know yet
+- The fine detail of roles. It will settle over the coming weeks, by talking to people.
+- There will be uneasy integration moments. Two cultures, a mail infrastructure and a SaaS.
+- I don't promise every day will be smooth. I promise we'll do it with respect, on both sides.
+:::

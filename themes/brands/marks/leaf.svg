@@ -1,0 +1,6 @@
+  <!-- neutral mark "leaf": one geometric family — the lockup shape and four glyphs for card markers and the watermark (glyphs: 4) -->
+  <symbol id="brand-mark" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50 6C78 20 94 46 50 94C6 46 22 20 50 6Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-1" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50 6C78 20 94 46 50 94C6 46 22 20 50 6Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-2" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50 50C50 22 72 6 94 6C94 34 72 50 50 50ZM50 50C50 22 28 6 6 6C6 34 28 50 50 50Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-3" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50 50C50 22 72 6 94 6C94 34 72 50 50 50ZM50 50C50 22 28 6 6 6C6 34 28 50 50 50ZM50 50C22 50 6 72 6 94C34 94 50 72 50 50Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-4" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50 50C50 22 72 6 94 6C94 34 72 50 50 50ZM50 50C50 22 28 6 6 6C6 34 28 50 50 50ZM50 50C22 50 6 72 6 94C34 94 50 72 50 50ZM50 50C78 50 94 72 94 94C66 94 50 72 50 50Z" fill="currentColor"/></symbol>

@@ -1,0 +1,74 @@
+---
+format: jmd/1
+layout: webpage
+title: Northwind Ops
+lang: en
+date: 2026-09-19
+---
+
+---
+intent: hook
+notes: The header band: what the product is, one line, the button.
+---
+# One place for the work that keeps a company running.
+Northwind Ops gathers the requests, the runbooks and the on-call rota of an operations team in a single, sovereign workspace.
+
+[Book a walkthrough →](https://example.com/walkthrough){.cta}
+
+---
+section: What it does
+notes: The four pillars, as cards.
+---
+## Requests, runbooks, on-call and reporting — in one flow.
+Every request lands in a queue, follows a runbook, reaches the person on call and leaves a trace the manager can read on Monday.
+
+::: cards
+- Requests | One queue per team, one form per request type. SLAs measured from the first message.
+- Runbooks | Step by step, with the checks that must not be skipped. Versioned and reviewed.
+- On-call | The rota lives with the runbooks, not in a spreadsheet. Handover notes at every shift.
+- Reporting | What came in, what was closed, what waited. A weekly digest read in five minutes.
+:::
+
+---
+intent: prove
+notes: The numbers band.
+---
+## Trusted by operations teams since 1995.
+
+::: metrics
+- 200+ | customers | Sixty percent private sector, forty percent public.
+- 250,000 | users | The installed base, all customers combined. {.hero}
+- 12% | yearly growth | Profitable, funded by the product.
+- 99.95% | availability | Measured over the last twelve months.
+:::
+
+---
+bg: lavender
+notes: A quote band.
+---
+::: statement
+The rota, the runbooks and the requests are finally one thing.
+— Head of Operations, a public-sector customer
+:::
+
+---
+section: How it starts
+notes: The rollout, four weeks.
+---
+## Four weeks, the team keeps working throughout.
+
+::: timeline {.chevrons}
+- Week 1 | Import the queues and the rota.
+- Week 2 | Rewrite the three runbooks that matter most.
+- Week 3 | First shifts on the tool, with the old one open beside it.
+- Week 4 | The old tool goes read-only. {.next}
+:::
+
+---
+intent: act
+notes: The footer band: the same button.
+---
+## See it on your own queues.
+Thirty minutes, your data, no slides.
+
+[Book a walkthrough →](https://example.com/walkthrough){.cta}

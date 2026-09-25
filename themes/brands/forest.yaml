@@ -1,0 +1,19 @@
+# Forest — neutral, deep green with a warm yellow: sustainability, health, public sector
+name: ""   # neutral: the lockup shows the mark alone
+logo: leaf
+primary: "#1E3F2B"
+accent: "#3E8E41"
+highlight: "#F2C14E"
+ink: "#1B2E22"
+secondary: "#A3B18A"
+font-display: Helvetica Neue
+font-body: Helvetica Neue
+font-fallback: "Segoe UI", system-ui, sans-serif
+type-scale: 0.94         # system faces run wider than the embedded ones
+fonts: fonts/system.css   # system fonts only — nothing embedded
+glyphs: 4
+watermark: mark
+card-marker: glyphs
+card-fill: plain
+card-shadow: offset
+motion: soft

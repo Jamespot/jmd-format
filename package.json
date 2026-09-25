@@ -1,0 +1,15 @@
+{
+  "name": "jmd-format",
+  "version": "1.5.0",
+  "description": ".jmd — a Markdown profile for presentations, and james-jmd.html — the self-contained runtime that renders it, prints it and rewrites it.",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/Jamespot/jmd-format.git" },
+  "type": "module",
+  "bin": { "jmd": "bin/jmd.mjs" },
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "test": "node tools/test.mjs",
+    "lint": "node bin/jmd.mjs lint"
+  },
+  "engines": { "node": ">=20" }
+}

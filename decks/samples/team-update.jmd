@@ -1,0 +1,125 @@
+---
+format: jmd/1
+layout: slide
+title: Ops team — Q3 update
+theme: jamespot
+lang: en
+date: 2026-09-15
+author: The Ops lead
+---
+
+---
+intent: hook
+notes: Set the tone in one sentence — this quarter we stopped firefighting.
+---
+## We stopped firefighting this quarter
+
+Three months ago every incident was a surprise. Today most of them are a procedure.
+
+---
+intent: problem
+section: Where we were
+notes: Do not soften it — June was bad, and everyone in the room remembers it.
+---
+## June was the worst month in two years
+
+::: metrics
+- 14 | incidents | Seven of them at night or on a weekend. {.hero}
+- 41 min | average time to the first response
+- 3 | customers who called the CEO
+:::
+
+---
+intent: reveal
+notes: The one number to take home. Pause on it.
+---
+## What changed
+
+::: metrics
+- 9 min | to the first response in September | From 41 in June, same team. {.hero}
+- 5 | incidents | in September
+- 0 | escalations to the CEO
+:::
+
+---
+intent: prove
+section: What we did
+notes: The evidence, plain. Every number comes from the incident log.
+---
+## The playbooks are used, and they work
+
+::: metrics
+- 12 | playbooks written | One per recurring incident type.
+- 87 % | of incidents matched a playbook | The other 13 % are now written up.
+- 2 | drills run | July and September, whole team.
+- 1 | tool | The crisis channel opens in one click.
+:::
+
+---
+intent: explain
+notes: Walk the steps — this is how an incident runs now, whoever is on call.
+---
+## How an incident runs today
+
+::: cards
+- Detect | The alert opens the crisis channel and pages the on-call.
+- Qualify | The on-call picks the playbook in the first three minutes.
+- Run | The playbook says who does what; the channel keeps the timeline.
+- Close | A one-page review the next morning, and the playbook is updated.
+:::
+
+---
+intent: decide
+section: What is next
+notes: Two ways to cover nights. I recommend the rotation, and here is why.
+---
+## Nights: two options
+
+::: compare
+### Outsource the night shift
+- Coverage from day one.
+- No context on our systems: every night call escalates to us anyway.
+- 18 k€ a year.
+### A paid on-call rotation {.hero}
+- Six volunteers, one week in six.
+- The people who wrote the playbooks answer the phone.
+- 11 k€ a year, and the knowledge stays in the team.
+:::
+
+---
+intent: celebrate
+notes: Names, out loud. Then applause.
+---
+## Thank you, night owls
+
+Malik, Sarah, Jonas, Priya, Tom and Léa took every night call in September — and wrote the playbooks that mean fewer calls next month.
+
+---
+intent: fun
+notes: The one slide that is allowed to be silly. Move on quickly.
+---
+## The most-read document in the company
+
+::: statement
+"Turn it off and on again" — playbook #7, opened 212 times.
+:::
+
+---
+intent: recap
+notes: Three things. If they remember one, make it the middle one.
+---
+## Three things to remember
+
+- **Incidents are procedures now** — 87 % match a playbook.
+- **Nine minutes to respond**, from forty-one.
+- **Nights need a decision** — the rotation, by the end of the month.
+
+---
+intent: act
+notes: One ask. Volunteers sign up on the channel today.
+---
+## Sign up for the rotation
+
+Six names by Friday. One week in six, paid, and the playbooks on your side.
+
+[Join the on-call rotation](https://example.com/on-call){.cta}

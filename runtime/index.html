@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="james-jmd @@RUNTIME_VERSION@@ · format jmd/1 · frozen @@BUILD_DATE@@">
+<meta http-equiv="Content-Security-Policy" content="@@CSP@@">
+<title>james-jmd</title>
+<style>
+@@FONTS@@
+</style>
+<style>
+/* brand : @@BRAND_NAME@@ */
+@@BRAND_CSS@@
+</style>
+<style>
+@@ENGINE@@
+</style>
+</head>
+<body>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+@@BRAND_MARK@@
+</svg>
+
+<div id="stage"><div id="track"></div></div>
+
+<div id="hud">
+  <span><kbd>←</kbd> <kbd>→</kbd> navigate</span>
+  <span><kbd>F</kbd> fullscreen</span>
+  <span><kbd>N</kbd> notes</span>
+  <span><kbd>I</kbd> info</span>
+  <span><kbd>M</kbd> motion</span>
+  <span><kbd>?</kbd> help</span>
+  <span><kbd>E</kbd> edit slide</span>
+  <span><kbd>P</kbd> print PDF</span>
+  <span><kbd>S</kbd> save .james-jmd.html</span>
+  <span><kbd>O</kbd> open</span>
+</div>
+<div id="counter"></div>
+<div id="notes"><div class="lbl">Speaker notes</div><div class="txt" id="notes-txt"></div></div>
+<div id="info"></div>
+<div id="help"><div class="box">
+  <div class="lbl">james-jmd — keys</div>
+  <dl>
+    <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Space</kbd></dt><dd>previous / next slide · in <em>step</em> motion, the next item first</dd>
+    <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>first / last slide</dd>
+    <dt><kbd>F</kbd></dt><dd>fullscreen</dd>
+    <dt><kbd>N</kbd></dt><dd>speaker notes</dd>
+    <dt><kbd>M</kbd></dt><dd>motion: <em>none · soft · slide · zoom · step</em> — one mode for the whole deck, remembered here</dd>
+    <dt><kbd>I</kbd></dt><dd>info: the file, its brand, its author, its size — and how the linter sees it</dd>
+    <dt><kbd>E</kbd></dt><dd>edit: the slide's source on the right; click a text in the slide to edit it in place · <em>document</em> opens the header (layout, title, brand…)</dd>
+    <dt><kbd>⌘S</kbd> / <kbd>S</kbd></dt><dd>save the <code>.jmd</code> (in edit mode) / save this deck as a self-contained <code>.james-jmd.html</code></dd>
+    <dt><kbd>P</kbd></dt><dd>print to PDF (waits for the linter's errors)</dd>
+    <dt><kbd>O</kbd></dt><dd>open another <code>.jmd</code> — or drop one on the window</dd>
+    <dt><kbd>?</kbd> <kbd>Esc</kbd></dt><dd>this help / close</dd>
+  </dl>
+  <p class="foot">A <code>.jmd</code> is Markdown with blocks. The theme decides the look, the brand its colors and shapes, the linter what fits. Format, contract and samples: <code>jmd spec</code>, or the <code>jmd_spec</code> tool of the connector.</p>
+</div></div>
+<div id="edit">
+  <div class="lbl"><span id="edit-title">Slide</span><button id="edit-target" type="button" title="edit the document header: layout, title, brand, language, date, author">document</button><button id="edit-status" type="button" title="show the details"></button><span class="hint">click a text to edit it · Esc close · ⌘S save</span></div>
+  <textarea id="edit-src" spellcheck="false" wrap="off"></textarea>
+  <div id="edit-help"><div id="edit-ctx"></div><div id="edit-chips"></div></div>
+  <div id="edit-lint"></div>
+</div>
+<div id="open"><div class="box">
+  <h1>james-jmd</h1>
+  <p>Drop a <code>.jmd</code> file here, or open one. It renders on-brand, prints to PDF, and leaves as a self-contained <code>.james-jmd.html</code>.</p>
+  <label for="open-file">Open a .jmd</label><input type="file" id="open-file" accept=".jmd,.md,text/markdown,text/plain">
+</div></div>
+
+<script type="application/json" id="brand">@@BRAND_JSON@@</script>
+<script type="application/json" id="assets">@@ASSETS_JSON@@</script>
+<script type="text/jmd" id="jmd" data-name="@@JMD_NAME@@">
+@@JMD@@
+</script>
+<script>
+@@RUNTIME@@
+</script>
+</body>
+</html>

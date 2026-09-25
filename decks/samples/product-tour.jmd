@@ -1,0 +1,187 @@
+---
+format: jmd/1
+layout: slide
+title: Northwind Ops — product tour
+theme: jamespot
+lang: en
+date: 2026-09-13
+---
+
+---
+intent: hook
+notes: Cover. One line, then the product.
+---
+# Northwind Ops
+One workspace for the team that keeps the lights on.
+
+![](assets/cover.svg){.cover}
+
+---
+bg: accent
+notes: Divider. A question, a pause.
+---
+::: section
+Why Northwind Ops?
+:::
+
+---
+intent: problem
+section: Context
+eyebrow: Context
+notes: Set the scene with the numbers, then move on.
+---
+## Incidents don't wait for office hours
+Outages, security events, supplier failures: every team has a plan on paper. Few can run it at 3 am with the people they actually have.
+
+::: cards {.right}
+### Every year
+**6 organizations out of 10** face a major incident. In those hours, **every minute counts**. {.wide}
+
+### Security
+- Ransomware attacks up 12× since 2020.
+- One attack every 10 seconds.
+
+### Regulation
+- GDPR
+- NIS2
+- DORA
+:::
+
+---
+bg: butter
+eyebrow: The three pillars
+notes: Three words to remember: prepare, react, continue.
+---
+## Prepare, react, continue
+**Prepare** to anticipate and plan, **React** to coordinate and act fast, **Continue** to keep the business running.
+
+::: cards
+### Prepare
+- **Ready-made plans**, tested.
+- **Drills** on a schedule.
+- **One place** for procedures.
+
+### React
+- **Real-time coordination** of the team.
+- **Secure channels**: chat, video, alerts.
+- **Faster decisions** with boards and workflows.
+
+### Continue
+- **Degraded mode** in one switch.
+- **Critical data** available 24/7.
+- **Back in business** in under 15 minutes.
+:::
+
+---
+intent: explain
+section: Before
+eyebrow: Before the incident
+notes: Five steps, in order. This is onboarding.
+---
+## Before the incident
+
+::: cards {.numbered}
+- Create the workspace | Set up the platform and train the core team.
+- Enroll the crisis cell | Invite the people who will run the response.
+- Switch on what you need | Enable the apps that match your plan.
+- Load the playbooks | Procedures, checklists, key documents.
+- Rehearse | Run a drill and fix what breaks.
+:::
+
+---
+section: Features
+eyebrow: Inbox
+notes: Show the real thread: timestamped, in one place.
+---
+## Talk to the crisis cell
+Built-in chat and video for clear, immediate exchanges — every message timestamped.
+
+[Learn more →](https://example.com/inbox){.cta}
+
+![](assets/inbox.svg){.right}
+
+---
+eyebrow: Board
+notes: From report to resolution, every action has an owner.
+---
+## Every action tracked, every owner named
+A shared board to run the response, from the first report to resolution.
+
+[Learn more →](https://example.com/board){.cta}
+
+![](assets/board.svg){.right}
+
+---
+eyebrow: Directory
+notes: The directory is alive: always current.
+---
+## The right people, found immediately
+A central directory that stays up to date, so you reach every member of the response team at once.
+
+[Learn more →](https://example.com/directory){.cta}
+
+![](assets/directory.svg){.right}
+
+---
+bg: sky
+eyebrow: Mobile
+notes: Everything in the pocket.
+---
+## The incident doesn't stop at your desk
+The whole workspace on the phone — react fast, even away from the office.
+
+![](assets/dashboard.svg){.right}
+
+---
+intent: prove
+section: Trust
+eyebrow: Security and hosting
+notes: Three proofs. Sovereign hosting, daily backups, certification.
+---
+## Built to meet your security requirements
+Developed and hosted in the EU on a qualified, high-security infrastructure.
+
+::: cards
+- Security | Hosted on a **qualified** infrastructure.
+- Backups | Daily automatic backups to a second zone.
+- Certification | **ISO 27001** certified.
+:::
+
+::: pills
+- Sovereign
+- Modular
+- User-centered
+- Measurable
+:::
+
+---
+section: Customers
+eyebrow: Customers
+notes: Let the room find its own sector.
+---
+## They run their operations on Northwind Ops
+Mid-size companies, large groups, public administrations and non-profits.
+
+::: logos
+- ![Acme](assets/logo-acme.svg)
+- ![Globex](assets/logo-globex.svg)
+- ![Initech](assets/logo-initech.svg)
+- ![Umbrella](assets/logo-umbrella.svg)
+- ![Hooli](assets/logo-hooli.svg)
+- ![Vandelay](assets/logo-vandelay.svg)
+- ![Stark](assets/logo-stark.svg)
+- ![Wayne](assets/logo-wayne.svg)
+- ![Wonka](assets/logo-wonka.svg)
+- ![Cyberdyne](assets/logo-cyberdyne.svg)
+- ![Tyrell](assets/logo-tyrell.svg)
+- ![Soylent](assets/logo-soylent.svg)
+:::
+
+---
+intent: act
+notes: Thank you. The site, then questions.
+---
+# Thank you
+Move at Northwind speed — [northwind.example.com](https://example.com)
+
+![](assets/cover.svg){.cover}

@@ -1,0 +1,20 @@
+JMD — the .jmd format and its runtime
+Copyright 2026 Jamespot SAS
+
+This product includes software developed at Jamespot (https://www.jamespot.com).
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+---
+
+This repository redistributes no third-party code. Two deliberate absences:
+
+* Yjs and @hocuspocus/provider (MIT) are the room — the shared edit page of the
+  hosted service. They are bundled only into that page, which is built by the
+  service, not by this repository (`edit: true` in tools/build.mjs). Neither the
+  bundle nor the bridge ships here.
+
+* The Garet type family (Type Forward, typeforward.com) is not committed in any
+  form. The two free weights are packed into a data-URI stylesheet by
+  tools/fontpack.py, on the machine that has them; the licensed variable family
+  stays at Jamespot. The default brand here needs no font but the system's.

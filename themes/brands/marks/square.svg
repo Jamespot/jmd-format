@@ -1,0 +1,6 @@
+  <!-- neutral mark "square": one geometric family — the lockup shape and four glyphs for card markers and the watermark (glyphs: 4) -->
+  <symbol id="brand-mark" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M22 8h56a14 14 0 0 1 14 14v56a14 14 0 0 1 -14 14h-56a14 14 0 0 1 -14 -14v-56a14 14 0 0 1 14 -14Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-1" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M22 8h56a14 14 0 0 1 14 14v56a14 14 0 0 1 -14 14h-56a14 14 0 0 1 -14 -14v-56a14 14 0 0 1 14 -14Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-2" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50 8h0a42 42 0 0 1 42 42v0a42 42 0 0 1 -42 42h0a42 42 0 0 1 -42 -42v0a42 42 0 0 1 42 -42Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-3" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50.0 4.0 L96.0 50.0 L50.0 96.0 L4.0 50.0Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-4" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M22 8h56a14 14 0 0 1 14 14v56a14 14 0 0 1 -14 14h-56a14 14 0 0 1 -14 -14v-56a14 14 0 0 1 14 -14ZM32 24h36a8 8 0 0 1 8 8v36a8 8 0 0 1 -8 8h-36a8 8 0 0 1 -8 -8v-36a8 8 0 0 1 8 -8Z" fill="currentColor"/></symbol>

@@ -1,0 +1,19 @@
+# Ocean — neutral, navy and blue with a sand highlight: the classic business palette
+name: ""   # neutral: the lockup shows the mark alone
+logo: dot
+primary: "#0B2545"
+accent: "#1479B8"
+highlight: "#FFD166"
+ink: "#13315C"
+secondary: "#8DA9C4"
+font-display: Helvetica Neue
+font-body: Helvetica Neue
+font-fallback: "Segoe UI", system-ui, sans-serif
+type-scale: 0.94         # system faces run wider than the embedded ones
+fonts: fonts/system.css   # system fonts only — nothing embedded
+glyphs: 4
+watermark: mark
+card-marker: glyphs
+card-fill: alternate
+card-shadow: none
+motion: soft

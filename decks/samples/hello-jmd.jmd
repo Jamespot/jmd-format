@@ -1,0 +1,71 @@
+---
+format: jmd/1
+layout: slide
+title: Hello, .jmd
+theme: jamespot
+lang: en
+date: 2026-09-12
+---
+
+---
+intent: hook
+section: Hello, .jmd
+notes: The whole pitch in one line. Pause after the subtitle.
+---
+# Content is a source. Rendering is disposable.
+A presentation is a text file agents write, and one HTML file renders.
+
+---
+intent: reveal
+eyebrow: What you are looking at
+notes: Three numbers, the middle one is the point: nothing to install.
+---
+## One file, no server, no install.
+
+::: metrics
+- 1 | file | Parser, theme, fonts, linter and print, in a single HTML.
+- 0 | dependencies | Opens in any browser, offline. {.hero}
+- 4 | blocks in J0 | metrics, timeline, compare, statement. Ten in V1.
+:::
+
+---
+intent: explain
+eyebrow: How a deck gets made
+notes: The agent never sees pixels. It reads the linter and fixes the source.
+---
+## The agent writes, the linter answers.
+
+::: timeline
+- Write | An agent, or you, writes the .jmd. Markdown plus a few blocks.
+- Lint | Unknown block, too many items, real overflow measured in the DOM. Errors block the export.
+- Render | The theme lays it out on-brand. No position, no size, no color in the source. {.now}
+- Ship | Print to PDF, or send the self-contained .james-jmd.html. The source travels with it.
+:::
+
+---
+intent: decide
+eyebrow: Why not the usual tools
+notes: Be fair to Google Slides. The point is who can read and diff the file.
+---
+## Slides editor, or source file.
+
+::: compare
+### A slides editor
+- Every layout is yours to fix, one box at a time.
+- The file is a binary or a blob of XML. Agents choke on it.
+- The brand drifts one deck at a time.
+
+### A .jmd source
+- The theme owns the layout. You own the words.
+- Plain text: diffable, versioned, written by any LLM.
+- One brand file, every deck on-brand.
+:::
+
+---
+intent: recap
+notes: Last slide. Let it sit, then show the source of slide 2.
+---
+::: statement
+The slides editor is what anyone can recode in a weekend. The format agents read and the graph that fills it are not.
+— Alain Garnier, PRD, September 12
+:::

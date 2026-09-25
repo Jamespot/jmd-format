@@ -1,0 +1,75 @@
+---
+format: jmd/1
+layout: doc
+title: Northwind Ops — the one-pager
+lang: en
+date: 2026-09-19
+---
+
+---
+intent: hook
+section: Northwind Ops
+notes: The cover says what the product is and who it is for. Nothing else.
+---
+# One place for the work that keeps a company running.
+Northwind Ops gathers the requests, the runbooks and the on-call rota of an operations team in a single, sovereign workspace.
+
+::: metrics
+- 200+ | customers | Sixty percent private sector, forty percent public.
+- 250,000 | users | The installed base, all customers combined. {.hero}
+- 12% | yearly growth | Profitable, funded by the product.
+:::
+
+---
+section: What it does
+eyebrow: Four pillars
+notes: One page, four pillars, then the way it is rolled out. The reader should be able to stop here.
+---
+## Requests, runbooks, on-call and reporting — in one flow.
+Every request lands in a queue, follows a runbook, reaches the person on call and leaves a trace the manager can read on Monday.
+
+::: cards
+### Requests
+- One queue per team, one form per request type.
+- SLAs measured from the first message, not from the ticket.
+
+### Runbooks
+- Step by step, with the checks that must not be skipped.
+- Versioned: a change is reviewed before it runs.
+
+### On-call
+- The rota lives with the runbooks, not in a spreadsheet.
+- Handover notes at every shift change.
+
+### Reporting
+- What came in, what was closed, what waited.
+- A weekly digest the manager reads in five minutes.
+:::
+
+::: timeline {.chevrons}
+- Week 1 | Import the queues and the rota.
+- Week 2 | Rewrite the three runbooks that matter most.
+- Week 3 | First shifts on the tool, with the old one open beside it.
+- Week 4 | The old tool goes read-only. {.next}
+:::
+
+---
+intent: decide
+section: Why now
+notes: The comparison closes the document. The recommendation is the second column.
+---
+## Keep the spreadsheet, or move the team?
+
+::: compare
+### Keep the spreadsheet
+- Free, familiar, and already there.
+- Nobody knows who is on call until they are called.
+- The runbook is in someone's head.
+
+### Move to Northwind Ops {.hero}
+- Four weeks, the team keeps working throughout.
+- The rota, the runbooks and the requests are one thing.
+- The manager reads the week instead of asking about it.
+:::
+
+[Book a walkthrough →](https://example.com/walkthrough){.cta}

@@ -1,0 +1,6 @@
+  <!-- neutral mark "hex": one geometric family — the lockup shape and four glyphs for card markers and the watermark (glyphs: 4) -->
+  <symbol id="brand-mark" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50.0 4.0 L89.8 27.0 L89.8 73.0 L50.0 96.0 L10.2 73.0 L10.2 27.0Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-1" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50.0 4.0 L89.8 27.0 L89.8 73.0 L50.0 96.0 L10.2 73.0 L10.2 27.0Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-2" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50.0 4.0 L89.8 73.0 L10.2 73.0Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-3" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50.0 4.0 L93.7 35.8 L77.0 87.2 L23.0 87.2 L6.3 35.8Z" fill="currentColor"/></symbol>
+  <symbol id="brand-glyph-4" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M50.0 4.0 L89.8 27.0 L89.8 73.0 L50.0 96.0 L10.2 73.0 L10.2 27.0ZM50.0 24.0 L72.5 37.0 L72.5 63.0 L50.0 76.0 L27.5 63.0 L27.5 37.0Z" fill="currentColor"/></symbol>

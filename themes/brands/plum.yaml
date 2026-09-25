@@ -1,0 +1,19 @@
+# Plum — neutral, aubergine and coral with an amber highlight: bold, event and creative decks
+name: ""   # neutral: the lockup shows the mark alone
+logo: hex
+primary: "#4A1942"
+accent: "#C4453A"
+highlight: "#F3A712"
+ink: "#33112E"
+secondary: "#A8516E"
+font-display: Helvetica Neue
+font-body: Helvetica Neue
+font-fallback: "Segoe UI", system-ui, sans-serif
+type-scale: 0.94         # system faces run wider than the embedded ones
+fonts: fonts/system.css   # system fonts only — nothing embedded
+glyphs: 4
+watermark: mark
+card-marker: glyphs
+card-fill: alternate
+card-shadow: offset
+motion: soft
