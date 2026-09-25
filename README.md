@@ -1,6 +1,6 @@
-# JMD — presentations as plain text
+# JMD — presentations as Markdown
 
-**`.jmd` is a Markdown profile for presentations.** A deck is a text file you can diff, review and generate. A single self-contained HTML file renders it on-brand, checks it, prints it to PDF and edits it within the limits of the format.
+**A deck is a `.jmd` file: standard Markdown, one slide separator, one family of `:::` blocks.** There is almost nothing to learn that you do not already know, and nothing you *can* write that decides how the page looks. A single self-contained HTML file renders it on-brand, checks it against the format, prints it to PDF and edits it in place.
 
 Two objects, and only two:
 
