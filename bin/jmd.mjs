@@ -3,6 +3,7 @@
    jmd lint   <file.jmd> [--dom] [--json] [--brand x]   static rules; --dom adds the overflow check in headless Chrome; exit 1 on error
    jmd build  <file.jmd> [-o out.html] [--brand x]
    jmd pdf    <file.jmd> [-o out.pdf]  [--brand x]
+   jmd pptx   <file.jmd> [-o out.pptx] [--brand x]   (PowerPoint, native: text, shapes, pictures — never read back as the source)
    jmd render <file.jmd> [-o dir]      [--brand x] [--scale 2]     one PNG per slide
    jmd render <file.jmd> --sheet [-o out.png]                       one contact sheet of every slide
    jmd open   [file.jmd]                                            build to a temp file and open it in the default browser (no file: the empty runtime)
@@ -27,9 +28,9 @@ for (let i = 0; i < rest.length; i++) {
   else pos.push(rest[i]);
 }
 const file = pos[0];
-const opts = { brand: flags.brand || null }; // null → the deck's own `brand:`, else jamespot
+const opts = { brand: flags.brand || null }; // null → the deck's own `brand:`, else DEFAULT_BRAND (`mono`, or what JMD_DEFAULT_BRAND says)
 // a brand is an id, a .yaml path, the YAML text, or an https URL (also in the deck's frontmatter) — resolved once here
-if (['lint', 'build', 'pdf', 'render', 'open', 'images', 'vendor'].includes(cmd)) {
+if (['lint', 'build', 'pdf', 'pptx', 'render', 'open', 'images', 'vendor'].includes(cmd)) {
   try { opts.brand = await jmd.resolveBrand(opts.brand, file && existsSync(file) ? readFileSync(file, 'utf8') : ''); }
   catch (e) { console.error('brand: ' + e.message); process.exit(2); }
 }
@@ -54,6 +55,10 @@ switch (cmd) {
   case 'pdf': {
     const out = flags.o || `${slug()}.pdf`;
     writeFileSync(out, await jmd.pdf(src(), opts)); console.log(out); jmd.closeBrowser(); break;
+  }
+  case 'pptx': {
+    const out = flags.o || `${slug()}.pptx`;
+    writeFileSync(out, await jmd.pptx(src(), opts)); console.log(out); jmd.closeBrowser(); break;
   }
   case 'render': {
     if (flags.sheet) {
@@ -117,6 +122,40 @@ switch (cmd) {
      A command and not a page — the doctrine says no admin page, and an operator holding the store's variables is the only
      person who should be minting these. The secret is shown once, here, and kept only as a digest: losing it means making
      another client, which is the behaviour we want from a secret. */
+  /* The look an organisation gets without naming it (spec/brand.md). A row is a domain and a brand spec — an id of the
+     shipped looks, the https URL of a brand.yaml, or YAML text — and it is read only when nobody said which brand to use.
+     By hand here because that is our onboarding: a customer signs, a line is added. The two other ways in are the domain's
+     own `/.well-known/jmd/brand.yaml` and the card on /me, and a row written here wins over both, so a customer can be
+     fixed without asking them to touch their site. */
+  case 'brand': {
+    let openStore;
+    try { ({ openStore } = await import('../mcp/store.mjs')); }
+    catch { console.error('this command needs the hosted service: it reads the deck store, which is not part of the format.'); process.exit(2); }
+    const { organisationOf, looksLikeDomain } = await import('../mcp/brand.mjs');
+    const st = await openStore();
+    if (!st) { console.error('no store: set the store\'s variables (make stats-staging does), or JMD_STORE=memory'); process.exit(2); }
+    const verb = pos[0] || 'list';
+    try {
+      if (verb === 'add' || verb === 'set') {
+        const domain = String(pos[1] || '').toLowerCase().trim(), spec = pos.slice(2).join(' ').trim();
+        if (!looksLikeDomain(domain)) { console.error('jmd brand add <domain> <brand> — a domain, such as acme.com'); process.exit(1); }
+        if (!organisationOf('x@' + domain)) { console.error(`${domain} is a mail provider, not an organisation: everyone holding an address there would inherit that look`); process.exit(1); }
+        if (!spec) { console.error('jmd brand add <domain> <brand> — a brand id, an https URL of a brand.yaml, or YAML text'); process.exit(1); }
+        await st.brandPut(domain, spec, process.env.USER || null);
+        console.log(`${domain} -> ${spec.length > 60 ? spec.slice(0, 57) + '...' : spec}`);
+      } else if (verb === 'rm' || verb === 'remove') {
+        const gone = await st.brandRemove(String(pos[1] || ''));
+        if (!gone) { console.error('no brand for this domain'); process.exit(1); }
+        console.log(`removed ${String(pos[1]).toLowerCase()}`);
+      } else {
+        const rows = await st.brands();
+        if (!rows.length) { console.log('no domain brand yet — jmd brand add <domain> <brand>'); break; }
+        console.log('domain                        brand                                   changed     by');
+        for (const r of rows) console.log(`${String(r.domain).padEnd(30)}${(String(r.spec).length > 38 ? String(r.spec).slice(0, 35) + '...' : String(r.spec)).padEnd(40)}${String(r.updated_at).slice(0, 10)}  ${r.updated_by || '\u2014'}`);
+      }
+    } finally { await st.close(); }
+    break;
+  }
   case 'client': {
     let openStore; // the store belongs to the hosted service; this tree may ship without it (PUBLIC.md)
     try { ({ openStore } = await import('../mcp/store.mjs')); }
@@ -145,7 +184,7 @@ switch (cmd) {
     } finally { await st.close(); }
     break;
   }
-  case 'stats': case 'reindex': case 'sweep': {
+  case 'stats': case 'reindex': case 'sweep': case 'rebuild': {
     let openStore; // the store belongs to the hosted service; this tree may ship without it (PUBLIC.md)
     try { ({ openStore } = await import('../mcp/store.mjs')); }
     catch { console.error('this command needs the hosted service: it reads the deck store, which is not part of the format.'); process.exit(2); }
@@ -153,6 +192,8 @@ switch (cmd) {
     if (!st) { console.error('no store: set CELLAR_ADDON_HOST / KEY_ID / KEY_SECRET, JMD_BUCKET and POSTGRESQL_ADDON_URI (make stats-staging does), or JMD_STORE=memory'); process.exit(2); }
     try {
       if (cmd === 'reindex') console.log(`${await st.reindex()} decks indexed from ${st.kind}`);
+      // the stored built file, remade with this deployment's runtime: what a read page serves, and the only way a runtime fix reaches a deck nobody saves
+      else if (cmd === 'rebuild') console.log(JSON.stringify(await st.rebuild({ onEach: (id, why) => console.error(`  ! ${id}: ${why}`) })));
       else if (cmd === 'sweep') console.log(JSON.stringify(await st.sweep(), null, 1));
       else {
         const x = await st.stats(), pad = (v, n) => String(v ?? '').padEnd(n), num = (v, n = 6) => String(v ?? 0).padStart(n);
@@ -170,6 +211,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.log(`jmd ${jmd.VERSION} — format ${jmd.FORMAT}\n\n  jmd lint   <file.jmd> [--dom] [--json] [--brand x]\n  jmd build  <file.jmd> [-o out.html] [--brand x]\n  jmd pdf    <file.jmd> [-o out.pdf]\n  jmd render <file.jmd> [-o dir] [--scale 2] | --sheet [-o out.png]\n  jmd open   [file.jmd]\n  jmd import <deck.pptx> [-o dir] [--brand x]\n  jmd restructure <import-dir> [--brand x] [--model m]\n  jmd spec   [agents|jmd]\n  jmd stats [--json] | reindex | sweep   (the store: needs its variables, see make stats-staging)\n  jmd client add <platform> [--label x] | list | revoke <client_id>   (the machines that call the platform API)`);
+    console.log(`jmd ${jmd.VERSION} — format ${jmd.FORMAT}\n\n  jmd lint   <file.jmd> [--dom] [--json] [--brand x]\n  jmd build  <file.jmd> [-o out.html] [--brand x]\n  jmd pdf    <file.jmd> [-o out.pdf]\n  jmd pptx   <file.jmd> [-o out.pptx]\n  jmd render <file.jmd> [-o dir] [--scale 2] | --sheet [-o out.png]\n  jmd open   [file.jmd]\n  jmd import <deck.pptx> [-o dir] [--brand x]\n  jmd restructure <import-dir> [--brand x] [--model m]\n  jmd spec   [agents|jmd]\n  jmd stats [--json] | reindex | sweep | rebuild   (the store: needs its variables, see make stats-staging)\n  jmd brand  add <domain> <brand> | list | rm <domain>   (the look an organisation gets without naming it)\n  jmd client add <platform> [--label x] | list | revoke <client_id>   (the machines that call the platform API)`);
     process.exit(cmd ? 2 : 0);
 }

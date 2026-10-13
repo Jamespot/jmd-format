@@ -74,7 +74,7 @@ try {
   const L = JSON.parse(await p.eval('JSON.stringify(jamesJmd.state.lint)'));
   ok(L.length === 1 && L[0].rule === 'overflow' && L[0].slide === 4, 'linter: exactly one error, overflow on slide 4', JSON.stringify(L));
   ok(!(await p.eval('document.getElementById("info").classList.contains("is-open")')) && !document_has_status(await p.eval('document.body.innerHTML')), 'nothing opens by itself, no error badge on the slide');
-  ok((await p.eval('document.getElementById("hud").textContent')).includes('info') && !(await p.eval('document.getElementById("hud").textContent')).includes('linter'), 'the HUD offers I info, not L linter');
+  ok((await p.eval('document.getElementById("help").textContent')).includes('info:') && !(await p.eval('document.getElementById("hud").textContent')).includes('linter'), 'the help offers I info, not L linter');
   await p.key('I');
   const card = await p.eval('document.getElementById("info").textContent');
   ok(await p.eval('document.getElementById("info").classList.contains("is-open")') && card.includes('four-blocks') && card.includes('slides4') && card.includes(ANY_BRAND) && card.includes('jmd/1'), 'I opens the file card: name, slides, brand, format');
@@ -87,18 +87,26 @@ try {
   await p.key('Escape');
   ok(!(await p.eval('document.getElementById("info").classList.contains("is-open")')), 'Esc closes it');
   await p.eval('window.__printed = 0; window.print = () => window.__printed++; window.__alerted = 0; window.alert = () => window.__alerted++; true');
-  await p.key('P');
+  await p.key('D'); await p.key('P');
   ok(await p.eval('window.__printed') === 0 && await p.eval('window.__alerted') === 0 && await p.eval('document.getElementById("info").classList.contains("is-open") && document.getElementById("info").classList.contains("is-report")') && (await p.eval('document.getElementById("info-report").textContent')).includes('The PDF waits'), 'P is refused while the linter has errors — Info opens on the report with one line, no alert');
   // the fix an agent would apply: remove the two items, reload through the runtime API
   await p.eval(`jamesJmd.load(${JSON.stringify(fixed)}, "fixed.jmd"); true`); await p.settle();
   ok(await p.eval('jamesJmd.state.lint.filter(x => x.level === "error").length') === 0, 'removing the two items clears the overflow', await p.eval('JSON.stringify(jamesJmd.state.lint)'));
-  await p.key('P');
-  ok(await p.eval('window.__printed') === 1, 'P prints once the deck is clean');
+  await p.key('P'); await p.settle(30);
+  ok(await p.eval('window.__printed') === 0, 'P alone does nothing: a PDF is a download, and every file leaves through D (2026-10-07)');
+  await p.key('D'); await p.key('P');
+  ok(await p.eval('window.__printed') === 1, 'D then P: from disk, the print dialog (Save as PDF) once the deck is clean');
   // self-contained export: intercept the download, check the round-trip
   await p.eval('URL.createObjectURL = b => { window.__blob = b; return "blob:test"; }; HTMLAnchorElement.prototype.click = function(){ window.__dl = this.download; }; true');
-  await p.key('S');
+  await p.key('S'); await p.settle(30);
+  ok(await p.eval('window.__dl') === undefined, 'S alone downloads nothing: the page leaves through D (2026-10-07)');
+  await p.key('D'); await p.key('S');
   const exported = await p.eval('window.__blob.text()');
-  ok(await p.eval('window.__dl') === 'fixed.james-jmd.html', 'S downloads <slug>.james-jmd.html');
+  ok(await p.eval('window.__dl') === 'Northwind × Contoso — four blocks.james-jmd.html', 'D then S downloads the page under the deck\'s title, as the PDF and the PowerPoint are named', await p.eval('window.__dl'));
+  /* One name, made in one place (runtime/jmd-core.js fileName): the title as a person reads it, what a file system refuses
+     replaced, 80 characters at most; no title → the source's name, else "deck"; a version says its number. */
+  const fname = (t, sfx, o) => JMD.fileName(t == null ? null : { meta: { title: t } }, sfx, o);
+  ok(fname('Neoditel 25 ans — souveraineté', '.pptx') === 'Neoditel 25 ans — souveraineté.pptx' && fname('a/b\\c:d*e?"f<g>h|i\u0001j', '.pdf') === 'a b c d e f g h i j.pdf' && fname('', '.jmd', { fallback: 'kickoff.jmd' }) === 'kickoff.jmd' && fname(null, '') === 'deck' && fname('Q3', '.pptx', { version: 4 }) === 'Q3 (v4).pptx' && fname('x'.repeat(200), '').length === 80, 'fileName: the title kept (accents, dashes), forbidden characters out, a fallback, a version, 80 characters at most');
   const m = /<script type="text\/jmd" id="jmd"[^>]*>\n([\s\S]*?)\n<\/script>/.exec(exported);
   ok(m && m[1] === fixed, 'exported file embeds the current source byte-for-byte');
   ok(!/<section class="slide slide--\w+"/.test(exported), 'exported file carries no rendered DOM, only the source');
@@ -113,7 +121,7 @@ try {
     const fitted = await p.eval('(() => { const s = document.querySelectorAll(".slide")[3], b = s.querySelector(".body-pad"), w0 = document.querySelectorAll(".slide")[0].querySelector(".body-pad").getBoundingClientRect().width; return { cls: s.classList.contains("is-fit"), fit: +s.dataset.fit, zoom: b.style.zoom, width: Math.round(b.getBoundingClientRect().width) === Math.round(w0), bottom: (b.lastElementChild.getBoundingClientRect().bottom - s.getBoundingClientRect().top) / (s.getBoundingClientRect().width / 1280) }; })()');
     ok(fitted.cls && fitted.fit >= 0.85 && fitted.fit < 1 && fitted.zoom === String(fitted.fit) && fitted.width && fitted.bottom <= 660, 'the body is zoomed to the fit, its rendered width kept, its content now above the limit (' + JSON.stringify(fitted) + ')');
     await p.eval('window.__printed = 0; window.print = () => window.__printed++; true');
-    await p.key('P');
+    await p.key('D'); await p.key('P');
     ok(await p.eval('window.__printed') === 1, 'P prints: a fitted slide is not an error');
     await p.key('E'); await p.settle(100); await p.eval('jamesJmd.show(3); true'); await p.settle(100);
     const mark = await p.eval('(() => { const s = document.querySelector(".slide.is-active"); const cs = getComputedStyle(s, "::after"); return { line: cs.borderTopStyle, text: cs.content }; })()');
@@ -157,6 +165,68 @@ try {
   ok(await p.eval('document.getElementById("open").classList.contains("is-open")'), 'over file:// it falls back to the Open screen instead of a blank page');
   await p.close();
 
+  console.log('\n4b. Download (D): one menu for every way the deck leaves (spec/export.md)');
+  {
+    /* What a browser makes alone (the page, the PDF) is always offered; PowerPoint and images need the server, so only the
+       deck's own page there offers them — a file from disk or a 24-hour link would offer a door nothing answers. */
+    const items = async q => JSON.parse(await q.eval(`JSON.stringify([...document.querySelectorAll('#dl-list a, #dl-list button')].map(e => e.querySelector('b').textContent.split(' ')[0] + (e.getAttribute('href') ? ' ' + e.getAttribute('href') : '')))`));
+    p = await open('file://' + exp); await p.settle();
+    ok(await p.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()') === '← → navigate F present E edit D download O open ? all keys', 'the bar holds what one reaches for: navigate, present, edit, download, (open, from disk), all keys — no longer P and S apart', await p.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()'));
+    await p.key('D'); await p.settle(80);
+    ok(await p.eval('document.getElementById("dl").classList.contains("is-open")') && JSON.stringify(await items(p)) === '["Page","PDF"]' && await p.eval('document.activeElement.matches("#dl-list button")'), 'from disk: D opens the menu on the page and the PDF, the first one focused');
+    await p.key('Escape'); await p.settle(50);
+    ok(!(await p.eval('document.getElementById("dl").classList.contains("is-open")')), 'Esc closes it');
+    await p.eval('document.getElementById("hud-dl").click(); true'); await p.settle(50);
+    ok(await p.eval('document.getElementById("dl").classList.contains("is-open")'), 'the hud\'s download is a button, for the mouse');
+    await p.eval('document.getElementById("dl").click(); true'); await p.settle(50);
+    ok(!(await p.eval('document.getElementById("dl").classList.contains("is-open")')), 'a click beside the box closes it');
+    /* Without a mouse (2026-10-07): ↑ ↓ move round the list, the letters take a format, and while the menu is open its keys
+       are its own — an arrow does not move the slides behind, Enter does not turn the page. */
+    const focused = () => p.eval('document.activeElement.getAttribute("data-key")'), slideNow = () => p.eval('jamesJmd.state.index');
+    const before = await slideNow();
+    await p.key('D'); await p.settle(50); await p.key('ArrowDown'); const down = await focused(); await p.key('ArrowDown'); const wrapped = await focused(); await p.key('ArrowUp'); const up = await focused();
+    await p.key('ArrowRight'); await p.key('Enter'); await p.settle(50);
+    ok(down === 'P' && wrapped === 'S' && up === 'P' && await slideNow() === before && !(await p.eval('document.getElementById("dl").classList.contains("is-open")')), '↓ ↑ move round the list (S, P, S, P); an arrow and Enter in the menu never move the slides — Enter takes the one in focus', JSON.stringify([down, wrapped, up]));
+    await p.eval('window.__dl = []; HTMLAnchorElement.prototype.click = function () { window.__dl.push(this.download); }; true'); // the runtime downloads through an <a download>: catch it
+    await p.key('D'); await p.settle(50); await p.key('s'); await p.settle(50);
+    ok(JSON.parse(await p.eval('JSON.stringify(window.__dl)')).some(n => /\.james-jmd\.html$/.test(n)) && !(await p.eval('document.getElementById("dl").classList.contains("is-open")')), 'D then S: the page leaves, the menu closes');
+    await p.key('D'); await p.settle(50); await p.key('q'); await p.key('i'); await p.settle(50);
+    ok(await p.eval('document.getElementById("dl").classList.contains("is-open") && !document.getElementById("info").classList.contains("is-open")') && await slideNow() === before, 'a letter the menu does not have does nothing — not the info card (I) behind it either');
+    await p.key('D'); await p.settle(50);
+    ok(!(await p.eval('document.getElementById("dl").classList.contains("is-open")')), 'D again closes it');
+    await p.close();
+    const jmdLib = await import('../lib/jmd.mjs');
+    const pageHtml = await jmdLib.build('---\nformat: jmd/1\nlayout: webpage\ntitle: A page\n---\n\n# One page\n\nA line.\n', { brand: ANY_BRAND });
+    const hosted = createServer((req, res) => { res.setHeader('content-type', 'text/html; charset=utf-8'); res.end(req.url.startsWith('/deck/WWWWWWWWWWWWWWWW') ? pageHtml : readFileSync(exp)); }).listen(0);
+    const at = `http://127.0.0.1:${hosted.address().port}`, seen = {};
+    for (const path of ['/deck/AAAAAAAAAAAAAAAA', '/deck/AAAAAAAAAAAAAAAA/v/3', '/deck/AAAAAAAAAAAAAAAA/edit/abcdefghijklmnopqrstuv/', '/d/BBBBBBBBBBBBBBBB/fixed.james-jmd.html', '/deck/WWWWWWWWWWWWWWWW']) {
+      p = await open(at + path); await p.settle(); await p.key('D'); await p.settle(80); seen[path] = await items(p);
+      if (path === '/deck/AAAAAAAAAAAAAAAA') { // X and I take the server's files: the link is clicked, the menu closes
+        // the link is caught on its way out (after the menu put its token on it), the browser does not follow it here
+        await p.eval('window.__href = []; window.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a[download]"); if (a) { e.preventDefault(); window.__href.push(a.getAttribute("href")); } }); true');
+        await p.key('x'); await p.settle(300);
+        seen.drawing = await p.eval('document.getElementById("dl-toast").classList.contains("is-open") && document.querySelector("#dl-toast .t").textContent');
+        const token = (await p.eval('window.__href[0] || ""')).split('?t=')[1] || '';
+        await p.eval(`document.cookie = 'jmd-dl-${token}=ok; Path=/'; true`); await p.settle(400); // what the server says with the file
+        seen.ready = await p.eval('document.querySelector("#dl-toast .t").textContent + "|" + document.getElementById("dl-toast").className + "|" + document.cookie.includes("jmd-dl-")');
+        await p.key('D'); await p.settle(30); await p.key('I'); await p.settle(300);
+        const token2 = (await p.eval('window.__href[1] || ""')).split('?t=')[1] || '';
+        await p.eval(`document.cookie = 'jmd-dl-${token2}=busy; Path=/'; true`); await p.settle(400);
+        seen.busy = await p.eval('document.querySelector("#dl-toast .t").textContent + "|" + document.getElementById("dl-toast").className');
+        seen.keys = JSON.parse(await p.eval('JSON.stringify(window.__href)')).map(h => h.replace(/\?t=[a-z0-9]{8,32}$/, '?t=*'));
+      }
+      await p.close();
+    }
+    hosted.close();
+    ok(JSON.stringify(seen['/deck/AAAAAAAAAAAAAAAA']) === '["Page","PDF /deck/AAAAAAAAAAAAAAAA/deck.pdf","PowerPoint /deck/AAAAAAAAAAAAAAAA/deck.pptx","Images /deck/AAAAAAAAAAAAAAAA/images.zip"]', 'on /deck/<id>: the PDF is a file the server draws (not a print dialog), PowerPoint and images too', JSON.stringify(seen['/deck/AAAAAAAAAAAAAAAA']));
+    ok(JSON.stringify(seen.keys) === '["/deck/AAAAAAAAAAAAAAAA/deck.pptx?t=*","/deck/AAAAAAAAAAAAAAAA/images.zip?t=*"]', 'D then X: the PowerPoint; D then I: the images — no mouse, each link with the token the page waits on', JSON.stringify(seen.keys));
+    /* The seconds a server draws a PowerPoint looked like a bug (2026-10-07): a strip says what is drawn and counts, then the
+       outcome the server's cookie carries — the cookie read once and dropped. */
+    ok(/^Drawing the PowerPoint · \d s$/.test(seen.drawing || '') && /^Ready — the PowerPoint is in your downloads\|is-open is-done\|false$/.test(seen.ready) && /^The server is drawing other files — try again in a few seconds\|is-open is-err$/.test(seen.busy), 'while the server draws: "Drawing the PowerPoint · n s" and a bar; then "Ready", or the reason in words (busy)', JSON.stringify([seen.drawing, seen.ready, seen.busy]));
+    ok(seen['/deck/AAAAAAAAAAAAAAAA/v/3'].includes('PowerPoint /deck/AAAAAAAAAAAAAAAA/v/3/deck.pptx') && seen['/deck/AAAAAAAAAAAAAAAA/edit/abcdefghijklmnopqrstuv/'].includes('PowerPoint /deck/AAAAAAAAAAAAAAAA/deck.pptx'), 'a published version exports itself; the edit page exports the deck as stored — never a URL with the edit key in it');
+    ok(JSON.stringify(seen['/d/BBBBBBBBBBBBBBBB/fixed.james-jmd.html']) === '["Page","PDF"]' && JSON.stringify(seen['/deck/WWWWWWWWWWWWWWWW']) === '["Page","PDF /deck/WWWWWWWWWWWWWWWW/deck.pdf","Images /deck/WWWWWWWWWWWWWWWW/images.zip"]', 'a 24-hour link offers what the browser makes alone; a Webpage has no PowerPoint', JSON.stringify([seen['/d/BBBBBBBBBBBBBBBB/fixed.james-jmd.html'], seen['/deck/WWWWWWWWWWWWWWWW']]));
+  }
+
   console.log('\n5. Linter on a broken deck');
   const bad = `---\nformat: jmd/2\n---\n---\nbg: pink\n---\n::: foo\n- a\n:::\n---\n---\n## A title that is far too long to fit the sixty characters budget\n::: metrics\n- 1|a\n- 2|b\n- 3|c\n- 4|d\n- 5|e\n:::\n---\nnotes: x\n---\n## T\n::: metrics\n- 1|a\n::: cards\n:::\n:::\n`;
   p = await open('file://' + EMPTY); await p.settle();
@@ -188,6 +258,19 @@ try {
     ok(js.ok === true, `${f} has no linter error`, JSON.stringify(js.findings.filter(x => x.level === 'error')));
   }
 
+  // the pages of the site written as decks (/doc, /releases) obey the same linter; the newest release band is this VERSION (1.27.0)
+  for (const f of existsSync(join(root, 'mcp/doc')) ? execSync('ls mcp/doc/*.jmd', { cwd: root }).toString().trim().split('\n') : []) {
+    const r = cli(`lint ${f} --dom --json`, false);
+    const js = JSON.parse(typeof r === 'string' ? r : r.out);
+    ok(js.ok === true, `${f} has no linter error`, JSON.stringify(js.findings.filter(x => x.level === 'error')));
+  }
+  // /releases is the service's page (mcp/doc), which the public tree does not ship (PUBLIC.md): asserted where it is
+  if (existsSync(join(root, 'mcp/doc'))) {
+    const { checkReleases } = await import('./check-releases.mjs');
+    const rel = checkReleases();
+    ok(!rel.misses.length, `/releases opens on ${rel.version}, in French and in English (a bump without its band is refused by make deploy-prod too)`, rel.misses.join(' · '));
+  } else console.log('  · no mcp/doc in this tree: the release notes are the service\'s, not checked here');
+
   console.log('\n7. V1 blocks, images, links, assets');
   const tour = readFileSync(join(root, 'decks/samples/product-tour.jmd'), 'utf8');
   execSync('node tools/build.mjs decks/samples/product-tour.jmd', BUILD); // brand from the deck's frontmatter
@@ -218,10 +301,151 @@ try {
   // the self-contained export keeps the embedded assets
   p = await open('file://' + join(root, 'build/product-tour.james-jmd.html')); await p.settle();
   await p.eval('URL.createObjectURL = b => { window.__blob = b; return "blob:test"; }; HTMLAnchorElement.prototype.click = function(){}; true');
-  await p.key('S');
+  await p.key('D'); await p.key('S');
   const exp2 = await p.eval('window.__blob.text()');
   ok(/<script type="application\/json" id="assets">\{"assets\/cover.svg":"data:image\/svg\+xml;base64,/.test(exp2), 'S export carries the embedded assets');
   await p.close();
+
+  console.log('\n7c. Data: table and chart (spec/jmd.md → Blocks — data, spec/charts.md)');
+  {
+    const H = '---\nformat: jmd/1\nlayout: slide\n---\n\n---\nnotes: n\n---\n## Data\n';
+    const one = (body, lang) => JMD.parse(H.replace('layout: slide', 'layout: slide' + (lang ? '\nlang: ' + lang : '')) + body);
+    const errs = (body, rule) => JMD.lint(one(body)).filter(f => f.level === 'error' && (!rule || f.rule === rule));
+    // the table: header, alignment by colons and by numbers, the hero row, a cell is inline
+    const tsrc = '::: table\n| Offer | Users | Note |\n|---|---|:-:|\n| **Starter** | 1 240 | ok |\n| Pro | 3,5 | [x](https://e.x) | {.hero}\n:::\n';
+    const th = JMD.render(one(tsrc), {});
+    ok(/<thead><tr><th[^>]*>Offer<\/th>/.test(th) && (th.match(/<tr/g) || []).length === 3, 'table: the row above |---| is the header, two body rows', th.slice(0, 300));
+    ok(/<td class="is-right"[^>]*>1 240<\/td>/.test(th) && /<td class="is-center"[^>]*>ok<\/td>/.test(th) && /<td data-line[^>]*><strong>Starter<\/strong><\/td>/.test(th), 'table: a column of numbers aligns right by itself, `:-:` centers, a cell is inline Markdown');
+    ok(/<tr class="is-hero">/.test(th) && /data-line="\d+" data-col="1"/.test(th), 'table: `{.hero}` puts a row forward; a cell carries the column the editor counts (a leading pipe is column 0)');
+    ok(!errs(tsrc).length && errs('::: table\n| a | b | c | d | e | f | g |\n|---|---|---|---|---|---|---|\n| 1 | 2 | 3 | 4 | 5 | 6 | 7 |\n:::\n', 'table-columns').length === 1, 'lint: a clean table; seven columns is `table-columns`');
+    const rows = (n, cells = '| a | 1 |') => '::: table\n| Name | N |\n|---|--:|\n' + Array.from({ length: n }, (_, k) => cells.replace('a', 'r' + k) + (k === 9 ? ' {.hero}' : '')).join('\n') + '\n:::\n';
+    ok(errs('::: table\n- not a row\n:::\n', 'table-rows').length === 1 && errs(rows(25), 'max-items').length === 1, 'lint: no row is `table-rows`; twenty-five rows is `max-items`');
+    // Seen in the field (2026-10-12): 14 companies made two hand-made pairs of columns, unequal, a hero lighting both halves — past 12 rows the table folds itself
+    const sh = JMD.render(one(rows(14)), {});
+    ok(!errs(rows(14)).length && /<div class="table-split">/.test(sh) && (sh.match(/<table /g) || []).length === 2 && (sh.match(/<thead>/g) || []).length === 2 && (sh.match(/is-hero/g) || []).length === 1, 'table: past 12 rows it folds in two tables side by side, the header repeated, the hero row lit alone');
+    const odd = JMD.render(one(rows(13)), {});
+    ok(sh.indexOf('>r6<') < sh.lastIndexOf('<table') && sh.indexOf('>r7<') > sh.lastIndexOf('<table') && odd.indexOf('>r6<') < odd.lastIndexOf('<table') && odd.indexOf('>r7<') > odd.lastIndexOf('<table'), 'table: the order runs down the first half then the second, the first the longer (13 rows: 7 and 6)');
+    ok(errs(rows(14, '| a | 1 | 2 | 3 |'), 'max-items').length === 1 && errs(rows(6, '| a | 1 | 2 | 3 |').replace('::: table', '::: table {.split}'), 'table-columns').length === 1 && /table-split/.test(JMD.render(one(rows(6).replace('::: table', '::: table {.split}')), {})), 'lint: a folded half holds 3 columns at most; `{.split}` folds a shorter table on demand');
+    // A planning seen in the field (2026-10-12): a timeline whose phases carry detail, cards without the theme's marker, an icon in a title
+    const phases = '::: timeline\n### Janvier à juin — Cadrage\n- Kick Off\n- Atelier 1\n### Juillet — Pilote {.now}\nCible restreinte.\n### Septembre 2027 — Déploiement {.next}\n- Plan de formation\n:::\n';
+    const tp = JMD.render(one(phases), {});
+    ok(!errs(phases).length && /<div class="timeline timeline--phases"/.test(tp) && (tp.match(/class="tl-step/g) || []).length === 3 && (tp.match(/<div class="tl-card">/g) || []).length === 3 && /tl-step is-now/.test(tp) && /tl-step is-next/.test(tp), 'timeline: `###` opens a phase (`{.now}` `{.next}` on its heading), its detail in a card under the dot');
+    ok(/<div class="tl-date"[^>]*>Janvier à juin<\/div>/.test(tp) && /<h4>Cadrage<\/h4>/.test(tp) && (tp.match(/<li>/g) || []).length === 3 && /<p data-line[^>]*>Cible restreinte\.<\/p>/.test(tp) && errs('::: timeline\n' + Array.from({ length: 7 }, (_, k) => '### P' + k).join('\n') + '\n:::\n', 'max-items').length === 1, 'timeline: `date — title`, bullets and text in a phase; seven phases is `max-items`');
+    const plain = JMD.render(one('::: cards {.plain}\n- A | a\n- B | b\n:::\n'), { brand: { 'card-marker': 'glyphs', glyphs: 4 } });
+    ok(!/class="num/.test(plain) && /class="num/.test(JMD.render(one('::: cards\n- A | a\n- B | b\n:::\n'), { brand: { 'card-marker': 'glyphs', glyphs: 4 } })), 'cards: `{.plain}` takes the theme\'s marker off, the deck\'s say without touching the theme');
+    const icon = '::: cards\n### ![](img:jamespot/logo-jamespot-icone) Cadrage\n- Kick Off\n:::\n';
+    ok(errs(icon, 'inline-image').length === 1 && !/!\[|img:jamespot/.test(JMD.render(one(icon), {})) && /<h3[^>]*>Cadrage<\/h3>/.test(JMD.render(one(icon), {})) && !errs('::: logos\n- ![A](a.svg)\n:::\n', 'inline-image').length, 'an image inside a text is `inline-image` and never printed as `![…]`; a logo wall is not one');
+    // the chart: the types, the values read as numbers, the series, the hero, the decimal mark of the deck's language
+    const bar = '::: chart\nunit: k€\n- Q1 | 980\n- Q2 | 1 150 {.hero}\n- Q3 | 3,5\n:::\n';
+    const bh = JMD.render(one(bar), {});
+    ok(/<figure class="chart chart--bar"/.test(bh) && (bh.match(/<rect class="chart-bar/g) || []).length === 3 && /chart-bar chart-s1 is-hero/.test(bh) && /chart-bar chart-s1 is-quiet/.test(bh), 'chart: bar by default, one bar per item, the hero forward and the others quiet');
+    ok(bh.includes('>1\u00A0150\u00A0k€</text>') && bh.includes('>3.5\u00A0k€</text>') && JMD.render(one(bar, 'fr'), {}).includes('>3,5\u00A0k€</text>'), 'chart: `1 150` and `3,5` read as numbers, drawn with the unit, the thousands spaced, the decimal mark of `lang:` (en . / fr ,)');
+    ok(!errs(bar).length && errs(bar.replace('| 980', '| about a thousand'), 'chart-value').length === 1 && errs(bar.replace('- Q3 | 3,5', '- Q3'), 'chart-value').length === 1, 'lint: a clean chart; a value that is not a number, or no value, is `chart-value`');
+    const pie = n => '::: chart {.pie}\n' + Array.from({ length: n }, (_, k) => `- P${k} | ${k + 1}`).join('\n') + '\n:::\n';
+    ok(!errs(pie(6)).length && errs(pie(7), 'max-items').length === 1 && errs(pie(3).replace('| 2', '| -2'), 'chart-value').length === 1 && errs(pie(3).replace('| 2', '| 2 | 4'), 'chart-series').length === 1, 'lint: a pie holds six slices, positive, one series');
+    ok(errs('::: chart\n- a | 1 | 2 | 3 | 4 | 5\n:::\n', 'chart-series').length === 1 && JMD.lint(one('::: chart {.radar}\n- a | 1\n:::\n')).some(f => f.rule === 'chart-type' && f.level === 'warning'), 'lint: five series is `chart-series`; an unknown type is a warning (drawn as bars)');
+    const ph = JMD.render(one('::: chart {.donut}\n- A | 30\n- B | 70 {.hero}\n:::\n'), {});
+    ok(/chart--pie/.test(ph) && (ph.match(/<path class="chart-slice/g) || []).length === 2 && /class="chart-total"[^>]*>70\u00A0%<\/text>/.test(ph) && /<span class="p">30\u00A0%<\/span>/.test(ph), '`{.donut}` is the pie: one slice per item, the hero\'s share in the hole, each share in the keys');
+    const lh = JMD.render(one('::: chart {.line}\nseries: 2025 | 2026\n- Jan | 12 | 14\n- Feb | 13 | 36\n:::\n'), {});
+    ok((lh.match(/<polyline class="chart-line/g) || []).length === 2 && /chart-legend[\s\S]*2025[\s\S]*2026/.test(lh) && />40<\/text>/.test(lh) && !/>50<\/text>/.test(lh), 'chart: a line per series, the series named in the legend, the top tick just above the data (40 for 36)');
+    ok(/<table class="chart-data">/.test(lh) && /pathLength="1"/.test(lh) && /style="--k:\d+"/.test(lh), 'chart: the numbers are also in the page as text; the line and the dots carry what the motion needs');
+    // the diagram: Mermaid's flowchart read by us — shapes, edges, labels, the hero, and what is ignored or refused
+    const flow = '::: diagram\nflowchart LR\n  A([Start]) --> B{Choice?}\n  B -->|Yes| C[Do it]:::hero\n  B -- No --> D[(Store)]\n  D -.-> A\n  C ==> E((End))\n  C ~~~ D\n:::\n';
+    const fh = JMD.render(one(flow), {});
+    ok(/<figure class="diagram diagram--lr"/.test(fh) && (fh.match(/<g class="dg-node/g) || []).length === 5 && /dg-node dg-stadium/.test(fh) && /dg-node dg-diamond/.test(fh) && /dg-node dg-rect is-hero/.test(fh) && /dg-node dg-cylinder/.test(fh) && /dg-node dg-circle/.test(fh), 'diagram: one node per id, its shape from its brackets, `:::hero` forward', fh.slice(0, 300));
+    ok((fh.match(/<path class="dg-edge/g) || []).length === 5 && /dg-edge dg-dotted/.test(fh) && /dg-edge dg-thick/.test(fh) && (fh.match(/<g class="dg-label/g) || []).length === 2 && />Yes<\/tspan>/.test(fh) && />No<\/tspan>/.test(fh), 'diagram: solid, dotted, thick; `|label|` and `-- label -->` both read; `~~~` places without drawing');
+    ok(/<ul class="chart-data"><li>Start → Choice\?<\/li>/.test(fh) && /Choice\? → Do it \(Yes\)/.test(fh), 'diagram: what it says is also in the page as text');
+    ok(!errs(flow).length && JMD.render(one('::: diagram\nflowchart TD\n  Q{"Two<br/>lines"} --> A\n:::\n'), {}).includes('>Two</tspan><tspan'), 'lint: a clean flowchart; `<br/>` in a label is a new line');
+    ok(errs('::: diagram\npie title P\n  "a" : 1\n:::\n', 'diagram-type')[0]?.message.includes('::: chart {.pie}') && errs('::: diagram\nsequenceDiagram\n  A->>B: hi\n:::\n', 'diagram-type').length === 1 && errs('::: diagram\n:::\n', 'diagram-empty').length === 1, 'lint: another Mermaid family is routed to our block or refused; an empty diagram is `diagram-empty`');
+    const styled = JMD.lint(one('::: diagram\n%%{init: {"theme":"dark"}}%%\nflowchart TD\n  A --> B\n  style A fill:#f00\n  classDef x fill:#0f0\n  B:::x\n  click A call alert()\n  A ?? B\n:::\n'));
+    ok(styled.some(f => f.rule === 'diagram-style' && f.level === 'warning') && styled.filter(f => f.rule === 'diagram-click' && f.level === 'error').length === 1 && styled.filter(f => f.rule === 'diagram-syntax').length === 1, 'lint: colors in the source are ignored (a warning), `click` is an error, a line we cannot read is `diagram-syntax`');
+    const chainOf = n => '::: diagram\nflowchart LR\n  ' + Array.from({ length: n }, (_, k) => 'N' + k).join(' --> ') + '\n:::\n';
+    ok(!errs(chainOf(10), 'max-items').length && errs(chainOf(11), 'max-items').length === 1 && errs('::: diagram\nflowchart LR\n  ' + Array.from({ length: 9 }, (_, k) => `N${k}[A label long enough to need two lines ${k}]`).join(' --> ') + '\n:::\n', 'diagram-dense').length === 1, 'lint: ten nodes on a slide, not eleven; a diagram that fits only below 14 px is `diagram-dense`');
+    ok(/diagram--td/.test(JMD.render(JMD.parse(H.replace('layout: slide', 'layout: story') + flow), {})), 'diagram: on a Story screen a left-to-right flow reads top-down');
+    // the other grammar: a list given a form, the way a SmartArt is — the words are HTML, edited in place, the drawing is ours
+    const cyc = '::: diagram {.cycle}\ncenter: One loop\n- Listen | what **customers** say\n- Decide\n- Ship | small {.hero}\n- Measure\n:::\n';
+    const ch = JMD.render(one(cyc), {});
+    ok(/diagram--cycle/.test(ch) && (ch.match(/<div class="dg-card/g) || []).length === 4 && /dg-card is-hero/.test(ch) && (ch.match(/<path class="dg-edge dg-arc/g) || []).length === 4 && /<strong>customers<\/strong>/.test(ch) && /class="dg-center"[^>]*>One loop</.test(ch) && /<b data-line="\d+" data-col="0">Listen<\/b>/.test(ch), 'cycle: a card per item on a ring, an arrow between each, the center, inline Markdown, the source line for the editor');
+    const pyr = JMD.render(one('::: diagram {.pyramid}\n- Top {.hero}\n- Middle\n- Base | what it stands on\n:::\n'), {});
+    ok((pyr.match(/<polygon class="dg-band/g) || []).length === 3 && /dg-band is-hero/.test(pyr) && (pyr.match(/<div class="dg-card/g) || []).length === 3, 'pyramid: a band per item, the first on top, its words beside it');
+    const mx = JMD.render(one('::: diagram {.matrix}\nx: Low effort | High effort\ny: High value | Low value\n- A\n- B\n- C\n- D\n:::\n'), {});
+    ok(/dg-matrix has-y has-x/.test(mx) && (mx.match(/<div class="dg-card/g) || []).length === 4 && />Low effort<\/span><span>High effort</.test(mx), 'matrix: four quadrants, the two axes named');
+    ok(!errs(cyc).length && errs(cyc.replace('- Decide\n- Ship | small {.hero}\n', ''), 'max-items').length === 1 && errs('::: diagram {.matrix}\n- A\n- B\n- C\n:::\n', 'max-items').length === 1 && errs('::: diagram {.pyramid}\n' + '- x\n'.repeat(7) + ':::\n', 'max-items').length === 1, 'lint: a cycle holds 3 to 6, a matrix 4, a pyramid 2 to 6');
+    ok(errs('::: diagram\n- a\n- b\n:::\n', 'diagram-form').length === 1 && JMD.lint(one('::: diagram {.wheel}\n- a\n:::\n')).length > 0 && JMD.lint(one('::: diagram {.cycle}\nflowchart TD\n- a\n- b\n- c\n:::\n')).some(f => f.rule === 'diagram-form' && f.level === 'warning'), 'lint: a list without a form is `diagram-form`; Mermaid under a form is a warning');
+    const tr = '::: diagram {.tree}\n- Ops | COO\n  - Product | CPO\n    - Platform\n    - Mobile {.hero}\n  - Sales\n:::\n';
+    const trh = JMD.render(one(tr), {});
+    ok((trh.match(/<g class="dg-node/g) || []).length === 5 && (trh.match(/class="dg-node dg-rect dg-root/g) || []).length === 1 && /dg-rect is-hero/.test(trh) && /<tspan class="dg-sub"[^>]*>COO<\/tspan>/.test(trh), 'tree: a box per item, the first unindented one the root, the role under the name, `{.hero}` forward');
+    ok((trh.match(/<path class="dg-edge/g) || []).length === 4 && !/dg-head/.test(trh) && /d="M[\d.,]+V[\d.]+H[\d.]+V[\d.]+"/.test(trh) && /<li>Ops — Product<\/li>/.test(trh) && /<li>Product — Mobile<\/li>/.test(trh), 'tree: each item hangs from the last one less indented, by an elbow, no arrowhead; the hierarchy is in the page as text');
+    ok(!errs(tr).length && errs('::: diagram {.tree}\n- Alone\n:::\n', 'max-items').length === 1 && errs('::: diagram {.tree}\n- R\n' + '  - c\n'.repeat(10) + ':::\n', 'max-items').length === 1 && errs('::: diagram {.tree}\n- R\n' + Array.from({ length: 9 }, (_, k) => `  - A long name for a team ${k} | with a long role under it`).join('\n') + '\n:::\n', 'diagram-dense').length === 1, 'lint: a tree of 2 to 10 on a slide; nine long boxes on one level are `diagram-dense`');
+    // the relation forms: a hub, sets that overlap, rings, a staircase, a funnel; the tree left to right, the matrix's center
+    const form = (f, body) => JMD.render(one('::: diagram {.' + f + '}\n' + body + ':::\n'), {});
+    const rad = form('radial', 'center: Hub\n- A\n- B {.hero}\n- C\n- D\n');
+    ok(/class="dg-hub"[^>]*>Hub</.test(rad) && (rad.match(/<line class="dg-edge dg-spoke/g) || []).length === 4 && !/dg-arc/.test(rad) && (rad.match(/<div class="dg-card/g) || []).length === 4, 'radial: a hub named by `center:`, a spoke to each card, no arrow turning');
+    const ven = form('venn', 'center: Both\n- Left\n- Right {.hero}\n');
+    ok((ven.match(/<circle class="dg-set/g) || []).length === 2 && /dg-set dg-v2 is-hero/.test(ven) && /dg-center--venn[^>]*>Both</.test(ven) && (form('venn', '- a\n- b\n- c\n').match(/<circle class="dg-set/g) || []).length === 3, 'venn: two or three sets, the shared part named, the hero set fuller');
+    const tgt = form('target', '- Core {.hero}\n- Ring\n- Outside\n');
+    ok((tgt.match(/<circle class="dg-ring/g) || []).length === 3 && /dg-ring is-hero[^>]*r="[\d.]+"/.test(tgt) && (tgt.match(/<polyline class="dg-leader/g) || []).length === 3, 'target: a ring per item from the core out, each named by a leader');
+    const stp = form('steps', '- One\n- Two\n- Three\n- Four {.hero}\n');
+    const hs = [...stp.matchAll(/class="dg-card[^"]*" style="--k:\d+;height:(\d+)px/g)].map(m => +m[1]);
+    ok(hs.length === 4 && hs.every((h, k) => !k || h > hs[k - 1]) && /dg-card is-deep is-hero/.test(stp), 'steps: each step higher than the one before, the words light on the deep ones');
+    const fun = form('funnel', '- Wide\n- Mid\n- Narrow {.hero}\n');
+    const widths = [...fun.matchAll(/<polygon class="dg-band[^"]*" style="[^"]*" points="([\d.]+),[\d.]+ ([\d.]+)/g)].map(m => m[2] - m[1]);
+    ok(widths.length === 3 && widths[0] > widths[1] && widths[1] > widths[2], 'funnel: the bands narrow from the first item down');
+    ok(/diagram--lr/.test(JMD.render(one('::: diagram {.tree .lr}\n- R\n  - a\n  - b\n:::\n'), {})) && /class="dg-grid-center"[^>]*>Pick</.test(form('matrix', 'center: Pick\n- a\n- b\n- c\n- d\n')), '`{.tree .lr}` grows left to right; a matrix names its center');
+    ok(errs('::: diagram {.radial}\n- a\n- b\n- c\n:::\n', 'diagram-center').length === 1 && errs('::: diagram {.venn}\n- a\n- b\n- c\n- d\n:::\n', 'max-items').length === 1 && !JMD.lint(one('::: diagram {.tree .lr}\n- R\n  - a\n:::\n')).some(f => f.rule === 'diagram-form'), 'lint: a radial needs its hub; a venn holds two or three; `.lr` is a tree\'s option, not an unknown form');
+    const heroOf = l => (JMD.render(one('::: diagram\nflowchart LR\n  ' + l + '\n:::\n'), {}).match(/dg-node dg-(\w+)[^"]*is-hero/) || [])[1];
+    ok(heroOf('A[Ship]{.hero} --> B') === 'rect' && heroOf('A{.hero} --> B') === 'rect' && heroOf('A[Ship] {.hero}') === 'rect' && heroOf('A --> B{Go?}{.hero}') === 'diamond', '`{.hero}`, the format\'s own modifier, puts a node forward like `:::hero` — and `A{.hero}` is not a decision');
+    ok((JMD.render(one(flow), {}).match(/<g class="dg-step">/g) || []).length === 5, 'a flowchart is one step per node — what an explain slide shows click by click');
+    const hostile = JMD.render(one('::: diagram {.cycle .x" onload="alert(1)}\ncenter: <img src=x onerror=alert(2)>\n- <script>alert(3)</script> | [x](javascript:alert(4))\n- "><svg onload=alert(5)> {.hero" onclick="alert(6)}\n- c\n:::\n'), {});
+    ok(!/<(script|img)\b|<[^>]*\son\w+\s*=|href="javascript:/i.test(hostile) && hostile.includes('&lt;script&gt;alert(3)&lt;/script&gt;'), 'forms: hostile words are text, a javascript: link becomes #, no attribute is reached', hostile.slice(0, 200));
+    // in a real page: the diagrams sample builds clean, an explain slide steps its diagram, a reveal leaves only the hero lit
+    execSync('node tools/build.mjs decks/samples/diagrams.jmd', BUILD);
+    p = await open('file://' + join(root, 'build/diagrams.james-jmd.html')); await p.settle();
+    ok(await p.eval('jamesJmd.state.lint.filter(x => x.level !== "info").length') === 0 && await p.eval('document.querySelectorAll(".diagram").length') === 9, 'diagrams.jmd: nine diagrams, no finding', JSON.stringify(await p.eval('jamesJmd.state.lint.filter(x => x.level !== "info")')));
+    await p.eval('jamesJmd.motion("soft"); jamesJmd.show([...document.querySelectorAll(".slide")].findIndex(s => s.classList.contains("slide--explain"))); true'); await p.settle(100);
+    const dstep = await p.eval('(() => { const s = document.querySelector(".slide--explain"); return { pending: s.querySelectorAll(".dg-card.is-pending").length, cards: s.querySelectorAll(".dg-card").length }; })()');
+    await p.key('ArrowRight'); await p.settle(50);
+    const dafter = await p.eval('document.querySelectorAll(".slide--explain .dg-card.is-pending").length');
+    ok(dstep.cards === 4 && dstep.pending === 4 && dafter === 3, 'explain: a cycle\'s cards arrive one by one on →', JSON.stringify(dstep) + ' ' + dafter);
+    // in the editor a box is drawn, not typed: a press on it opens the slide's source on the box's line
+    await p.eval('jamesJmd.motion("none"); jamesJmd.show(1); jamesJmd.edit(); true'); await p.settle(80);
+    await p.eval('(() => { const g = [...document.querySelectorAll(".slide.is-active .dg-node")].find(n => n.textContent === "Shipped"); g.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); })(); true'); await p.settle(50);
+    const picked = await p.eval('(() => { const t = document.getElementById("edit-src"); return t.value.slice(t.selectionStart, t.selectionEnd); })()');
+    ok(picked === 'D ==> F([Shipped]){.hero}' && await p.eval('document.activeElement.id') === 'edit-src', 'editor: a press on a diagram box selects its line in the source', picked);
+    await p.close();
+    writeFileSync(join(root, 'build/reveal-diagram.jmd'), H.replace('notes: n', 'intent: reveal\nnotes: n') + '::: diagram {.cycle}\n- A\n- B {.hero}\n- C\n:::\n');
+    execSync('node tools/build.mjs build/reveal-diagram.jmd', BUILD);
+    p = await open('file://' + join(root, 'build/reveal-diagram.james-jmd.html')); await p.settle(1500);
+    const rev = await p.eval('(() => { const c = [...document.querySelectorAll(".dg-card")]; return c.map(x => getComputedStyle(x).opacity); })()');
+    ok(rev.length === 3 && +rev[1] === 1 && +rev[0] < 0.5 && +rev[2] < 0.5, 'reveal: the hero stays lit, the other cards go quiet (after their motion too)', rev.join(','));
+    await p.close();
+    // in a real page: the sample builds clean, the chart moves in a presented deck and stands still where motion is off
+    execSync('node tools/build.mjs decks/samples/numbers.jmd', BUILD);
+    p = await open('file://' + join(root, 'build/numbers.james-jmd.html')); await p.settle();
+    ok(await p.eval('jamesJmd.state.lint.filter(x => x.level !== "info").length') === 0 && await p.eval('document.querySelectorAll(".chart .chart-svg").length') === 4 && await p.eval('document.querySelectorAll(".table tbody tr").length') === 3, 'numbers.jmd: four charts and a table, no finding');
+    await p.eval('jamesJmd.show(2); true'); await new Promise(r => setTimeout(r, 120));
+    ok(await p.eval('getComputedStyle(document.querySelector(".slide.is-active .chart-bar")).animationName') === 'jc-grow-y', 'presented, a bar grows from its axis (jc-grow-y)');
+    await p.eval('jamesJmd.show(3); true'); await new Promise(r => setTimeout(r, 120));
+    ok(await p.eval('getComputedStyle(document.querySelector(".slide.is-active .chart-line")).animationName') === 'jc-draw', 'presented, a line draws itself (jc-draw)');
+    await p.eval('jamesJmd.motion("none"); jamesJmd.show(2); true'); await new Promise(r => setTimeout(r, 60));
+    ok(await p.eval('getComputedStyle(document.querySelector(".slide.is-active .chart-bar")).animationName') === 'none', 'motion off: the chart stands still');
+    // in place: a table cell is edited where it stands, its row keeps its edge pipes
+    await p.eval('jamesJmd.show(1); jamesJmd.edit(); true'); await p.settle(50);
+    await p.eval('document.querySelector(".slide.is-active .table tbody tr td").click(); true'); await p.settle(50);
+    ok(await p.eval('document.activeElement.classList.contains("is-inline") && document.activeElement.textContent') === 'Starter', 'click on a table cell opens it in place with its source text');
+    await p.eval('document.activeElement.textContent = "Solo"; document.activeElement.dispatchEvent(new Event("input", {bubbles: true})); true');
+    await new Promise(r => setTimeout(r, 300));
+    await p.eval('document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); true'); await p.settle(100);
+    const numbersSrc = readFileSync(join(root, 'decks/samples/numbers.jmd'), 'utf8');
+    ok(await p.eval('jamesJmd.state.src') === numbersSrc.replace('| Starter | 1 240 |', '| Solo | 1 240 |'), 'Enter commits: that cell of that row changed, the edge pipes where they were, nothing else moved');
+    await p.close();
+    // the other layouts: the same source lints clean as a Story and as a Doc
+    for (const lay of ['story', 'doc']) {
+      const f = join(tmp, `numbers-${lay}.jmd`); writeFileSync(f, numbersSrc.replace('layout: slide', 'layout: ' + lay));
+      const r = cli(`lint ${f} --dom --json`, false); const js = JSON.parse(typeof r === 'string' ? r : r.out);
+      ok(js.ok === true && js.findings.every(x => x.level !== 'warning'), `numbers.jmd as a ${lay}: no error, no fit`, JSON.stringify(js.findings));
+    }
+  }
 
   console.log('\n7b. Case: what the format names is read in lowercase');
   {
@@ -343,6 +567,28 @@ try {
     await p.mouse(im.x, im.y); await p.settle(100);
     ok(!(await p.eval('document.querySelector(".slide.is-active").hasAttribute("contenteditable")')) && await p.eval('document.activeElement.tagName') !== 'SECTION' && !(await p.eval('document.querySelector(".slide.is-active").textContent.trim() === "---"')), 'a click on an image never turns the slide into an editable field');
     ok(await p.eval('document.querySelectorAll("[data-line]").length') > 0 && await p.eval('document.querySelectorAll("section.slide[data-line]").length') === 0, 'only text pieces carry data-line, never a slide');
+
+    /* **The first slide of a deck whose body follows the front matter directly** (2026-09-27, found on a live deck). Every
+       sample here opens its first slide with a `---`, and every in-place test above is on slide 2 or later — so the one
+       shape that was broken was the one nothing drove: with no `---` to open it, that slide got no `bodyStart`, the base of
+       every node's map fell back to 0, and its title claimed **line 0 of the document**. Clicking it and typing rewrote the
+       front matter's own `---`: the title on screen did not move, the deck lost its header, and the mangled source was
+       saved. It is read here at three levels — the map, the `data-line` in the markup, and the click — because the first
+       is the cause, the second is what the editor reads, and the third is what a person does. */
+    const bare = '---\nformat: jmd/1\ntitle: Held\n---\n# First title\nA lead line.\n\n---\n# Second\nMore.\n';
+    const head = JMD.parse(bare).slides[0].nodes.find(n => n.type === 'title');
+    ok(head.map[0] === 4 && JMD.parse(bare).slides[1].nodes.find(n => n.type === 'title').map[0] === 8,
+      'a title on a first slide the front matter opens is counted from the document, not from the slide', String(head.map[0]));
+    await p.eval('jamesJmd.load(' + JSON.stringify(bare) + ', "bare.jmd"); true'); await p.settle();
+    await p.eval('jamesJmd.state.editing || jamesJmd.edit(); jamesJmd.show(0); true'); await p.settle(100); // 0-based: the first slide, the one that was broken
+    ok(await p.eval('document.querySelector(".slide.is-active h1").dataset.line') === '4', 'and the markup says so: the editor writes back to the line the text came from', await p.eval('document.querySelector(".slide.is-active h1").dataset.line'));
+    await p.eval('document.querySelector(".slide.is-active h1").click(); true'); await p.settle(50);
+    await p.eval('document.activeElement.textContent = "Renamed"; document.activeElement.dispatchEvent(new Event("input", {bubbles: true})); true');
+    await new Promise(r => setTimeout(r, 300));
+    await p.eval('document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); true'); await p.settle(100);
+    const renamed = await p.eval('jamesJmd.state.src');
+    ok(renamed === bare.replace('# First title', '# Renamed') && renamed.startsWith('---\nformat: jmd/1'),
+      'clicking that title changes that title — and the front matter is still where it was', JSON.stringify(renamed.split('\n').slice(0, 6)));
     // help: the palette of shapes, the caret hint, the bg chip
     await p.eval('jamesJmd.load(' + JSON.stringify(fixed) + ', "four-blocks.jmd"); jamesJmd.state.editing || jamesJmd.edit(); jamesJmd.show(1); true'); await p.settle(100);
     const chips = await p.eval('Array.from(document.querySelectorAll("#edit-chips button")).map(b => b.textContent)');
@@ -363,9 +609,65 @@ try {
     ok(over.lint > 0 && over.cls && over.line === 'dashed' && over.top === '660px', 'an overflowing slide draws a dashed line at 660px in edit mode (' + JSON.stringify(over) + ')');
     // decoration the theme applies on its own: the brand's watermark and card markers
     await p.eval('jamesJmd.load(' + JSON.stringify(readFileSync(join(root, 'decks/samples/product-tour.jmd'), 'utf8')) + ', "product-tour.jmd"); true'); await p.settle(100);
-    const deco = await p.eval('(() => { const wms = Array.from(document.querySelectorAll(".slide .wm")).map(w => w.className + " " + (w.querySelector("use") || {}).getAttribute("href")); const split = document.querySelector(".slide--split .wm"); const glyphs = Array.from(document.querySelectorAll(".card .num--glyph use")).map(u => u.getAttribute("href")); const vivid = document.querySelectorAll(".card--vivid").length; const offset = document.querySelectorAll(".cards--offset").length; const wmOpacity = getComputedStyle(document.querySelector(".slide:not(.slide--indigo):not(.slide--accent):not(.slide--sky) .wm--mark svg")).opacity; return { wms, split: !!split, glyphs, vivid, offset, wmOpacity, marks: document.querySelectorAll("symbol[id^=brand-glyph-]").length }; })()');
-    ok(deco.wms.length > 3 && deco.wms.some(c => c.includes('wm--a') && c.includes('brand-glyph-1')) && deco.wms.some(c => c.includes('wm--b') && c.includes('brand-glyph-2')), 'content slides carry the watermark: the mark\'s shape family, variant and side alternating (' + deco.wms.length + ')');
-    ok(+deco.wmOpacity <= 0.04, 'the watermark is faint (opacity ' + deco.wmOpacity + ')');
+    const deco = await p.eval('(() => { const wms = Array.from(document.querySelectorAll(".slide .wm")).map(w => w.className + " " + (w.querySelector("use") || {}).getAttribute("href")); const split = document.querySelector(".slide--split .wm"); const glyphs = Array.from(document.querySelectorAll(".card .num--glyph use")).map(u => u.getAttribute("href")); const vivid = document.querySelectorAll(".card--vivid").length; const offset = document.querySelectorAll(".cards--offset").length; const wmOpacity = getComputedStyle(document.querySelector(".slide:not(.slide--intent):not(.slide--indigo):not(.slide--accent):not(.slide--sky) .wm--mark .wm-g")).opacity; return { wms, split: !!split, glyphs, vivid, offset, wmOpacity, marks: document.querySelectorAll("symbol[id^=brand-glyph-]").length }; })()');
+    ok(deco.wms.length > 3 && deco.wms.every(c => c.includes('brand-glyph-1')) && deco.wms.some(c => c.includes('wm--a')) && deco.wms.some(c => c.includes('wm--b')), 'content slides carry the watermark: one glyph for the whole deck, side alternating (' + deco.wms.length + ')');
+    ok(+deco.wmOpacity <= 0.04, 'the watermark is faint on a neutral slide (opacity ' + deco.wmOpacity + ')');
+    // the glyph that travels: the intent poses it (engine.css), a measure places it where the pose hangs on the page (act),
+    // the presenter flies it from one pose to the next, and on explain walks it under each step — motion only
+    await p.eval('jamesJmd.load(' + JSON.stringify(readFileSync(join(root, 'decks/samples/team-update.jmd'), 'utf8')) + ', "team-update.jmd"); true'); await p.settle(400);
+    const pose = await p.eval('(() => { const s = jamesJmd.state.slides, at = i => { const g = s[i].querySelector(".wm-g"), c = g && getComputedStyle(g); return c && { x: parseFloat(c.left), y: parseFloat(c.top), w: parseFloat(c.width), o: +c.opacity }; }; const idx = n => s.findIndex(x => x.dataset.intent === n); const act = s[idx("act")], cta = act.querySelector("a.cta").getBoundingClientRect(), r0 = act.getBoundingClientRect(), k = r0.width / 1280; return { hook: at(idx("hook")), prove: at(idx("prove")), act: at(idx("act")), ctaRight: (cta.right - r0.left) / k, ctaMid: (cta.top + cta.height / 2 - r0.top) / k }; })()');
+    ok(Math.abs(pose.hook.x - 640) < 2 && pose.hook.w > 800, 'hook: the glyph is huge, centred behind the words (' + JSON.stringify(pose.hook) + ')');
+    ok(pose.prove.w <= 40 && pose.prove.o === 1, 'prove: the glyph is a small full stamp (' + JSON.stringify(pose.prove) + ')');
+    ok(pose.act.x > pose.ctaRight && pose.act.x - pose.ctaRight < 120 && Math.abs(pose.act.y - pose.ctaMid) < 2, 'act: the glyph is measured beside the button (' + JSON.stringify(pose.act) + ', button ends at ' + Math.round(pose.ctaRight) + ')');
+    const wasEditing = await p.eval('(() => { const e = jamesJmd.state.editing; if (e) jamesJmd.edit(); return e; })()'); await p.settle(100);
+    const flight = await p.eval('(() => { const s = jamesJmd.state.slides, h = s.findIndex(x => x.dataset.intent === "hook"); jamesJmd.motion("soft"); jamesJmd.show(h); jamesJmd.show(h + 1); const soft = s[h + 1].querySelector(".wm-g").getAnimations().length; jamesJmd.motion("none"); jamesJmd.show(h); jamesJmd.show(h + 1); const none = s[h + 1].querySelector(".wm-g").getAnimations().length; return { soft, none }; })()');
+    ok(flight.soft === 1 && flight.none === 0, 'presenting, the glyph flies from one pose to the next — never with motion none (' + JSON.stringify(flight) + ')');
+    const walk = await p.eval('(() => { const s = jamesJmd.state.slides, e = s.findIndex(x => x.dataset.intent === "explain"), g = s[e].querySelector(".wm-g"); jamesJmd.motion("soft"); jamesJmd.show(e); const x0 = g.style.getPropertyValue("--gx"); jamesJmd.next(); const x1 = g.style.getPropertyValue("--gx"); jamesJmd.next(); const x2 = g.style.getPropertyValue("--gx"); jamesJmd.prev(); jamesJmd.prev(); const back = g.style.getPropertyValue("--gx"); return { x0, x1, x2, back }; })()');
+    await p.eval('(() => { jamesJmd.state.motion = null; ' + (wasEditing ? 'jamesJmd.edit(); ' : '') + 'return true; })()'); await p.settle(100); // the suite goes on as it was
+    // the QR code a shared deck carries (mcp/qr.mjs): what the server draws must scan back to the link, at every length a
+    // read link can have and well past it (versions 1 to 9), read by the browser's own detector where it has one
+    // the QR code is drawn by the service, which the public tree does not ship (PUBLIC.md): asserted where mcp/ is
+    const { qrSvg } = existsSync(join(root, 'mcp/qr.mjs')) ? await import('../mcp/qr.mjs') : {};
+    if (!qrSvg) console.log('  · no mcp/ in this tree: the QR code the service draws is not scanned back here');
+    else {
+    const qrTexts = ['https://slides.jamespot.io/deck/S_vQ3uZK5U4RLw2N', 'x', 'https://example.org/deck/' + 'a'.repeat(16) + '?n=' + 'é'.repeat(30), 'https://example.com/' + 'b'.repeat(150)];
+    const scanned = await p.eval('(async () => { if (!("BarcodeDetector" in window)) return null; const d = new BarcodeDetector({ formats: ["qr_code"] }), out = []; for (const svg of ' + JSON.stringify(qrTexts.map(t => qrSvg(t))) + ') { const img = new Image(); img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg.replace("currentColor", "#000")))); await img.decode(); const c = document.createElement("canvas"); c.width = c.height = 400; c.getContext("2d").drawImage(img, 0, 0, 400, 400); out.push(((await d.detect(c))[0] || {}).rawValue || ""); } return out; })()');
+    if (scanned) ok(JSON.stringify(scanned) === JSON.stringify(qrTexts), 'the QR code scans back to its link, from 1 byte to 170 (' + scanned.map(x => x.length).join(', ') + ')');
+    else console.log('  · no BarcodeDetector in this Chrome: the QR code is not scanned back here');
+    }
+    // Q shows the code where the page has one (a shared deck), and does nothing on a file that has none
+    const q = await p.eval('(() => { const key = () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "q" })); key(); const none = !document.getElementById("qr"); const d = document.createElement("div"); d.id = "qr"; document.body.appendChild(d); key(); const open = d.classList.contains("is-open"); key(); const shut = !d.classList.contains("is-open"); d.remove(); return { none, open, shut }; })()');
+    ok(q.none && q.open && q.shut, 'Q opens and closes the QR code of a shared deck, and is nothing on a file that has none (' + JSON.stringify(q) + ')');
+    // a phone held upright: the Slide deck is drawn as a Story, one screen at a time; turned sideways, the slides again
+    const phone = await browser.page('file://' + join(root, 'build/james-jmd.html'), { network: false });
+    await phone.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    await phone.send('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
+    await phone.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true, screenOrientation: { type: 'portraitPrimary', angle: 0 } });
+    await phone.eval('location.reload(); true'); await phone.settle(600);
+    await phone.eval('jamesJmd.load(' + JSON.stringify(readFileSync(join(root, 'decks/samples/team-update.jmd'), 'utf8')) + ', "team-update.jmd"); true'); await phone.settle(300);
+    const upright = JSON.parse(await phone.eval('JSON.stringify({ layout: jamesJmd.state.layout, reflowed: jamesJmd.state.reflowed, src: /layout: slide/.test(jamesJmd.state.src), story: document.body.classList.contains("layout-story") })'));
+    await phone.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 300, y: 400 }] });
+    await phone.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 180, y: 410 }] });
+    await phone.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await phone.settle(200);
+    const swipedTo = await phone.eval('jamesJmd.state.i');
+    const bar = JSON.parse(await phone.eval('JSON.stringify({ shown: getComputedStyle(document.getElementById("progress")).display, n: document.querySelectorAll("#progress button").length, done: document.querySelectorAll("#progress .is-done").length })'));
+    await phone.eval('document.querySelectorAll("#progress button")[6].click(); true'); const jumped = await phone.eval('jamesJmd.state.i');
+    await phone.eval('jamesJmd.show(1); true');
+    ok(bar.shown === 'flex' && bar.n === 10 && bar.done === 2 && jumped === 6, 'on a touch screen, the story bar: one segment a screen, the seen ones filled, a tap goes there (' + JSON.stringify(bar) + ', tapped 7 → ' + (jumped + 1) + ')');
+    // the bar takes the colour of what is under it: the dark band of a tall phone, or the screen itself on a 9:16 one
+    const tint = async i => { await phone.eval('jamesJmd.show(' + i + '); true'); await phone.settle(100); return phone.eval('document.getElementById("progress").classList.contains("is-light")'); };
+    const inBand = await tint(2);
+    await phone.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 693, deviceScaleFactor: 1, mobile: true, screenOrientation: { type: 'portraitPrimary', angle: 0 } }); await phone.settle(300);
+    const onWhite = await tint(2), onDark = await tint(1);
+    ok(!inBand && onWhite && !onDark, 'the story bar stays readable: white in the dark band, ink over a white screen, white over a dark one (' + [inBand, onWhite, onDark].join(' ') + ')');
+    await phone.eval('jamesJmd.show(1); true');
+    await phone.send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: true, screenOrientation: { type: 'landscapePrimary', angle: 90 } }); await phone.settle(500);
+    const sideways = JSON.parse(await phone.eval('JSON.stringify({ layout: jamesJmd.state.layout, i: jamesJmd.state.i })'));
+    phone.close && phone.close();
+    ok(upright.layout === 'story' && upright.reflowed && upright.src && upright.story, 'a phone held upright reads a Slide deck as a Story — the source still says slide (' + JSON.stringify(upright) + ')');
+    ok(swipedTo === 1, 'a swipe turns the page (' + swipedTo + ')');
+    ok(sideways.layout === 'slide' && sideways.i === 1, 'turned sideways, the slides again, on the same screen (' + JSON.stringify(sideways) + ')');
+    ok(walk.x0 === '' && walk.x1 && walk.x2 && walk.x2 !== walk.x1 && walk.back === '', 'explain: the glyph walks to each step as it arrives, and back to its corner (' + JSON.stringify(walk) + ')');
     ok(!deco.split, 'a split slide (already decorated) has no watermark');
     ok(deco.marks === 4 && [...new Set(deco.glyphs)].length >= 3 && deco.glyphs[0] === '#brand-glyph-1' && deco.glyphs[1] === '#brand-glyph-2', 'cards take one shape of the family each, rotating (' + [...new Set(deco.glyphs)].join(' ') + ')');
     const look2026 = JMD.render(JMD.parse(readFileSync(join(root, 'decks/samples/product-tour.jmd'), 'utf8')), { brand: { glyphs: 4, 'card-fill': 'alternate', 'card-shadow': 'offset' } });
@@ -525,6 +827,47 @@ try {
       const r = cli(`lint ${drafted} --json`, false); const js = JSON.parse(typeof r === 'string' ? r : r.out);
       ok(js.slides > 0 && !js.findings.some(f => f.rule === 'missing-asset' || f.rule === 'unknown-block' || f.rule === 'format'), 'jmd import: the draft parses, every referenced media exists', JSON.stringify(js.findings.filter(f => f.level === 'error')));
     } else console.log('  – JMD_TEST_PPTX not set, importer run skipped');
+    /* An Office file is the one zip with folders in it (lib/pptx.mjs): `paths: true` takes `ppt/slides/slide1.xml` and
+       `[Content_Types].xml`, never a `..`, and `deflate: true` is still read back by unzip and by us. */
+    const office = writeZip({ '[Content_Types].xml': '<Types/>'.repeat(40), '_rels/.rels': '<R/>', 'ppt/media/a.png': Buffer.alloc(300, 1) }, { paths: true, deflate: true });
+    writeFileSync(join(tmp, 'office.zip'), office);
+    let officeSays = ''; try { officeSays = execSync('unzip -t office.zip', { cwd: tmp, encoding: 'utf8' }); } catch (e) { officeSays = String(e.stdout || e.message); }
+    const refusedPaths = ['ppt/../x.xml', '/abs.xml', 'ppt//x.xml', '..'].filter(n => { try { writeZip({ [n]: 'x' }, { paths: true }); return false; } catch { return true; } });
+    ok(/No errors detected/.test(officeSays) && readZip(office).text('_rels/.rels') === '<R/>' && refusedPaths.length === 4, 'writeZip paths: folders and brackets for an Office file, deflated and read back; `..`, a leading `/` or an empty segment refused', officeSays.split('\n')[0] + ' refused=' + refusedPaths.join(','));
+  }
+
+  console.log('\n9b. PowerPoint export (lib/pptx.mjs)');
+  {
+    /* The deck's words land in XML that PowerPoint, Keynote and OnlyOffice (Wedoc) parse: every character is escaped, a link
+       leaves only as https/http/mailto, and the file opens in a reader that is not ours — our own importer reads it back. */
+    const jmdLib = await import('../lib/jmd.mjs');
+    const { readZip } = await import('./zip.mjs');
+    const { importPptx } = await import('../lib/import-pptx.mjs');
+    const evil = `---\nformat: jmd/1\nlayout: slide\ntitle: Export & co\nlang: en\n---\n\n---\nnotes: Say <b>this</b> & that.\n---\n# Tags <script>alert(1)</script> & "quotes" ]]>\nA [safe link](https://www.jamespot.com) and a [bad one](javascript:alert(1)).\n\n---\n\n## Second screen\n\n::: metrics\n- 42 | answers | and nothing else\n- 7 | days | a week\n:::\n`;
+    const buf = await jmdLib.pptx(evil, { brand: ANY_BRAND });
+    const z = readZip(buf), slide1 = z.text('ppt/slides/slide1.xml'), rels1 = z.text('ppt/slides/_rels/slide1.xml.rels');
+    ok(buf.slice(0, 2).toString() === 'PK' && z.has('[Content_Types].xml') && z.has('ppt/presentation.xml') && z.has('ppt/slides/slide2.xml') && !z.has('ppt/slides/slide3.xml'), 'pptx: a zip with the Office parts, one slide per screen');
+    ok(!/<script/i.test(slide1) && slide1.includes('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot; ]]&gt;'), 'pptx: the deck\'s words are escaped in the slide XML — a tag in a title is text, never markup');
+    ok(rels1.includes('https://www.jamespot.com') && !/javascript:/i.test(rels1) && !/javascript:/i.test(slide1.replace(/<a:t>[^<]*<\/a:t>/g, '')), 'pptx: an https link leaves as a link, a javascript: link never does', rels1.match(/Target="[^"]*"/g)?.join(' '));
+    ok(z.has('ppt/notesSlides/notesSlide1.xml') && z.text('ppt/notesSlides/notesSlide1.xml').includes('Say &lt;b&gt;this&lt;/b&gt; &amp; that.'), 'pptx: the speaker notes travel, escaped');
+    ok(/<a:t>42<\/a:t>/.test(z.text('ppt/slides/slide2.xml')) && /<a:t>answers<\/a:t>/.test(z.text('ppt/slides/slide2.xml')), 'pptx: a block\'s text is native text — a metric is a number someone can edit');
+    ok(Object.keys(z).length >= 0 && [...z.names].filter(n => n.startsWith('ppt/media/')).every(n => z.read(n).slice(1, 4).toString() === 'PNG'), 'pptx: what is not text (the watermark, the drawing) is PNG pictures');
+    writeFileSync(join(tmp, 'export.pptx'), buf);
+    const back = await importPptx(join(tmp, 'export.pptx'), join(tmp, 'export-back'), { brand: ANY_BRAND });
+    const backSrc = readFileSync(back.jmd, 'utf8');
+    ok(back.slides === 2 && backSrc.includes('Second screen') && backSrc.includes('42'), 'pptx: our own importer opens the export and finds its screens and words', `${back.slides} slides`);
+    let refusedWeb = null; try { await jmdLib.pptx('---\nformat: jmd/1\nlayout: webpage\n---\n\n# One page\n'); } catch (e) { refusedWeb = e; }
+    ok(refusedWeb && refusedWeb.code === 'JMD_NO_SCREEN', 'pptx: a webpage has no screens to give PowerPoint — refused in words', String(refusedWeb));
+    /* The face (spec/export.md "Fonts"): the brand's own is embedded in a deck, never in an Office file — the brand names the
+       face the reader's suite has (Jamespot: Arial, Arial Black for Garet Heavy), one name of its own shape, nothing else. */
+    const faces = [...slide1.matchAll(/<a:rPr [^>]*?b="([01])"[^>]*>(?:(?!<\/a:rPr>).)*?<a:latin typeface="([^"]*)"/g)].map(m => m[2] + ':' + m[1]);
+    if (!HOUSE) ok(faces.length && !faces.some(f => /Garet/.test(f)), 'pptx: every run names a face, and never a brand face the Office suite does not have', [...new Set(faces)].join(' '));
+    else ok(faces.includes('Arial Black:0') && faces.some(f => f.startsWith('Arial:')) && faces.includes('Courier New:0') && !faces.some(f => /Garet/.test(f)) && z.text('ppt/theme/theme1.xml').includes('typeface="Arial"'), 'pptx: the Jamespot faces — Arial Black for the heaviest weights (no bold on top), Arial for the rest, Courier New for a mono, never Garet', [...new Set(faces)].join(' '));
+    const { validateBrand } = await import('./safe.mjs');
+    const officeBad = ['Arial, Verdana', '"Arial"', 'x</style><script>', 'A;b', ''.padEnd(70, 'a')].filter(v => { try { validateBrand({ primary: '#000', 'font-office': v }); return false; } catch (e) { return /font-office/.test(e.message); } });
+    ok(officeBad.length === 5 && validateBrand({ primary: '#000', 'font-office': 'Arial', 'font-office-heavy': 'Arial Black' }), 'brand: font-office is one face (letters, digits, spaces) — a list, a quote, markup or 70 letters refused, the field named');
+    const plainBrand = await jmdLib.pptx(evil, { brand: 'slate' });
+    ok(!/typeface="(?!Arial"|Courier New")/.test(readZip(plainBrand).text('ppt/slides/slide2.xml')), 'pptx: a brand that names no office face gets Arial, which every suite has');
   }
 
   console.log('\n10. CLI and PDF pipeline');
@@ -593,6 +936,25 @@ try {
     ok((badBrand('accent', '"#123456; } </style>"') || '').includes('accent'), 'brand: a color carrying `;` is refused');
     ok((badBrand('type-scale', '"1</style>"') || '').includes('type-scale') && (badBrand('watermark', 'evil') || '').includes('watermark') && (badBrand('motion', 'x') || '').includes('motion'), 'brand: scale and enum fields are validated by shape');
     ok((badBrand('fonts', '../../../../etc/passwd') || '').includes('fonts') && badBrand('fonts', 'fonts/system.css') === null, 'brand: fonts must be a fonts/….css of the brands folder, nowhere else on the disk');
+    /* `brand` was the last channel through which a caller's words reached the server's disk (confirmed hole, closed). `dir`
+       has been confined under a scratch folder for the call since §2, but a brand naming a `.yaml` path went straight to
+       readFileSync: on the hosted server that read any .yaml of the machine, quoted one of its lines back verbatim through
+       the shape error that refused it, and — a file that is there failing differently from one that is not — told a caller
+       which paths exist. Locally a path must keep working: `--brand=./ours.yaml` is the point of the flag. So the assertion
+       is in two halves, and the second one is that hosted the answer is the *same sentence* either way: no oracle left. */
+    const { setBrandPaths } = await import('../tools/build.mjs');
+    const outside = join(tmp, 'outside-brand.yaml'), leaky = join(tmp, 'leaky-brand.yaml'), absent = join(tmp, 'no-such-brand.yaml');
+    writeFileSync(outside, 'name: Read from outside the tree\nprimary: "#ff0000"\n');
+    writeFileSync(leaky, 'accent: A-LINE-OF-A-FILE-NOBODY-ASKED-FOR\nprimary: "#00ff00"\n');
+    ok(loadBrand(outside).name === 'Read from outside the tree', 'locally a brand may be a .yaml anywhere: the disk belongs to whoever typed the command');
+    setBrandPaths(false); // what mcp/tools.mjs setHosted(true) does
+    const hostedSays = p => { try { loadBrand(p); return '(read it)'; } catch (e) { return e.message; } };
+    const there = hostedSays(outside), lineOf = hostedSays(leaky), notThere = hostedSays(absent);
+    setBrandPaths(true);
+    ok(/a path is not a brand/.test(there) && /a path is not a brand/.test(lineOf) && there === notThere && lineOf === notThere,
+      'hosted a path is not a brand at all, and the refusal is one sentence whether the file is there or not: no file read, no line of it quoted back, no way to learn which paths exist', JSON.stringify([there.slice(0, 40), notThere === there]));
+    ok(!lineOf.includes('A-LINE-OF-A-FILE-NOBODY-ASKED-FOR') && loadBrand('mono').id === 'mono' && loadBrand('primary: "#112233"').id === 'custom',
+      'and what still works is what a caller is meant to name: an id, or the YAML itself', lineOf.slice(0, 60));
     ok(!/["<>{};]/.test(cssStr(fontAttack)) && cssStr('Helvetica Neue') === 'Helvetica Neue', 'interpolation escapes CSS anyway: nothing can close a string, a rule or the <style>');
     const built0 = buildHtml({ jmd: adversarial, name: 'x"><script>alert(0)</script>.jmd', brand: 'name: "Acme */</style><script>alert(0)</script>"\nprimary: "#112233"', dir: deckDir });
     ok(!built0.includes('<script>alert(0)') && built0.includes('data-name="x&quot;&gt;&lt;script&gt;'), 'the deck name and the brand name are escaped where they land (attribute, CSS comment)');
@@ -659,7 +1021,7 @@ try {
     ok(await p.eval('window.__pwned === undefined') && await p.eval('document.querySelectorAll(".slide").length') === 4 && violations.length === 1, 'CSP: a foreign <script> added to the file is blocked (one violation), the runtime still renders', violations.join(' | '));
     await p.close();
     // the samples render with zero CSP noise, and the editor, export and print still work under the policy
-    for (const f of ['four-blocks', 'product-tour', 'team-update']) {
+    for (const f of ['four-blocks', 'product-tour', 'team-update', 'numbers']) {
       violations.length = 0;
       execSync(`node tools/build.mjs decks/samples/${f}.jmd`, BUILD);
       p = await open('about:blank'); await p.send('Log.enable'); p.on('Log.entryAdded', e => { if (/Content Security Policy/.test(e.entry.text)) violations.push(e.entry.text.slice(0, 120)); });
@@ -667,12 +1029,60 @@ try {
       ok(violations.length === 0 && await p.eval('document.querySelectorAll(".slide").length') > 0, `${f}: renders under the CSP with no violation`, violations.join(' | '));
       await p.close();
     }
+    // the data blocks: the first that draw SVG from what the author wrote — labels, values, unit, series and cells all try
+    const advData = ['---', 'format: jmd/1', 'layout: slide', `brand: ${ANY_BRAND}`, '---', '', '---', 'notes: n', '---', '## Chart',
+      '::: chart {.bar .x" onload="alert(1)}', 'unit: k€"/><script>alert(2)</script>', 'series: <svg onload=alert(3)> | </text><script>alert(4)</script>',
+      '- <script>alert(5)</script> | 12 | 3', '- "><img src=x onerror=alert(6)> | 7 | 4 {.hero" onclick="alert(7)}', '- </svg><foreignObject><b>x</b></foreignObject> | 9 onmouseover=alert(8) | 2', ':::',
+      '', '---', 'notes: n', '---', '## Pie', '::: chart {.pie}', '- <script>alert(9)</script> | 3 {.hero}', '- [js](javascript:alert(10)) | 4', ':::',
+      '', '---', 'notes: n', '---', '## Table', '::: table', '| <script>alert(11)</script> | </td></tr></table><script>alert(12)</script> |', '|---|---|',
+      '| <svg onload=alert(13)> | [x](javascript:alert(14)) | {.hero" onclick="alert(15)}', ':::', ''].join('\n');
+    const dataPath = join(tmp, 'adversarial-data.james-jmd.html'); writeFileSync(dataPath, buildHtml({ jmd: advData, name: 'adversarial-data.jmd', brand: ANY_BRAND }));
+    violations.length = 0;
+    p = await open('about:blank'); await p.send('Log.enable'); p.on('Log.entryAdded', e => { if (/Content Security Policy/.test(e.entry.text)) violations.push(e.entry.text.slice(0, 120)); });
+    await p.navigate('file://' + dataPath); await p.settle();
+    const dd = JSON.parse(await p.eval(`JSON.stringify({
+      slides: document.querySelectorAll('.slide').length,
+      scripts: [...document.scripts].filter(s => !['application/json', 'text/jmd'].includes(s.type)).length,
+      handlers: [...document.querySelectorAll('*')].reduce((n, el) => n + [...el.attributes].filter(a => /^on/i.test(a.name)).length, 0),
+      foreign: [...document.querySelectorAll('.chart-svg *')].map(el => el.tagName).filter(t => !['defs', 'linearGradient', 'stop', 'path', 'rect', 'text', 'line', 'polyline', 'polygon', 'circle'].includes(t)),
+      svgs: document.querySelectorAll('.chart-svg').length, imgs: document.querySelectorAll('.slide img').length,
+      links: [...document.querySelectorAll('.slide a')].map(a => a.getAttribute('href')),
+      text: [...document.querySelectorAll('.slide')].map(s => s.textContent).join(' ')
+    })`));
+    ok(dd.slides === 3 && dd.svgs === 2 && dd.scripts === 1 && dd.handlers === 0 && dd.foreign.length === 0 && dd.imgs === 0, 'data blocks: one script (ours), zero on* attributes, nothing in a chart but the drawing\'s own elements, no image smuggled in', JSON.stringify({ ...dd, text: '' }));
+    ok(dd.text.includes('<script>alert(5)</script>') && dd.text.includes('<script>alert(11)</script>') && dd.links.every(h => h === '#'), 'labels and cells show as literal text, a javascript: link in a cell or a key becomes #');
+    ok(violations.length === 0, 'no CSP violation while rendering the hostile data blocks', violations.join(' | '));
+    await p.close();
+    // the diagram: labels, ids, classes, directives and links all try; a node's text is the only thing the author reaches
+    const advDia = ['---', 'format: jmd/1', 'layout: slide', `brand: ${ANY_BRAND}`, '---', '', '---', 'notes: n', '---', '## Diagram', '::: diagram {.x" onload="alert(1)}',
+      '%%{init: {"securityLevel": "loose", "theme": "base", "themeVariables": {"primaryColor": "url(javascript:alert(2))"}}}%%', 'flowchart TD',
+      '  A["<img src=x onerror=alert(3)>"] -->|"</text><script>alert(4)</script>"| B{<svg onload=alert(5)>}', '  B --> C["</tspan></text></svg><foreignObject><b>x</b></foreignObject>"]:::hero" onclick="alert(6)',
+      '  C --> D[["javascript:alert(7)"]]', '  click A href "javascript:alert(8)"', '  click B call alert(9)', '  style A fill:url(javascript:alert(10))', '  linkStyle 0 stroke:red', ':::', '',
+      '---', 'notes: n', '---', '## Many', '::: diagram', 'graph LR', '  ' + Array.from({ length: 500 }, (_, k) => 'N' + k).join(' --> '), ':::', ''].join('\n');
+    const diaPath = join(tmp, 'adversarial-diagram.james-jmd.html'); writeFileSync(diaPath, buildHtml({ jmd: advDia, name: 'adversarial-diagram.jmd', brand: ANY_BRAND }));
+    violations.length = 0;
+    p = await open('about:blank'); await p.send('Log.enable'); p.on('Log.entryAdded', e => { if (/Content Security Policy/.test(e.entry.text)) violations.push(e.entry.text.slice(0, 120)); });
+    const t0 = Date.now(); await p.navigate('file://' + diaPath); await p.settle();
+    const dg = JSON.parse(await p.eval(`JSON.stringify({
+      slides: document.querySelectorAll('.slide').length,
+      scripts: [...document.scripts].filter(s => !['application/json', 'text/jmd'].includes(s.type)).length,
+      handlers: [...document.querySelectorAll('*')].reduce((n, el) => n + [...el.attributes].filter(a => /^on/i.test(a.name)).length, 0),
+      foreign: [...document.querySelectorAll('.diagram-svg *')].map(el => el.tagName).filter(t => !['g', 'path', 'rect', 'text', 'tspan', 'polygon', 'circle'].includes(t)),
+      svgs: document.querySelectorAll('.diagram-svg').length, imgs: document.querySelectorAll('.slide img').length, links: document.querySelectorAll('.slide a').length,
+      hero: document.querySelectorAll('.dg-node.is-hero').length, js: document.querySelector('.diagram-svg').outerHTML.includes('javascript:') && [...document.querySelectorAll('.diagram-svg [href], .diagram-svg [style*="url"]')].length,
+      text: document.querySelector('.diagram').textContent,
+      lint: jamesJmd.state.lint.filter(f => f.level === 'error').map(f => f.rule)
+    })`));
+    ok(dg.slides === 2 && dg.svgs === 1 && dg.scripts === 1 && dg.handlers === 0 && dg.foreign.length === 0 && dg.imgs === 0 && dg.links === 0 && !dg.js && dg.hero === 1 && dg.lint.includes('diagram-syntax'), 'diagram: one script (ours), zero on* attributes, nothing in the drawing but its own elements, no link, no url(); `:::hero" onclick=…` is the hero class and a line not read, never an attribute', JSON.stringify({ ...dg, text: '' }));
+    ok(dg.text.includes('<img src=x onerror=alert(3)>') && dg.text.includes('</text><script>alert(4)</script>') && dg.lint.filter(r => r === 'diagram-click').length === 2 && dg.lint.includes('max-items'), 'diagram: hostile labels show as text; both `click` lines are errors; 500 nodes is `max-items`, shown as its text, never laid out', dg.lint.join(','));
+    ok(violations.length === 0 && Date.now() - t0 < 15000, 'no CSP violation, and a 500-node graph lays out without hanging the page', violations.join(' | ') + ' ' + (Date.now() - t0) + 'ms');
+    await p.close();
     p = await open('file://' + join(root, 'build/four-blocks.james-jmd.html')); await p.settle();
     await p.eval('URL.createObjectURL = b => { window.__blob = b; return "blob:test"; }; HTMLAnchorElement.prototype.click = function(){ window.__dl = this.download; }; window.print = () => { window.__printed = 1; }; true');
     await p.key('E'); const editOpen = await p.eval('document.getElementById("edit").classList.contains("is-open")'); await p.key('Escape');
-    await p.key('S'); const reExported = await p.eval('window.__blob.text()');
-    await p.key('P');
-    ok(editOpen && await p.eval('window.__dl') === 'four-blocks.james-jmd.html' && await p.eval('window.__printed') === 1, 'under the CSP: the editor opens, S exports, P prints');
+    await p.key('D'); await p.key('S'); const reExported = await p.eval('window.__blob.text()');
+    await p.eval('window.print = () => { window.__printed = 1; window.__printedAs = document.title; }; true'); await p.key('D'); await p.key('P');
+    ok(editOpen && /\.james-jmd\.html$/.test(await p.eval('window.__dl')) && await p.eval('window.__printed') === 1 && await p.eval('window.__printedAs') === (await p.eval('window.__dl')).replace(/\.james-jmd\.html$/, '') && /james-jmd$/.test(await p.eval('document.title')), 'under the CSP: the editor opens, D S exports, P prints — the PDF named like the page, the tab\'s title back after', JSON.stringify([await p.eval('window.__dl'), await p.eval('window.__printedAs')]));
     ok(/<meta http-equiv="Content-Security-Policy" content="[^"]*sha256-/.test(reExported) && new RegExp("sha256-" + runtimeHash[1].replace(/[+/=]/g, '\\$&')).test(reExported), 'the re-exported file keeps the CSP and the same runtime hash: it stays valid offline');
     await p.close();
   }
@@ -710,7 +1120,7 @@ try {
     ok(over.length === 1 && over[0].slide === 3 && /limit 1730/.test(over[0].message) && /new page with `---`/.test(over[0].message), 'overflow on a Doc page: measured against the A4 page, the message suggests a new page', JSON.stringify(over));
     await p.eval('window.print = () => { window.__printed = (window.__printed || 0) + 1; }; true');
     await p.eval(`jamesJmd.load(${JSON.stringify(onePager)}, "one-pager.jmd"); true`); await p.settle(300);
-    await p.key('P');
+    await p.key('D'); await p.key('P');
     ok(await p.eval('window.__printed') === 1, 'P prints a clean Doc');
     // back to a Slide deck in the same window: the stage returns to the single-slide stage
     await p.eval(`jamesJmd.load(${JSON.stringify(fixed)}, "four-blocks.jmd"); true`); await p.settle(200);

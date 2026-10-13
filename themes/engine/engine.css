@@ -129,15 +129,19 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 .mark-blob{position:absolute;z-index:0;pointer-events:none;color:var(--jp-purple-500)}
 /* watermark — a brand feature (watermark: mark | circles | none): faint, clipped by the edge, side alternating slide to slide */
 .wm{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.wm--mark svg{position:absolute;width:620px;height:620px;color:var(--brand-accent);opacity:.035}
-.wm--mark.wm--a svg{right:-150px;bottom:-190px}
-.wm--mark.wm--b svg{left:-170px;bottom:-230px;transform:rotate(18deg)}
+.wm--mark .wm-g{position:absolute;left:var(--gx);top:var(--gy);width:calc(var(--gs) * var(--wm-k,1));height:calc(var(--gs) * var(--wm-k,1));translate:-50% -50%;rotate:var(--gr);color:var(--gc);opacity:var(--go)}
+/* the glyph's pose: centre (--gx --gy, of the page), size in design px (--gs, × --wm-k per layout), rotation, color, opacity.
+   Neutral: big, faint, clipped by the edge, side alternating. Each intent poses it below; the presenter carries it from one pose
+   to the next (james-jmd.js, fly), so one shape travels through the deck. Same values in print: a pose is static. */
+.wm--mark .wm-g{--gx:87.5%;--gy:83.3%;--gs:620px;--gr:0deg;--gc:var(--brand-accent);--go:.035}
+.wm--mark.wm--b .wm-g{--gx:10.9%;--gy:88.9%;--gr:18deg}
+.wm-bit{display:none}
 .wm--circles:before,.wm--circles:after{content:"";position:absolute;border-radius:50%;background:var(--brand-bg-lavender,var(--jp-purple-100));opacity:.4}
 .wm--circles.wm--a:before{right:-170px;top:-160px;width:520px;height:520px}
 .wm--circles.wm--a:after{right:-80px;bottom:-220px;width:380px;height:380px}
 .wm--circles.wm--b:before{left:-200px;bottom:-200px;width:520px;height:520px}
 .wm--circles.wm--b:after{right:-120px;top:-150px;width:300px;height:300px}
-.slide--indigo .wm--mark svg,.slide--accent .wm--mark svg,.slide--sky .wm--mark svg{color:#fff;opacity:.05}
+.slide--indigo .wm--mark .wm-g,.slide--accent .wm--mark .wm-g,.slide--sky .wm--mark .wm-g{--gc:#fff;--go:.05}
 .slide--indigo .wm--circles:before,.slide--indigo .wm--circles:after,.slide--accent .wm--circles:before,.slide--accent .wm--circles:after,.slide--sky .wm--circles:before,.slide--sky .wm--circles:after{background:#fff;opacity:.07}
 .mark-blob--statement{top:-120px;right:-90px;width:440px;height:440px;opacity:.18}
 
@@ -176,6 +180,9 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 /* Plain Markdown outside blocks: single column */
 .prose{display:flex;flex-direction:column;gap:14px;max-width:1000px}
 .prose a{color:var(--jp-purple-700)}
+/* a link in a lead takes the lead's color, underlined — the browser's blue was unreadable on a dark band (1.27.0, /doc and /releases) */
+.slide-lead a:not(.cta){color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--hook,.slide--problem,.slide--celebrate,.slide--act) .prose a:not(.cta){color:#fff}
 .prose p{margin:0;font-size:max(17px, calc(22px * var(--type-scale,1)));line-height:1.5;color:var(--jp-ink-muted)}
 /* a plain list is designed, not left to the browser: a brand marker, room between items, the bold lead-in in ink;
    few items (≤4) read big with a hairline between them; many (8+) go to two columns */
@@ -319,6 +326,186 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
 .metric .s{font-size:14px;line-height:1.4;color:var(--jp-ink-muted)}
 .metric--hero .s{color:rgba(255,255,255,.78)}
 
+/* table — a Markdown pipe table, on-brand: the header in the deep color, rows that breathe, numbers aligned and tabular */
+.table-wrap{width:100%;overflow:hidden;border-radius:20px;border:1.5px solid var(--jp-line)}
+.table{width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums;font-size:max(15px, calc(19px * var(--type-scale,1)));line-height:1.35}
+.table th,.table td{padding:calc(13px * var(--type-scale,1)) 22px;text-align:left;vertical-align:middle}
+.table thead th{background:var(--jp-indigo-800);color:#fff;font-family:var(--font-display);font-weight:800;font-size:.86em;letter-spacing:.01em}
+.table td{color:var(--jp-ink-muted);border-top:1.5px solid var(--jp-line-soft);background:var(--jp-surface)}
+.table tbody tr:first-child td{border-top:0}
+.table tbody tr:nth-child(even) td{background:var(--jp-purple-050)}
+.table td:first-child{color:var(--jp-ink);font-weight:700}
+.table .is-right{text-align:right}.table .is-center{text-align:center}
+.table tr.is-hero td{background:var(--jp-purple-100);color:var(--jp-ink);font-weight:800}
+.table tr.is-hero td:first-child{box-shadow:inset 6px 0 0 var(--brand-accent)}
+.table strong{color:var(--jp-ink)}
+.table--compact th,.table--compact td{padding:calc(9px * var(--type-scale,1)) 18px}
+.table--compact{font-size:max(14px, calc(16px * var(--type-scale,1)))}
+.slide--wash .table-wrap,.slide--lavender .table-wrap,.slide--butter .table-wrap{border-color:transparent}
+:is(.slide--indigo,.slide--accent,.slide--sky) .table-wrap{border-color:rgba(255,255,255,.18)}
+:is(.slide--indigo,.slide--accent,.slide--sky) .table thead th{background:rgba(255,255,255,.14)}
+:is(.slide--indigo,.slide--accent,.slide--sky) .table td{background:transparent;color:rgba(255,255,255,.82);border-color:rgba(255,255,255,.12)}
+:is(.slide--indigo,.slide--accent,.slide--sky) .table tbody tr:nth-child(even) td{background:rgba(255,255,255,.05)}
+:is(.slide--indigo,.slide--accent,.slide--sky) .table td:first-child,:is(.slide--indigo,.slide--accent,.slide--sky) .table strong{color:#fff}
+:is(.slide--indigo,.slide--accent,.slide--sky) .table tr.is-hero td{background:var(--jp-yellow-500);color:var(--jp-indigo-800)}
+:is(.slide--indigo,.slide--accent,.slide--sky) .table tr.is-hero td:first-child{box-shadow:none}
+
+/* chart — numbers drawn in the brand's colors, never a library: the SVG is drawn in design units (jmd-core.js chartBox), so its
+   type is the slide's type. Series: accent, deep, secondary, highlight; slices: the same, then two quiet tones. */
+.chart{margin:0;display:flex;flex-direction:column;gap:14px;min-width:0;--c1:var(--brand-accent);--c2:var(--jp-indigo-800);--c3:var(--brand-secondary,var(--jp-purple-300));--c4:var(--jp-yellow-500);--c5:var(--jp-purple-300);--c6:var(--jp-ink-faint);--c-quiet:var(--jp-purple-200);--c-text:var(--jp-ink);--c-soft:var(--jp-ink-soft);--c-grid:var(--jp-line);--c-dot:#fff}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--problem,.slide--act) .chart{--c1:var(--jp-yellow-500);--c2:#fff;--c3:var(--jp-purple-300);--c4:var(--brand-secondary,var(--jp-purple-200));--c5:rgba(255,255,255,.55);--c6:rgba(255,255,255,.3);--c-quiet:rgba(255,255,255,.28);--c-text:#fff;--c-soft:rgba(255,255,255,.72);--c-grid:rgba(255,255,255,.18);--c-dot:var(--jp-indigo-800)}
+.slide--accent .chart{--c-dot:var(--brand-accent)}
+.chart-plot{display:flex;align-items:center;gap:56px;min-width:0}
+.chart-svg{display:block;width:100%;height:auto;overflow:visible;font-family:var(--font-body)}
+.chart-s1,.chart-c1{--c:var(--c1)}.chart-s2,.chart-c2{--c:var(--c2)}.chart-s3,.chart-c3{--c:var(--c3)}.chart-s4,.chart-c4{--c:var(--c4)}.chart-c5{--c:var(--c5)}.chart-c6{--c:var(--c6)}
+.chart-grad stop:first-child{stop-color:color-mix(in srgb,var(--c) 88%,white)}.chart-grad stop:last-child{stop-color:var(--c)}
+.chart-area-grad stop:first-child{stop-color:var(--c);stop-opacity:.30}.chart-area-grad stop:last-child{stop-color:var(--c);stop-opacity:0}
+.chart-bar.is-quiet{fill:var(--c-quiet)}
+.chart-line{fill:none;stroke:var(--c);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.chart-dot{fill:var(--c-dot);stroke:var(--c);stroke-width:3}
+.chart-dot.is-hero{fill:var(--c4);stroke:var(--c);stroke-width:4}
+.chart-slice{fill:var(--c);stroke:var(--c-dot);stroke-width:3}
+:is(.slide--white,.slide--wash,.slide--lavender,.slide--butter,.slide--intent) .chart-slice{stroke:var(--brand-card,#fff)}
+.chart:has(.chart-slice.is-hero) .chart-slice:not(.is-hero){opacity:.5}
+.chart-value{fill:var(--c-text);font-family:var(--font-display);font-weight:800}
+.chart-label{fill:var(--c-soft);font-weight:600}
+.chart-tick{fill:var(--c-soft)}
+.chart-total{fill:var(--c-text);font-family:var(--font-display);font-weight:900;letter-spacing:-.03em}
+.chart-grid{stroke:var(--c-grid);stroke-width:1.5;stroke-dasharray:4 6}
+.chart-axis{stroke:var(--c-grid);stroke-width:2}
+.chart-legend{display:flex;flex-wrap:wrap;gap:8px 28px;font-size:16px;font-weight:600;color:var(--c-soft)}
+.chart-key{display:flex;align-items:center;gap:10px}
+.chart-key i{flex:none;width:14px;height:14px;border-radius:4px;background:var(--c)}
+.chart--pie .chart-svg{width:auto;height:var(--chart-h);flex:none}
+.chart-keys{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:16px;flex:1;min-width:0}
+.chart-keys .chart-key{font-size:max(16px, calc(21px * var(--type-scale,1)));color:var(--c-text);gap:14px;padding-bottom:14px;border-bottom:1.5px solid var(--c-grid)}
+.chart-keys .chart-key:last-child{border-bottom:0;padding-bottom:0}
+.chart-keys .chart-key i{width:16px;height:16px;border-radius:50%}
+.chart-keys .k{flex:1;min-width:0;text-align:left}
+.chart-keys .p{font-family:var(--font-display);font-weight:900;font-size:1.35em;letter-spacing:-.02em}
+.chart-keys .is-hero .p{color:var(--c1)}
+.chart:has(.chart-slice.is-hero) .chart-keys .chart-key:not(.is-hero),.chart:has(.chart-slice.is-hero) .chart-keys .chart-key:not(.is-hero) .p{color:var(--c-soft)} /* a color, not an opacity: the keys' own motion ends on opacity 1 */
+.chart-data{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap} /* the numbers as text: a screen reader, a copy */
+.body-pad:has(> .chart){--body-gap:36px}
+.body-pad:has(> .table-wrap){--body-gap:32px}
+.table-split{display:grid;grid-template-columns:1fr 1fr;gap:22px;width:100%;align-items:start}
+.table-split .table-wrap{min-width:0}
+.body-pad:has(> .table-split){--body-gap:32px}
+.layout-story .table-split{grid-template-columns:1fr;gap:14px}
+
+/* diagram — a Mermaid flowchart drawn by jmd-core.js (diagramLayout) in the brand's colors: boxes in the card color edged with
+   the accent, a decision in the warm tint, a terminal (stadium, circle) in the deep color, `:::hero` in the accent. Dark slides
+   turn it like a chart. The SVG is laid out in design units and only ever shrunk to its box, never stretched. */
+.diagram{margin:0;display:flex;justify-content:center;align-items:center;min-width:0;--d-fill:var(--brand-card,#fff);--d-line:color-mix(in srgb,var(--brand-accent) 70%,white);--d-text:var(--jp-ink);--d-edge:color-mix(in srgb,var(--jp-ink-soft) 75%,white);--d-decide:color-mix(in srgb,var(--jp-yellow-500) 26%,white);--d-decide-line:color-mix(in srgb,var(--jp-yellow-500) 80%,var(--jp-ink));--d-term:var(--jp-indigo-800);--d-term-text:#fff;--d-hero:var(--brand-accent);--d-hero-text:#fff;--d-label:var(--jp-ink-soft);--d-label-bg:color-mix(in srgb,var(--brand-accent) 9%,white);--d-deep-text:#fff;--dv1:var(--brand-accent);--dv2:var(--jp-indigo-800);--dv3:var(--jp-yellow-500)}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--problem,.slide--act) .diagram{--d-fill:rgba(255,255,255,.1);--d-line:rgba(255,255,255,.55);--d-text:#fff;--d-edge:rgba(255,255,255,.55);--d-decide:rgba(255,255,255,.18);--d-decide-line:var(--jp-yellow-500);--d-term:#fff;--d-term-text:var(--jp-indigo-800);--d-hero:var(--jp-yellow-500);--d-hero-text:var(--jp-indigo-800);--d-label:#fff;--d-label-bg:var(--jp-indigo-800);--d-deep-text:var(--jp-indigo-800);--dv1:#fff;--dv2:var(--jp-yellow-500);--dv3:var(--jp-purple-300)}
+.slide--accent .diagram{--d-label-bg:var(--brand-accent)}
+.diagram-svg{display:block;max-width:100%;height:auto;overflow:visible;font-family:var(--font-body)}
+.dg-node rect,.dg-node polygon,.dg-node circle,.dg-node path{fill:var(--d-fill);stroke:var(--d-line);stroke-width:2.5}
+.dg-node text{fill:var(--d-text);font-weight:650}
+.dg-node path.dg-inner{fill:none}
+.is-editing .dg-node[data-node-line]{cursor:pointer}.is-editing .dg-node[data-node-line]:hover :is(rect,polygon,circle,path){stroke-width:4}
+.dg-node .dg-sub{fill:var(--d-label);font-weight:500}
+.dg-root rect{fill:var(--d-term);stroke:var(--d-term)}.dg-root text,.dg-root .dg-sub{fill:var(--d-term-text)}
+.dg-node.is-hero .dg-sub{fill:var(--d-hero-text)}
+.dg-diamond polygon{fill:var(--d-decide);stroke:var(--d-decide-line)}
+:is(.dg-stadium,.dg-circle) :is(rect,circle){fill:var(--d-term);stroke:var(--d-term)}
+:is(.dg-stadium,.dg-circle) text{fill:var(--d-term-text)}
+.dg-node.is-hero :is(rect,polygon,circle,path){fill:var(--d-hero);stroke:var(--d-hero)}
+.dg-node.is-hero text{fill:var(--d-hero-text);font-weight:800}
+.dg-edge{fill:none;stroke:var(--d-edge);stroke-width:2.5;stroke-linecap:round}
+.dg-edge.dg-dotted{stroke-dasharray:2 7}
+.dg-edge.dg-thick{stroke-width:5;stroke:var(--d-line)}
+.dg-head{fill:var(--d-edge)}.dg-head.dg-thick{fill:var(--d-line)}
+.dg-label rect{fill:var(--d-label-bg)}
+.dg-label text{fill:var(--d-label);font-weight:700}
+.diagram--none pre{margin:0;font-size:16px;color:var(--jp-ink-soft);white-space:pre-wrap}
+.body-pad:has(> .diagram){--body-gap:32px}
+.dg-card{box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:13px 14px;border:2.5px solid var(--d-line);border-radius:14px;background:var(--d-fill);color:var(--d-text);text-align:center}
+.dg-card b{font-family:var(--font-display);font-size:20px;line-height:1.25;font-weight:800}
+.dg-card span{font-size:16px;line-height:1.3;color:var(--d-label)}
+.dg-card.is-hero{background:var(--d-hero);border-color:var(--d-hero);color:var(--d-hero-text)}.dg-card.is-hero span{color:inherit;opacity:.85}
+.dg-stage{position:relative;flex:none}.dg-stage .diagram-svg{position:absolute;inset:0}
+.dg-stage .dg-card{position:absolute;transform:translate(-50%,-50%)}
+.dg-center{position:absolute;transform:translate(-50%,-50%);font-family:var(--font-display);font-size:26px;line-height:1.15;font-weight:900;color:var(--d-text);text-align:center}
+.dg-arc{stroke-width:3}
+.dg-pyramid{display:flex;align-items:flex-start;width:100%}.dg-pyramid .diagram-svg{flex:none}
+.dg-band{fill:color-mix(in srgb,var(--d-term) var(--t),transparent)}.dg-band.is-hero{fill:var(--d-hero)}
+.dg-leader{stroke:var(--d-edge);stroke-width:1.5;stroke-dasharray:2 5}
+.dg-rows{display:flex;flex-direction:column;flex:1;min-width:0}
+.dg-rows .dg-card{height:var(--bh);justify-content:center;gap:2px;padding:0 0 0 6px;border:0;border-radius:0;background:none;text-align:left}
+.dg-rows .dg-card b{font-size:22px}.dg-rows .dg-card span{font-size:17px}
+.dg-rows .dg-card.is-hero{color:var(--d-text)}.dg-rows .dg-card.is-hero b{color:var(--d-hero)}
+.dg-matrix{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;gap:12px 14px;width:100%}
+.dg-matrix:not(.has-y){grid-template-columns:1fr}
+.dg-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;grid-column:-2}
+.dg-grid .dg-card{text-align:left;min-height:140px;justify-content:center}
+.dg-axis{display:flex;justify-content:space-between;gap:16px;font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--d-label)}
+.dg-axis--y{grid-row:1;writing-mode:vertical-rl;transform:rotate(180deg);flex-direction:row-reverse}
+.dg-axis--x{grid-column:-2}
+.dg-grid{position:relative}
+.dg-grid-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:10px 20px;border-radius:999px;background:var(--d-term);color:var(--d-term-text);font-family:var(--font-display);font-size:18px;font-weight:900;white-space:nowrap}
+.dg-hub{position:absolute;transform:translate(-50%,-50%);box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:16px;border-radius:50%;background:var(--d-term);color:var(--d-term-text);font-family:var(--font-display);font-size:22px;line-height:1.15;font-weight:900;text-align:center}
+.dg-spoke{stroke-width:3}
+.dg-set{fill:color-mix(in srgb,var(--dv) 20%,transparent);stroke:var(--dv);stroke-width:3}.dg-set.is-hero{fill:color-mix(in srgb,var(--dv) 42%,transparent)}
+.dg-v1{--dv:var(--dv1)}.dg-v2{--dv:var(--dv2)}.dg-v3{--dv:var(--dv3)}
+.dg-venn .dg-card,.dg-target .dg-card{background:none;border:0;padding:0;gap:3px}
+.dg-venn .dg-card.is-hero,.dg-target .dg-card.is-hero{background:none;color:var(--d-text)}.dg-target .dg-card.is-hero b{color:var(--d-hero)}.dg-venn .dg-card.is-hero b{font-weight:900}
+.dg-venn .dg-card.is-hero span,.dg-target .dg-card.is-hero span{color:var(--d-label);opacity:1}
+.dg-center--venn{font-size:19px;line-height:1.2}
+.dg-ring{fill:color-mix(in srgb,var(--d-term) var(--t),transparent);stroke:var(--d-fill);stroke-width:3}.dg-ring.is-hero{fill:var(--d-hero)}
+.dg-dot{fill:var(--d-text);stroke:var(--d-fill);stroke-width:2}
+.dg-leader--solid{fill:none;stroke-dasharray:none;stroke-width:1.5}
+.dg-target .dg-card{transform:translate(0,-50%);text-align:left;max-width:520px}.dg-target .dg-card b{font-size:22px}.dg-target .dg-card span{font-size:17px}
+.dg-steps{display:flex;align-items:flex-end;gap:10px;width:100%}
+.dg-steps .dg-card{flex:1;min-width:0;justify-content:flex-start;text-align:left;border:0;border-radius:14px 14px 4px 4px;padding:18px 16px;background:color-mix(in srgb,var(--d-term) var(--t),var(--d-fill))}
+.dg-steps .dg-card span{color:inherit;opacity:.8}.dg-steps .dg-card.is-deep{color:var(--d-deep-text)}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--problem,.slide--act) .dg-steps .dg-card{background:color-mix(in srgb,#fff calc(var(--t) * .4),transparent);color:#fff} /* on a dark slide the steps climb in white, the words stay white */
+.dg-steps .dg-card.is-hero{background:var(--d-hero);color:var(--d-hero-text)}
+
+/* chart motion: the bars grow from their axis, the line draws itself, the donut opens, the values land last. One global mode
+   like every motion (body.motion-*): never in a Doc, a webpage, print, the editor or a measure — and never for reduced motion. */
+@keyframes jc-grow-y{from{transform:scaleY(0)}to{transform:none}}
+@keyframes jc-grow-x{from{transform:scaleX(0)}to{transform:none}}
+@keyframes jc-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes jc-pop{0%{opacity:0;transform:scale(0)}70%{opacity:1;transform:scale(1.25)}100%{opacity:1;transform:none}}
+@keyframes jc-land{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes jc-fade{from{opacity:0}to{opacity:1}}
+@keyframes jc-open{from{transform:rotate(-100deg) scale(.82);opacity:0}to{transform:none;opacity:1}}
+@keyframes jc-slice{from{opacity:0}to{opacity:var(--o,1)}}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-bar{transform-box:fill-box;transform-origin:50% 100%;animation:jc-grow-y .8s cubic-bezier(.2,.9,.25,1.08) both;animation-delay:calc(220ms + var(--k,0) * 75ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-bar.is-neg{transform-origin:50% 0}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart--hbar .chart-bar{transform-origin:0 50%;animation-name:jc-grow-x}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart--hbar .chart-bar.is-neg{transform-origin:100% 50%}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-value{animation:jc-land .45s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(620ms + var(--k,0) * 75ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-line{stroke-dasharray:1;animation:jc-draw 1.2s linear both;animation-delay:calc(250ms + var(--k,0) * 220ms)} /* linear: the dots below land as the line reaches them */
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-area{animation:jc-fade .9s ease both;animation-delay:900ms}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-dot{transform-box:fill-box;transform-origin:center;animation:jc-pop .45s cubic-bezier(.2,.8,.3,1.2) both;animation-delay:calc(250ms + var(--k,0) * 100ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart--line .chart-value{animation-delay:calc(400ms + var(--k,0) * 100ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart--pie .chart-svg{transform-origin:var(--cx) var(--cy);animation:jc-open 1s cubic-bezier(.2,.8,.2,1) both;animation-delay:150ms}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-slice{animation:jc-slice .5s ease both;animation-delay:calc(200ms + var(--k,0) * 110ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart:has(.chart-slice.is-hero) .chart-slice:not(.is-hero){--o:.5}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-total{transform-box:fill-box;transform-origin:center;animation:jc-pop .55s cubic-bezier(.2,.8,.3,1.2) both;animation-delay:900ms}
+body:not(.motion-none):not(.is-editing) .slide.is-active .chart-keys .chart-key{animation:jp-rise .45s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(450ms + var(--i,0) * 90ms)}
+/* diagram motion: the nodes arrive rank after rank, each edge draws itself from the node it leaves, its arrow and its label land at the end */
+body:not(.motion-none):not(.is-editing) .slide.is-active .dg-node{transform-box:fill-box;transform-origin:center;animation:dg-pop .5s cubic-bezier(.2,.8,.3,1.2) both;animation-delay:calc(150ms + var(--k,0) * 320ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .dg-edge:not(.dg-dotted){stroke-dasharray:1;animation:jc-draw .45s ease-out both;animation-delay:calc(150ms + var(--k,0) * 320ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .dg-edge.dg-dotted{animation:dg-fade .45s ease both;animation-delay:calc(150ms + var(--k,0) * 320ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active :is(.dg-head,.dg-label){animation:dg-fade .3s ease both;animation-delay:calc(100ms + var(--k,0) * 320ms)}
+@keyframes dg-in{from{opacity:0;scale:.7}to{opacity:var(--o,1);scale:var(--s,1)}}
+@keyframes dg-pop{0%{opacity:0;transform:scale(0)}70%{opacity:var(--o,1);transform:scale(1.15)}100%{opacity:var(--o,1);transform:none}}
+@keyframes dg-fade{from{opacity:0}to{opacity:var(--o,1)}}
+@keyframes dg-rise{from{opacity:0;translate:0 16px}to{opacity:var(--o,1);translate:none}}
+body:not(.motion-none):not(.is-editing) .slide.is-active .dg-card{animation:dg-in .5s cubic-bezier(.2,.8,.3,1.15) both;animation-delay:calc(150ms + var(--k,0) * 260ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active .dg-stage :is(.dg-arc,.dg-head){animation-duration:.4s;animation-delay:calc(150ms + var(--k,0) * 260ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active :is(.dg-band,.dg-leader,.dg-ring,.dg-dot,.dg-set){animation:dg-rise .5s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(150ms + var(--k,0) * 260ms)}
+body:not(.motion-none):not(.is-editing) .slide.is-active :is(.dg-center,.dg-hub,.dg-grid-center){animation:jc-fade .6s ease both;animation-delay:400ms}
+body:not(.motion-none):not(.is-editing) .slide.is-active :is(.dg-step,.dg-card).is-pending,body:not(.motion-none):not(.is-editing) .slide.is-active .dg-step:is(.is-pending,.is-shown) *{animation:none}
+body:not(.motion-none):not(.is-editing) .slide.is-active .dg-card.is-shown{animation-delay:0s}
+body:not(.motion-none):not(.is-editing) .slide.is-active .table tbody tr{animation:jp-rise .45s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(160ms + var(--i,0) * 55ms)}
+.chart-keys .chart-key:nth-child(2),.table tbody tr:nth-child(2){--i:1}.chart-keys .chart-key:nth-child(3),.table tbody tr:nth-child(3){--i:2}
+.chart-keys .chart-key:nth-child(4),.table tbody tr:nth-child(4){--i:3}.chart-keys .chart-key:nth-child(5),.table tbody tr:nth-child(5){--i:4}
+.chart-keys .chart-key:nth-child(6),.table tbody tr:nth-child(6){--i:5}.table tbody tr:nth-child(7){--i:6}.table tbody tr:nth-child(n+8){--i:7}
+
 /* timeline */
 .timeline{display:flex;align-items:flex-start;gap:0;width:100%}
 .tl-step{flex:1;display:flex;flex-direction:column;gap:14px;position:relative;padding-right:18px}
@@ -405,6 +592,23 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
   background:rgba(14,13,46,.85);border-radius:999px;padding:6px 14px;
   transition:opacity .4s ease}
 #hud.is-idle,#counter.is-idle{opacity:0;pointer-events:none}
+/* The bar holds what one reaches for — move, present, edit, download, the full list (what an office suite puts first) — and, on an edit page, the room's own controls
+   (the name, who is here, versions), which are worth more than hints (2026-10-07: the bar wrapped and ran under the
+   counter). It never wraps and stops before the counter; short of room, the deck's name gives way, never a button. */
+#hud{max-width:calc(100vw - 150px);white-space:nowrap}#hud>*{flex-shrink:0}#hud>span:empty{display:none}#hud>#deckname{flex-shrink:1;min-width:72px}
+body.is-hosted #hud-open{display:none}
+@media (max-width:900px){#hud .w{display:none}#hud{gap:10px}}
+@media (pointer:coarse){#hud>span{display:none}} /* a phone has no keys to list: the pill keeps the menu, a tap or a swipe turns the page */
+@media (pointer:coarse){#hud kbd,#dl kbd{display:none}#hud #hud-dl .w{display:inline;padding:4px 2px}} /* and a button says its word, not its key: a lone D means nothing to a thumb */
+/* the story bar (james-jmd.js): a touch screen only, a deck one turns screen by screen only — a Doc scrolls, print has none */
+#progress{display:none}
+@media (pointer:coarse){body:not(.layout-doc):not(.layout-webpage):not(.is-editing) #progress{display:flex;position:fixed;z-index:45;top:env(safe-area-inset-top,0px);left:10px;right:10px;gap:4px}}
+#progress button{flex:1;height:22px;padding:9px 0;border:0;background:transparent;cursor:pointer}
+#progress i{display:block;height:3px;border-radius:2px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.25)}
+#progress .is-done i{background:rgba(255,255,255,.95)}
+#progress.is-light i{background:rgba(27,24,64,.16);box-shadow:none} /* over a light screen: ink, measured by the runtime (tintProgress) */
+#progress.is-light .is-done i{background:rgba(27,24,64,.82)}
+@media print{#progress{display:none!important}}
 #hud kbd{background:rgba(255,255,255,.10);border-radius:4px;padding:2px 6px;color:rgba(255,255,255,.7)}
 #counter{position:fixed;bottom:14px;right:18px;z-index:50;font-family:var(--font-mono);
   font-size:12px;color:rgba(255,255,255,.7);letter-spacing:.06em;background:rgba(14,13,46,.85);border-radius:999px;padding:6px 12px;transition:opacity .4s ease}
@@ -427,6 +631,22 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
   font-weight:800;border-radius:999px;padding:14px 28px;cursor:pointer}
 #open input{display:none}
 /* help — the keys, on demand (? or H) */
+#hud-dl{all:unset;cursor:pointer}#hud-dl:hover kbd,#hud-dl:focus-visible kbd{background:rgba(255,255,255,.22);color:#fff}
+#dl{position:fixed;inset:0;z-index:68;display:none;align-items:center;justify-content:center;background:rgba(14,13,46,.8);font-family:var(--font-mono);color:#fff}
+#dl.is-open{display:flex}
+#dl .box{background:rgba(14,13,46,.98);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:24px 28px;width:min(90vw,520px);font-size:13px;line-height:1.5}
+#dl .lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--jp-yellow-500);margin-bottom:14px}
+#dl-list{display:grid;gap:8px}
+#dl-list a,#dl-list button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:1fr auto;gap:2px 16px;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.06);cursor:pointer;color:#fff}
+#dl-list a:hover,#dl-list button:hover,#dl-list a:focus,#dl-list button:focus{background:rgba(255,255,255,.14);outline:2px solid var(--jp-yellow-500);outline-offset:-2px}
+#dl-list b{font-weight:700}#dl-list small{grid-column:1;color:rgba(255,255,255,.7);font-size:12px}
+#dl-list kbd{grid-row:1/span 2;grid-column:2;align-self:center;background:rgba(255,255,255,.10);border-radius:4px;padding:2px 6px;color:rgba(255,255,255,.7)}
+#dl-toast{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:69;display:none;flex-direction:column;gap:8px;min-width:min(90vw,380px);max-width:90vw;padding:12px 16px;border-radius:12px;background:rgba(14,13,46,.96);border:1px solid rgba(255,255,255,.12);color:#fff;font-family:var(--font-mono);font-size:13px}
+#dl-toast.is-open{display:flex}
+#dl-toast .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+#dl-toast .bar i{display:block;height:100%;width:0;background:var(--jp-yellow-500);transition:width .2s linear}
+#dl-toast.is-done .bar i{background:#8BE8B4}#dl-toast.is-err .bar i{background:#FF7B85}
+#dl .foot{margin:14px 0 0;color:rgba(255,255,255,.6);font-size:12px}
 #help{position:fixed;inset:0;z-index:68;display:none;align-items:center;justify-content:center;background:rgba(14,13,46,.8);font-family:var(--font-mono);color:#fff}
 #help.is-open{display:flex}
 #help .box{background:rgba(14,13,46,.98);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:28px 32px;max-width:720px;width:min(90vw,720px);font-size:13px;line-height:1.5}
@@ -527,7 +747,7 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--highlight .lockup,.slide--highlight .lockup svg{color:var(--jp-indigo-800)}
 .slide--highlight .chrome-meta,.slide--highlight .slide-tag{color:color-mix(in srgb,var(--jp-indigo-800) 55%,transparent)}
 .slide--highlight .slide-eyebrow{color:var(--jp-indigo-800)}
-.slide--highlight .wm--mark svg{color:var(--jp-indigo-800)}
+.slide--highlight .wm--mark .wm-g{--gc:var(--jp-indigo-800)}
 
 /* centred intents: everything gathers in the middle */
 .slide--hook .body-pad,.slide--reveal .body-pad,.slide--celebrate .body-pad,.slide--fun .body-pad,.slide--act .body-pad{align-items:center;text-align:center;justify-content:center;padding-top:calc(96px * var(--type-scale,1))}
@@ -553,7 +773,9 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--hook.slide--split .split-media{left:0;background:var(--brand-primary)}
 .slide--hook.slide--split .split-media:before,.slide--hook.slide--split .split-media:after{display:none}
 .slide--hook.slide--split .split-media img{left:0;top:0;width:100%;height:100%;max-height:none;border-radius:0;box-shadow:none;object-fit:cover;object-position:center;filter:brightness(.42) saturate(.9)}
-.slide--hook .wm{display:none}
+.slide--hook .wm--circles{display:none}
+/* the glyph, hook: huge behind the words, a deeper tone of the background (it lifts the white title's contrast, never lowers it) */
+.slide--hook .wm--mark .wm-g{--gx:50%;--gy:50%;--gs:860px;--gr:0deg;--gc:var(--brand-primary);--go:.22}
 
 /* problem — tension: heavy weight, a bar of highlight on the title, numbers as bad news */
 .slide--problem .slide-h2{font-size:calc(62px * var(--type-scale,1));font-weight:900;letter-spacing:-.02em}
@@ -577,6 +799,8 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--problem .col--light{background:rgba(255,255,255,.08)}.slide--problem .col--light h3{color:#fff}.slide--problem .col p,.slide--problem .col li{color:rgba(255,255,255,.85)}
 .slide--problem .col--dark{background:var(--jp-yellow-500);color:var(--jp-indigo-800)}.slide--problem .col--dark p,.slide--problem .col--dark li{color:var(--jp-indigo-800)}
 .slide--problem .tl-step h4,.slide--problem .tl-step p{color:#fff}.slide--problem .tl-step p{opacity:.8}
+/* the glyph, problem: pushed into the corner, cut by the edge, under pressure */
+.slide--problem .wm--mark .wm-g{--gx:93%;--gy:102%;--gs:600px;--gr:30deg;--gc:var(--brand-accent);--go:.32}
 
 /* reveal — one hero, the rest recedes; the title steps back */
 .slide--reveal .slide-h2{font-size:calc(40px * var(--type-scale,1));font-weight:700;color:var(--jp-ink-muted);max-width:900px}
@@ -594,6 +818,12 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--reveal .prose p{font-size:max(22px, calc(30px * var(--type-scale,1)));line-height:1.3;color:var(--jp-ink);font-weight:600}
 .slide--reveal .prose ul.few li{font-size:max(20px, calc(28px * var(--type-scale,1)));border:0;padding:8px 0}
 .slide--reveal .statement .q{font-size:64px}
+.slide--reveal .diagram:has(.is-hero) :is(.dg-node,.dg-card,.dg-band,.dg-ring,.dg-set):not(.is-hero),.slide--reveal .diagram:has(.is-hero) :is(.dg-edge,.dg-head,.dg-label,.dg-leader,.dg-dot){--o:.35;opacity:.35}
+.slide--reveal .dg-card.is-hero{--s:1.07;scale:1.07;box-shadow:0 24px 60px rgba(0,0,0,.14)}
+.slide--reveal .dg-steps .dg-card.is-hero,.slide--reveal .dg-rows .dg-card.is-hero{--s:1;scale:none;box-shadow:none}
+.slide--decide .diagram:has(.is-hero) :is(.dg-node,.dg-card,.dg-band,.dg-ring,.dg-set):not(.is-hero){--o:.6;opacity:.6}
+/* the glyph, reveal: back in the middle, opened behind the key idea, very pale */
+.slide--reveal .wm--mark .wm-g{--gx:50%;--gy:56%;--gs:600px;--gr:45deg;--gc:var(--brand-accent);--go:.07}
 
 /* prove — dense, equal, sober */
 .slide--prove{--type-scale:calc(var(--brand-type-scale,1) * .88)}
@@ -605,11 +835,16 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--prove .card,.slide--prove .col{border-radius:10px}
 .slide--prove .cards{gap:14px}.slide--prove .compare{gap:14px}
 .slide--prove .card .num{display:none}
+.slide--prove .dg-card{border-radius:8px}.slide--prove .dg-rect rect{rx:5px}
 .slide--prove .card--vivid{background:var(--brand-card,#fff);border-color:var(--jp-line)}.slide--prove .card--vivid h3{color:var(--jp-ink)}.slide--prove .card--vivid p,.slide--prove .card--vivid li{color:var(--jp-ink-muted)}
 .slide--prove .prose ul.few li{font-size:max(17px, calc(21px * var(--type-scale,1)));padding:10px 0}
 .slide--prove .prose li:before{border-radius:1px;width:8px;height:8px;background:var(--jp-indigo-800)}
 .slide--prove .logos{gap:18px 30px}.slide--prove .logo{height:34px}.slide--prove .logo img{height:34px;max-width:118px;filter:grayscale(1);opacity:.85}
-.slide--prove .card-marker,.slide--prove .wm{display:none}
+.slide--prove .card-marker,.slide--prove .wm--circles{display:none}
+/* the glyph, prove / explain / recap: small and full, put away in the corner like a stamp — room for the evidence.
+   explain: the presenter then sets it on the corner of each step as it arrives, a tick (james-jmd.js, follow) */
+.slide--explain .wm--mark{z-index:4} /* its glyph is a tick on a card's corner, so it sits over the content (it holds nothing else) */
+.slide--prove .wm--mark .wm-g,.slide--explain .wm--mark .wm-g,.slide--recap .wm--mark .wm-g{--gx:5.6%;--gy:95%;--gs:30px;--gr:0deg;--gc:var(--brand-accent);--go:1;--wm-k:1}
 
 /* explain — numbered, sequential, a progression under the title */
 .slide--explain .slide-head:after{content:"";display:block;height:6px;width:160px;border-radius:3px;background:linear-gradient(90deg,var(--brand-accent),color-mix(in srgb,var(--brand-accent) 15%,transparent))}
@@ -647,7 +882,7 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--recap .card .num svg{display:none}.slide--recap .card .num:before{content:"✓"}
 .slide--recap .card--vivid{background:#fff;border-color:transparent}.slide--recap .card--vivid h3{color:var(--jp-ink)}.slide--recap .card--vivid p{color:var(--jp-ink-muted)}
 .slide--recap .card{border-color:transparent;background:#fff}
-.slide--recap .figure,.slide--recap .wm{display:none}
+.slide--recap .figure,.slide--recap .wm--circles{display:none}
 .slide--recap .metric{background:#fff}.slide--recap .metric--hero{background:var(--brand-primary)}
 
 /* celebrate — warmth, the name or the number huge, a confetti of the palette */
@@ -666,7 +901,19 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
     radial-gradient(circle at 93% 64%, rgba(255,255,255,.5) 0 8px, transparent 9px),
     radial-gradient(circle at 50% 96%, var(--jp-yellow-500) 0 5px, transparent 6px),
     radial-gradient(circle at 5% 50%, rgba(255,255,255,.35) 0 5px, transparent 6px)}
-.slide--celebrate .wm--mark svg{opacity:.16;width:760px;height:760px;transform:rotate(-14deg)}
+.slide--celebrate .wm--mark .wm-g{--gx:50%;--gy:50%;--gs:760px;--gr:45deg;--gc:var(--brand-primary);--go:.2}
+/* …and it multiplies: six small copies replace the confetti dots */
+.slide--celebrate:has(.wm-bit):before{display:none}
+.slide--celebrate .wm-bit{display:block;position:absolute;translate:-50% -50%;width:calc(var(--bs) * var(--wm-k,1));height:calc(var(--bs) * var(--wm-k,1));rotate:var(--br);color:var(--bc,var(--jp-yellow-500))}
+.slide--celebrate .wm-bit:nth-of-type(2){left:9%;top:24%;--bs:54px;--br:20deg}
+.slide--celebrate .wm-bit:nth-of-type(3){left:88%;top:19%;--bs:40px;--br:-25deg;--bc:#fff}
+.slide--celebrate .wm-bit:nth-of-type(4){left:15%;top:80%;--bs:38px;--br:60deg;--bc:#fff}
+.slide--celebrate .wm-bit:nth-of-type(5){left:84%;top:78%;--bs:60px;--br:10deg}
+.slide--celebrate .wm-bit:nth-of-type(6){left:30%;top:10%;--bs:26px;--br:-40deg}
+.slide--celebrate .wm-bit:nth-of-type(7){left:66%;top:91%;--bs:30px;--br:35deg}
+@keyframes jp-bit{from{opacity:0;scale:.2}to{opacity:1;scale:1}}
+body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{animation:jp-bit .6s cubic-bezier(.3,1.6,.5,1) both;animation-delay:calc(550ms + var(--bd,0) * 80ms)}
+.slide--celebrate .wm-bit:nth-of-type(3){--bd:1}.slide--celebrate .wm-bit:nth-of-type(4){--bd:2}.slide--celebrate .wm-bit:nth-of-type(5){--bd:3}.slide--celebrate .wm-bit:nth-of-type(6){--bd:4}.slide--celebrate .wm-bit:nth-of-type(7){--bd:5}
 .slide--celebrate .metrics{gap:28px;width:100%}
 .slide--celebrate .metric{background:rgba(255,255,255,.12);color:#fff;border-radius:32px;align-items:center;text-align:center}
 .slide--celebrate .metric .v{color:var(--jp-yellow-500);font-size:80px;white-space:nowrap;line-height:1.02}.slide--celebrate .metric .l{color:#fff}.slide--celebrate .metric .s{color:rgba(255,255,255,.8)}
@@ -680,7 +927,7 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--fun .slide-h2{display:inline-block;transform:rotate(-2.5deg);font-size:calc(64px * var(--type-scale,1));font-weight:900;padding:6px 22px;background:var(--jp-indigo-800);color:var(--jp-yellow-500);border-radius:14px;max-width:none}
 .slide--fun .slide-lead{font-size:max(19px, calc(24px * var(--type-scale,1)));font-weight:700}
 .slide--fun .wm{display:block}
-.slide--fun .wm--mark svg,.slide--fun .wm--mark.wm--b svg{color:var(--jp-indigo-800);opacity:.92;width:440px;height:440px;right:-150px;bottom:-170px;left:auto;transform:rotate(22deg)}
+.slide--fun .wm--mark .wm-g{--gx:94.5%;--gy:93%;--gs:440px;--gr:22deg;--gc:var(--jp-indigo-800);--go:.92}
 .slide--fun .wm--circles:before,.slide--fun .wm--circles:after{background:var(--jp-indigo-800);opacity:.9}
 .slide--fun .body-pad{z-index:3}
 .slide--fun .card{border:3px solid var(--jp-indigo-800);background:#fff;box-shadow:10px 10px 0 var(--jp-indigo-800);border-radius:18px}
@@ -707,7 +954,8 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--act .card .num--glyph,.slide--act .card .num--letter{color:var(--jp-yellow-500);background:transparent}
 .slide--act .tl-step h4,.slide--act .tl-step p{color:#fff}.slide--act .tl-step .dot{background:var(--jp-yellow-500);color:var(--jp-indigo-800)}
 .slide--act .metric{background:rgba(255,255,255,.08);color:#fff}.slide--act .metric .v{color:var(--jp-yellow-500)}
-.slide--act .wm--mark svg{opacity:.08}
+.slide--act .wm--mark .wm-g{--go:.08}
+/* the glyph, act: beside the button, pointing at it — placed by measure (jmd-core.js, placeGlyphs); this is the pose without a CTA */
 
 
 /* ── Layout: Doc (spec/jmd.md) ───────────────────────────────────────────────
@@ -739,6 +987,30 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .layout-doc .statement,.layout-doc .divider{align-self:auto;margin:auto 0}
 .layout-doc .statement{max-width:none;padding:0 110px}
 .layout-doc .statement .q{font-size:52px}
+/* timeline in phases (heading form): the dots and their line on top, a date under each dot, the phase's detail in a card.
+   Written after the intents: the card keeps its light surface and dark words on every background, only the date turns. */
+.timeline--phases{align-items:stretch}
+.timeline--phases .tl-step{gap:10px;padding-right:16px;text-align:left}
+.timeline--phases .tl-step .tl-date{font-family:var(--font-display);font-weight:800;font-size:max(13.5px, calc(15px * var(--type-scale,1)));letter-spacing:.02em;color:var(--brand-accent);line-height:1.25}
+.timeline--phases .tl-step .tl-card{flex:1;background:var(--jp-purple-050);border:1.5px solid var(--jp-line-soft);border-radius:20px;padding:calc(18px * var(--type-scale,1)) calc(20px * var(--type-scale,1));display:flex;flex-direction:column;gap:calc(9px * var(--type-scale,1))}
+.timeline--phases .tl-step .tl-card h4{font-size:calc(19px * var(--type-scale,1));color:var(--jp-ink)}
+.timeline--phases .tl-step .tl-card p{padding-right:0;color:var(--jp-ink-muted)}
+.timeline--phases .tl-card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:calc(6px * var(--type-scale,1))}
+.timeline--phases .tl-card li{display:flex;gap:10px;font-size:max(13.5px, calc(15px * var(--type-scale,1)));line-height:1.35;color:var(--jp-ink-muted)}
+.timeline--phases .tl-card li>span{flex:1;min-width:0}
+.timeline--phases .tl-card li:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--jp-purple-500);flex:none;margin-top:7px}
+.timeline--phases .tl-card strong{color:var(--jp-ink)}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--hook,.slide--problem,.slide--celebrate,.slide--act) .timeline--phases .tl-step .tl-date{color:#fff}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--hook,.slide--problem,.slide--celebrate,.slide--act) .timeline--phases .tl-step .tl-card{background:#fff;border-color:transparent}
+.timeline--phases .tl-step.is-now .tl-card{background:var(--jp-yellow-100);border-color:var(--jp-yellow-500)}
+.timeline--phases .tl-step.is-next .tl-card{border-style:dashed;border-width:1.5px;border-color:var(--jp-purple-400)}
+.timeline--phases .tl-step.is-hero .dot{background:var(--brand-accent);color:#fff}
+.timeline--phases .tl-step.is-hero .tl-card{border-color:var(--brand-accent);box-shadow:inset 0 5px 0 var(--brand-accent)}
+.layout-story .timeline--phases .tl-step .tl-date{flex:1;min-width:200px;margin-top:12px}
+.layout-story .timeline--phases .tl-step .tl-card{flex-basis:100%;margin-left:62px}
+.layout-doc .timeline--phases:has(.tl-step:nth-child(5)) .tl-step .tl-date{flex:1;min-width:260px;margin-top:16px}
+.layout-doc .timeline--phases:has(.tl-step:nth-child(5)) .tl-step .tl-card{flex-basis:100%;margin-left:74px}
+
 /* portrait density: four numbers go 2×2, four or five cards go two abreast, a timeline of five or six runs down the page */
 .layout-doc .metrics[style*="--n:4"]{grid-template-columns:1fr 1fr}
 .layout-doc .cards[style*="--n:4"],.layout-doc .cards[style*="--n:5"]{grid-template-columns:1fr 1fr}
@@ -766,6 +1038,7 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .layout-doc .figure img{max-height:640px}
 .layout-doc .slide--split .prose:has(> p > a.cta:only-child),.layout-doc .prose a.cta{margin-top:0}
 .layout-doc .compare{flex:none}
+.layout-doc .table{font-size:max(16px, calc(20px * var(--type-scale,1)))}
 /* the cover: the title high, the art fills the lower half */
 .layout-doc .slide--cover .body-pad{padding-top:calc(150px * var(--type-scale,1));justify-content:center}
 .layout-doc .slide--cover:has(.cover-art) .body-pad{justify-content:flex-start}
@@ -778,9 +1051,10 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .layout-doc .slide--hook.slide--split .split-media{position:absolute;inset:0;margin:0;height:auto;border-radius:0}
 .layout-doc .slide--hook.slide--split .split-media img{border-radius:0}
 .layout-doc .slide--explain .cards .card:not(:last-child):after{display:none}
-.layout-doc .wm--mark svg{width:760px;height:760px}
-.layout-doc .wm--mark.wm--a svg{right:-190px;bottom:-240px}
-.layout-doc .wm--mark.wm--b svg{left:-210px;bottom:-280px}
+.layout-doc .wm--mark{--wm-k:1.23}
+.layout-doc :is(.slide--prove,.slide--explain,.slide--recap) .wm--mark .wm-g{--gx:10.6%;--gy:93.2%} /* the stamp sits on the footer's left edge */
+.layout-doc .slide:not(.slide--intent) .wm--mark.wm--a .wm-g{--gx:85.2%;--gy:92.3%}
+.layout-doc .slide:not(.slide--intent) .wm--mark.wm--b .wm-g{--gx:13.3%;--gy:94.5%}
 
 /* ── Layout: Story (spec/jmd.md) ─────────────────────────────────────────────
    Vertical 9:16, one screen per `---`, presented like slides (← →, motion) and posted as images or a carousel PDF. Drawn in
@@ -835,6 +1109,10 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .layout-story .logos{gap:18px 24px;justify-content:center}
 .layout-story .logo,.layout-story .logo img{height:36px}.layout-story .logo img{max-width:120px}
 .layout-story .pills{gap:8px}
+/* data on a narrow screen: the table tightens, the donut sits above its keys */
+.layout-story .table{font-size:15px}.layout-story .table th,.layout-story .table td{padding:10px 12px}
+.layout-story .chart-plot{flex-direction:column;gap:28px;align-items:stretch}
+.layout-story .chart--pie .chart-svg{height:300px;align-self:center}
 /* the picture: below the text, full width — or the whole screen behind the words under `hook` */
 .layout-story .slide{flex-direction:column}
 .layout-story .slide--split .body-pad,.layout-story .slide--split-block .body-pad{width:100%;padding-right:48px;flex:none}
@@ -855,9 +1133,9 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .layout-story .slide--hook .body-pad,.layout-story .slide--reveal .body-pad,.layout-story .slide--celebrate .body-pad,.layout-story .slide--fun .body-pad,.layout-story .slide--act .body-pad{padding-top:calc(120px * var(--type-scale,1))}
 .layout-story .slide--problem .slide-head{border-left-width:8px;padding-left:20px}
 .layout-story .slide--act a.cta{height:72px;padding:0 36px;font-size:22px}
-.layout-story .wm--mark svg{width:520px;height:520px}
-.layout-story .wm--mark.wm--a svg{right:-160px;bottom:-200px}
-.layout-story .wm--mark.wm--b svg{left:-180px;bottom:-240px}
+.layout-story .wm--mark{--wm-k:.62}
+.layout-story .slide:not(.slide--intent) .wm--mark.wm--a .wm-g{--gs:840px;--gx:82.8%;--gy:93.8%}
+.layout-story .slide:not(.slide--intent) .wm--mark.wm--b .wm-g{--gs:840px;--gx:14%;--gy:97.4%}
 .layout-story .mark-blob--statement{top:-100px;right:-120px;width:360px;height:360px}
 
 /* ── Layout: Webpage (spec/jmd.md) ───────────────────────────────────────────
@@ -894,9 +1172,9 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .layout-webpage .slide--cover:has(.cover-art) .body-pad{padding-bottom:460px}
 .layout-webpage .slide--hook,.layout-webpage .slide--celebrate,.layout-webpage .slide--act{min-height:640px}
 .layout-webpage .slide--hook.slide--split .split-media{left:0}
-.layout-webpage .wm--mark svg{width:520px;height:520px}
-.layout-webpage .wm--mark.wm--a svg{right:-130px;bottom:-160px}
-.layout-webpage .wm--mark.wm--b svg{left:-150px;bottom:-200px}
+.layout-webpage .wm--mark{--wm-k:.84}
+.layout-webpage .slide:not(.slide--intent) .wm--mark.wm--a .wm-g{--gx:89.8%;--gy:calc(100% - 100px)}
+.layout-webpage .slide:not(.slide--intent) .wm--mark.wm--b .wm-g{--gx:8.6%;--gy:calc(100% - 60px)}
 
 /* ── Print / PDF ──────────────────────────────────────── */
 /* Slide: one 1280×720 px page per slide. The runtime switches @page by layout: Doc and Webpage A4 (210×297 mm — the zoomed Doc
@@ -911,10 +1189,10 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
   .layout-webpage .slide:last-child{page-break-after:auto}
   .slide{position:relative;opacity:1!important;pointer-events:auto;page-break-after:always;
     break-after:page;inset:auto;transition:none}
-  #hud,#counter,#notes,#open,#info,#help,#edit{display:none!important}
+  #hud,#counter,#notes,#open,#info,#help,#dl,#dl-toast,#edit{display:none!important}
   .slide,.slide *{animation:none!important;transition:none!important}
   .is-pending{opacity:1!important;visibility:visible!important}
-  .slide--indigo,.slide--accent,.slide--sky,.slide--wash,.slide--lavender,.slide--butter,.slide--highlight,.slide--celebrate:before,.metric--hero,.col--dark,.slide-pill,
+  .slide--indigo,.slide--accent,.slide--sky,.slide--wash,.slide--lavender,.slide--butter,.slide--highlight,.slide--celebrate:before,.metric--hero,.col--dark,.slide-pill,.table th,.table td,
   .tl-step .dot,.tl-band,.metric,.col--light,.card .num{
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }

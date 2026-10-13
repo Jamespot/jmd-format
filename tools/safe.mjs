@@ -16,6 +16,7 @@ const ENUMS = {
 };
 export const COLOR_KEYS = ['primary', 'accent', 'highlight', 'ink', 'secondary', 'bg-lavender', 'bg-wash', 'bg-butter', 'card'];
 const FONT = /^[\p{L}\p{N}\s,'"_-]+$/u; // a font list: names (any script), quotes, commas — never `<`, `}`, `;`, `\`, `(`
+const FONT_ONE = /^[\p{L}\p{N}][\p{L}\p{N} _-]{0,63}$/u; // one face, as an Office file names it: no list, no quote
 const MARK_ID = /^[\w-]+$/;
 
 /** Every brand value against its shape; a field out of shape is an Error naming it, and nothing is built.
@@ -24,6 +25,7 @@ export function validateBrand(b, { marks = [] } = {}) {
   const bad = (k, why) => { throw new Error(`brand ${k}: ${JSON.stringify(String(b[k]))} ${why}`); };
   for (const k of COLOR_KEYS) if (b[k] !== undefined && b[k] !== '' && !HEX.test(b[k])) bad(k, 'is not a #hex color');
   for (const k of ['font-display', 'font-body', 'font-fallback']) if (b[k] !== undefined && b[k] !== '' && !FONT.test(b[k])) bad(k, 'is not a font name (letters, spaces, commas, quotes)');
+  for (const k of ['font-office', 'font-office-heavy']) if (b[k] !== undefined && b[k] !== '' && !FONT_ONE.test(b[k])) bad(k, 'is not one font name (letters, digits, spaces — no list, no quotes)');
   if (b['type-scale'] !== undefined && b['type-scale'] !== '' && !(/^\d+(\.\d+)?$/.test(b['type-scale']) && +b['type-scale'] >= 0.5 && +b['type-scale'] <= 2)) bad('type-scale', 'is not a number between 0.5 and 2');
   if (b.glyphs !== undefined && b.glyphs !== '' && !/^\d{1,2}$/.test(b.glyphs)) bad('glyphs', 'is not a count');
   for (const k in ENUMS) if (b[k] !== undefined && b[k] !== '' && !ENUMS[k].includes(b[k])) bad(k, 'is not one of ' + ENUMS[k].join(', '));

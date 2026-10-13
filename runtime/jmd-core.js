@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.5.0';
+  var VERSION = '1.27.1';
   var FORMAT_MAX = 1;
   // layouts (spec/jmd.md): the page the deck is made of — one table, the runtime and the CSS read it.
   //   w, h   the page in design units (the slide's px: every block's CSS is written in them); h 0 = as tall as its content
@@ -18,7 +18,40 @@ globalThis.JMD = (function () {
     story: { w: 640, h: 1138, limit: 1060, zoom: 1.687, flow: 'screen' },
     webpage: { w: 1280, h: 0, limit: 0, zoom: 1, flow: 'scroll' }
   };
+  /* The name every file of a deck leaves under — the page, the PDF, the PowerPoint, the images, in the browser and on the
+     server alike (2026-10-07: one name, made in one place): its title as a person reads it, accents and spaces kept,
+     only what a file system refuses replaced, 80 characters at most; no title → the source's own name, else "deck".
+     `suffix` is what follows it (".pptx", ".james-jmd.html", " (images).zip"); `version` a published version's number. */
+  function fileName(doc, suffix, opts) {
+    opts = opts || {};
+    var clean = function (s) { return String(s || '').normalize('NFC').replace(/[\/\\:*?"<>|\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim(); };
+    var stem = clean(doc && doc.meta && doc.meta.title) || clean(String(opts.fallback || '').replace(/\.(jmd|md)$/i, '')) || 'deck';
+    return stem + (opts.version ? ' (v' + opts.version + ')' : '') + (suffix || '');
+  }
+
   function layout(doc) { var l = doc && doc.meta && doc.meta.layout; return PAGES[l] ? l : 'slide'; }
+
+  /* Renaming a deck is **an edit of its source**, because that is where its name lives — `title:` in the document header,
+     and `meta.title` is only what the store measured from it. One function, so the editor's Rename and `/me`'s make the
+     same edit: the header's own `title:` line if it has one, a line added to the header if it has none, and a header if the
+     deck has none at all. The name goes on a `key: value` line, so everything that would end that line early or rewrite the
+     ones around it is taken out first — newlines, control characters, bidi overrides, zero-widths — and it is cut, like
+     every deck value this codebase lets a person set. An empty name changes nothing: a deck with no title is a case the
+     whole chain already handles, and losing a name by wiping a field is not a gesture anybody means to make. */
+  function withTitle(src, title) {
+    var t = String(title == null ? '' : title)
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/[\u0000-\u001F\u007F\u200B-\u200D\u2060\u202A-\u202E\uFEFF]/g, '')
+      .trim().slice(0, 200).trim();
+    if (!t) return src;
+    var lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
+    if (lines[0] !== '---') return '---\ntitle: ' + t + '\n---\n' + lines.join('\n');
+    var j = 1;
+    while (j < lines.length && lines[j] !== '---') j++;
+    for (var i = 1; i < j; i++) if (/^title\s*:/i.test(lines[i])) { lines[i] = 'title: ' + t; return lines.join('\n'); }
+    lines.splice(1, 0, 'title: ' + t);
+    return lines.join('\n');
+  }
 
   /* ───────────────────────── utils ───────────────────────── */
   function esc(s) {
@@ -30,8 +63,10 @@ globalThis.JMD = (function () {
   }
   // Inline Markdown, deliberately poor: links, bold, italic, code. No raw HTML gets through.
   // `[text](url){.cta}` → a link; `.cta` makes it a button.
+  // An image inside a text (`![](x)` in a card title, a bullet, a cell) is not drawn — an image stands alone on its line —
+  // and is not printed either: the linter says it (`inline-image`), the slide never shows the syntax (seen in the field, 2026-10-12).
   function inline(s) {
-    return esc(s)
+    return esc(String(s).replace(INLINE_IMG, '').replace(/\s{2,}/g, ' ').trim())
       .replace(/\[([^\]]+)\]\(([^)\s]+)\)(\{[^}]*\})?/g, function (_, t, u, m) {
         var cls = mods(m || '').classes;
         return '<a href="' + esc(safeUrl(u)) + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (/^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : '') + '>' + t + '</a>';
@@ -47,6 +82,7 @@ globalThis.JMD = (function () {
     (String(s).match(/\.[\w-]+/g) || []).forEach(function (c) { m.classes.push(c.slice(1).toLowerCase()); });
     return m;
   }
+  var INLINE_IMG = /!\[[^\]]*\]\([^)\s]*\)(\{[^}]*\})?/g;
   var IMG = /^\s*!\[([^\]]*)\]\(([^)\s]+)\)\s*(\{[^}]*\})?\s*$/; // an image alone on its line
 
   /* ───────────────────────── parser ───────────────────────── */
@@ -126,7 +162,13 @@ globalThis.JMD = (function () {
 
   // Slide body → nodes: title, lead, block, image, prose
   function parseSlideBody(slide) {
-    var nodes = [], L = slide.lines, base = slide.bodyStart || 0;
+    /* Where this slide's first line sits **in the document**, which is what every node's map is counted from — and what
+       `data-line` carries, so a click on a text in the editor writes back to the line it came from. `bodyStart` exists only
+       for a slide a `---` opened; the first slide of a deck whose body follows the front matter directly is opened by the
+       `!cur` branch and has none, and falling back to 0 made every one of its nodes claim the top of the document. A click
+       on that slide's title then rewrote line 0 — the front matter's own `---` — leaving the title on screen unchanged and
+       the deck without a header (2026-09-27). The fallback is the slide's own start, which both branches always set. */
+    var nodes = [], L = slide.lines, base = slide.bodyStart == null ? (slide.start || 0) : slide.bodyStart;
     var i = 0, prose = null;
     function flushProse() { if (prose && prose.lines.some(function (x) { return x.trim(); })) nodes.push(prose); prose = null; }
     while (i < L.length) {
@@ -304,6 +346,699 @@ globalThis.JMD = (function () {
   }
   function iconSvg(name) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + '</svg>'; }
 
+  /* ───────────────────────── data: table and chart (spec/charts.md) ─────────────────────────
+     Both are data, never code: a cell goes through inline() like every text, a chart value must read as a number, and the
+     SVG is built here from numbers and escaped labels only — nothing the author writes reaches an attribute but a number. */
+  var COLS = /(?<!\\)\s\|\s|(?<!\\)\|/; // the editor's split (runtime/james-jmd.js): data-col counts the same columns it rewrites
+  var TABLE_SEP = /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/;
+  function isRow(l) { return /(^|[^\\])\|/.test(l); }
+  // `| a | b |` or `a | b` → the cells, each with the column the editor counts (a leading `|` makes an empty column 0)
+  function tableRow(l) {
+    var mM = /\s*\{([^}]*)\}\s*$/.exec(l), attrs = mods(mM ? mM[1] : '');
+    if (mM) l = l.slice(0, mM.index);
+    var parts = l.trim().split(COLS).map(function (c) { return c.replace(/\\\|/g, '|').trim(); });
+    var cells = parts.map(function (t, k) { return { text: t, col: k }; });
+    if (/^\|/.test(l.trim())) cells.shift();
+    if (/(^|[^\\])\|$/.test(l.trim()) && cells.length && !cells[cells.length - 1].text) cells.pop();
+    return { cells: cells, attrs: attrs };
+  }
+  function table(b) {
+    var rows = [], head = null, align = [];
+    b.lines.forEach(function (l, k) {
+      if (!l.trim() || !isRow(l)) return;
+      if (TABLE_SEP.test(l.trim())) {
+        if (rows.length === 1 && !head) {
+          head = rows.pop();
+          align = tableRow(l).cells.map(function (c) { var t = c.text; return /^:-+:$/.test(t) ? 'center' : /-:$/.test(t) ? 'right' : /^:-/.test(t) ? 'left' : ''; });
+        }
+        return;
+      }
+      var r = tableRow(l); r.line = b.map[0] + 1 + k; rows.push(r);
+    });
+    var width = Math.max(head ? head.cells.length : 0, rows.reduce(function (m, r) { return Math.max(m, r.cells.length); }, 0));
+    return { head: head, rows: rows, align: align, width: width };
+  }
+  var TABLE_MAX = 12, TABLE_SPLIT_MAX = 24, TABLE_SPLIT_COLS = 3;
+  function tableSplit(b, t) { return has(b.attrs, 'split') || (t || table(b)).rows.length > TABLE_MAX; }
+  // a number as people write it in a cell or a chart: `1 200`, `3,5`, `42 %`, `-7`, `€5.2M` — the unit around it is not the value
+  function num(s) {
+    var m = /^[^\d\-+.,]*([-+]?\d[\d\s\u00A0\u202F]*(?:[.,]\d+)?)\s*[^\d]*$/.exec(String(s).trim());
+    if (!m) return null;
+    var v = parseFloat(m[1].replace(/[\s\u00A0\u202F]/g, '').replace(',', '.'));
+    return isFinite(v) ? v : null;
+  }
+
+  var CHART_TYPES = ['bar', 'hbar', 'line', 'pie'];
+  var CHART_MAX = { bar: 12, hbar: 8, line: 24, pie: 6 };
+  var SERIES_MAX = 4;
+  function chartType(b) { for (var i = 0; i < b.attrs.classes.length; i++) { var c = b.attrs.classes[i] === 'donut' ? 'pie' : b.attrs.classes[i]; if (CHART_TYPES.indexOf(c) >= 0) return c; } return 'bar'; }
+  // `- label | value | value…` items; `series: A | B` names the columns, `unit: k€` follows every value
+  function chart(b) {
+    var opts = {};
+    b.lines.forEach(function (l) { var m = /^\s*(series|unit)\s*:\s*(.*)$/i.exec(l); if (m) opts[m[1].toLowerCase()] = m[2].trim(); });
+    var its = items(b).map(function (it) {
+      return { label: it.cols[0] || '', raw: it.cols.slice(1), values: it.cols.slice(1).map(num), hero: has(it.attrs, 'hero'), line: it.line };
+    });
+    var n = its.reduce(function (m, it) { return Math.max(m, it.values.length); }, 0);
+    var series = opts.series ? opts.series.split(COLS).map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    return { type: chartType(b), items: its, n: n, series: series, unit: opts.unit || '' };
+  }
+  function fmt(v, dec) { // a value drawn on the chart: at most two decimals, the thousands spaced, the decimal mark of the deck's language
+    var r = Math.round(v * 100) / 100, s = String(Math.abs(r)).split('.');
+    return (r < 0 ? '\u2212' : '') + s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0') + (s[1] ? (dec || '.') + s[1] : '');
+  }
+  function f1(x) { return String(Math.round(x * 10) / 10); }
+  function cut(s, max) { s = String(s); return s.length > max ? s.slice(0, Math.max(1, max - 1)) + '…' : s; }
+  // the step of an axis of about four ticks: 1, 2, 2.5 or 5 times a power of ten — the top tick sits just above the data
+  function niceStep(v) { if (v <= 0) return 1; var raw = v / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+  // the drawing box per layout, in design units (= the px of the type): the SVG is never scaled, so 16 reads as 16 everywhere
+  function chartBox(ctx, right) {
+    var lay = ctx && ctx.layout;
+    if (lay === 'story') return { w: 544, h: 440 };
+    if (lay === 'doc') return { w: 1060, h: right ? 460 : 520 };
+    if (right) return { w: 544, h: 400 };
+    return { w: 1088, h: lay === 'webpage' ? 400 : 360 };
+  }
+  // several series: their names, above the drawing (a pie names its slices in its own list)
+  function chartLegend(c) {
+    if (c.n < 2 || c.type === 'pie') return '';
+    var keys = [];
+    for (var s = 0; s < Math.min(c.n, SERIES_MAX); s++) keys.push('<span class="chart-key chart-s' + (s + 1) + '"><i></i>' + inline(c.series[s] || ('Series ' + (s + 1))) + '</span>');
+    return '<div class="chart-legend">' + keys.join('') + '</div>';
+  }
+  function chartSvg(c, box, id) {
+    var W = box.w, H = box.h, its = c.items, out = [], fs = 16, S = Math.min(c.n, SERIES_MAX) || 1;
+    function k_(k) { return ' style="--k:' + Math.min(k, 23) + '"'; } // the order an element arrives in (engine.css, motion)
+    // the gradients: one per series, ids unique in the page (`jc-<n>-`), the colors from classes — never from the source
+    var defs = '<defs>' + Array.apply(null, Array(S)).map(function (_, s) {
+      return '<linearGradient id="' + id + 'g' + (s + 1) + '" class="chart-grad chart-s' + (s + 1) + '" x1="0" y1="0" x2="' + (c.type === 'hbar' ? 1 : 0) + '" y2="' + (c.type === 'hbar' ? 0 : 1) + '"><stop offset="0"/><stop offset="1"/></linearGradient>' +
+        '<linearGradient id="' + id + 'a' + (s + 1) + '" class="chart-area-grad chart-s' + (s + 1) + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0"/><stop offset="1"/></linearGradient>';
+    }).join('') + '</defs>';
+    out.push(defs);
+    function fill(s) { return ' fill="url(#' + id + 'g' + (s + 1) + ')"'; }
+    var vals = []; its.forEach(function (it) { it.values.slice(0, S).forEach(function (v) { if (v != null) vals.push(v); }); });
+    var hi = vals.length ? Math.max.apply(null, vals) : 1, lo = vals.length ? Math.min.apply(null, vals) : 0;
+    var unit = c.unit ? '\u00A0' + c.unit : '';
+    function lbl(v) { return esc(fmt(v, c.dec) + unit); }
+    var anyHero = its.some(function (it) { return it.hero; });
+    if (c.type === 'pie') {
+      var tot = its.reduce(function (s, it) { return s + Math.max(0, it.values[0] || 0); }, 0) || 1;
+      var R = Math.min(H, 360) / 2 - 4, r0 = R * 0.58, cx = R + 4, cy = H / 2, a = -Math.PI / 2;
+      its.forEach(function (it, k) {
+        var v = Math.max(0, it.values[0] || 0), da = v / tot * Math.PI * 2; if (!da) return;
+        var a2 = a + Math.min(da, Math.PI * 2 - 1e-4), big = da > Math.PI ? 1 : 0;
+        var p = function (rr, t) { return f1(cx + rr * Math.cos(t)) + ' ' + f1(cy + rr * Math.sin(t)); };
+        out.push('<path class="chart-slice chart-c' + (k % 6 + 1) + (it.hero ? ' is-hero' : '') + '"' + k_(k) + ' d="M' + p(R, a) + 'A' + f1(R) + ' ' + f1(R) + ' 0 ' + big + ' 1 ' + p(R, a2) + 'L' + p(r0, a2) + 'A' + f1(r0) + ' ' + f1(r0) + ' 0 ' + big + ' 0 ' + p(r0, a) + 'Z"/>');
+        a += da;
+      });
+      // the hero's share in the hole: the one number the slice is there to say
+      var hero = its.filter(function (it) { return it.hero; })[0];
+      var center = hero ? '<text class="chart-total"' + k_(its.length) + ' x="' + f1(cx) + '" y="' + f1(cy) + '" text-anchor="middle" dominant-baseline="central" font-size="' + Math.round(r0 * 0.46) + '">' + Math.round(Math.max(0, hero.values[0] || 0) / tot * 100) + '\u00A0%</text>' : '';
+      return '<svg class="chart-svg" viewBox="0 0 ' + f1(2 * R + 8) + ' ' + H + '" width="' + f1(2 * R + 8) + '" height="' + H + '" style="--cx:' + f1(cx) + 'px;--cy:' + f1(cy) + 'px" role="img" aria-hidden="true">' + out.join('') + center + '</svg>';
+    }
+    // bars say their value: the tallest one touches the top. A line reads against its ticks: the top tick sits just above it
+    var span = Math.max(hi, 0) - Math.min(lo, 0) || 1, step = niceStep(span);
+    var max = c.type === 'line' ? Math.ceil(Math.max(hi, 0) / step) * step || step : Math.max(hi, 0), min = c.type === 'line' ? Math.floor(Math.min(lo, 0) / step) * step : Math.min(lo, 0);
+    if (max === min) max = min + 1;
+    if (c.type === 'hbar') {
+      var lw = Math.min(W * 0.32, 260), vw = 90, rowH = (H - 8) / Math.max(its.length, 1), bh = Math.min(rowH * 0.62, 44) / S;
+      var x0 = lw + (W - lw - vw) * (-min / (max - min)), scale = (W - lw - vw) / (max - min);
+      its.forEach(function (it, k) {
+        var y = 4 + k * rowH + (rowH - bh * S) / 2;
+        out.push('<text class="chart-label" x="' + f1(lw - 12) + '" y="' + f1(4 + k * rowH + rowH / 2) + '" text-anchor="end" dominant-baseline="central" font-size="' + fs + '">' + esc(cut(it.label, Math.floor(lw / (fs * 0.55)))) + '</text>');
+        it.values.slice(0, S).forEach(function (v, s) {
+          if (v == null) return;
+          var xa = Math.min(x0, x0 + v * scale), w = Math.abs(v * scale), yy = y + s * bh;
+          out.push('<rect class="chart-bar chart-s' + (s + 1) + (it.hero ? ' is-hero' : anyHero ? ' is-quiet' : '') + (v < 0 ? ' is-neg' : '') + '"' + k_(k) + fill(s) + ' x="' + f1(xa) + '" y="' + f1(yy) + '" width="' + f1(Math.max(w, 1)) + '" height="' + f1(bh - (S > 1 ? 2 : 0)) + '" rx="' + f1(Math.min(6, bh / 3)) + '"/>');
+          out.push('<text class="chart-value"' + k_(k) + ' x="' + f1(v < 0 ? xa - 8 : xa + w + 8) + '" y="' + f1(yy + bh / 2) + '" text-anchor="' + (v < 0 ? 'end' : 'start') + '" dominant-baseline="central" font-size="' + (S > 1 ? fs - 2 : fs) + '">' + lbl(v) + '</text>');
+        });
+      });
+      out.push('<line class="chart-axis" x1="' + f1(x0) + '" x2="' + f1(x0) + '" y1="0" y2="' + H + '"/>');
+    } else {
+      var top = 30, bottom = 40, left = c.type === 'line' ? 64 : 4, right = c.type === 'line' ? 24 : 4;
+      var ph = H - top - bottom, pw = W - left - right, y = function (v) { return top + ph * (max - v) / (max - min); };
+      var slot = pw / Math.max(its.length, 1), maxCh = Math.max(3, Math.floor(slot / (fs * 0.55)));
+      if (c.type === 'line') for (var tv = min; tv <= max + step / 1e6; tv += step) (function (v) {
+        out.push('<line class="chart-grid" x1="' + left + '" x2="' + (W - right) + '" y1="' + f1(y(v)) + '" y2="' + f1(y(v)) + '"/>');
+        out.push('<text class="chart-tick" x="' + (left - 10) + '" y="' + f1(y(v)) + '" text-anchor="end" dominant-baseline="central" font-size="' + (fs - 2) + '">' + lbl(v) + '</text>');
+      })(Math.round(tv * 1e6) / 1e6);
+      // labels that would touch are thinned: one in two (or three…), the last always said
+      var longest = its.reduce(function (m, it) { return Math.max(m, Math.min(String(it.label).length, maxCh)); }, 1);
+      var every = Math.max(1, Math.ceil((longest * fs * 0.62 + 12) / slot));
+      its.forEach(function (it, k) {
+        if (k % every && k !== its.length - 1) return;
+        if (k !== its.length - 1 && every > 1 && its.length - 1 - k < every) return; // never two labels side by side at the end
+        out.push('<text class="chart-label" x="' + f1(left + slot * (k + 0.5)) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="' + fs + '">' + esc(cut(it.label, every > 1 ? longest : maxCh)) + '</text>');
+      });
+      if (c.type === 'bar') {
+        var gw = Math.min(slot * 0.7, 120 * S), bw = gw / S;
+        its.forEach(function (it, k) {
+          it.values.slice(0, S).forEach(function (v, s) {
+            if (v == null) return;
+            var x = left + slot * k + (slot - gw) / 2 + s * bw, ya = Math.min(y(v), y(0)), hgt = Math.abs(y(v) - y(0));
+            out.push('<rect class="chart-bar chart-s' + (s + 1) + (it.hero ? ' is-hero' : anyHero ? ' is-quiet' : '') + (v < 0 ? ' is-neg' : '') + '"' + k_(k) + fill(s) + ' x="' + f1(x + (S > 1 ? 1 : 0)) + '" y="' + f1(ya) + '" width="' + f1(bw - (S > 1 ? 2 : 0)) + '" height="' + f1(Math.max(hgt, 1)) + '" rx="' + f1(Math.min(8, bw / 4)) + '"/>');
+            if (S === 1 || bw >= 44) out.push('<text class="chart-value"' + k_(k) + ' x="' + f1(x + bw / 2) + '" y="' + f1(v < 0 ? ya + hgt + 18 : ya - 9) + '" text-anchor="middle" font-size="' + (S > 1 ? fs - 3 : fs + 2) + '">' + lbl(v) + '</text>');
+          });
+        });
+      } else {
+        for (var s = 0; s < S; s++) {
+          var pts = []; its.forEach(function (it, k) { var v = it.values[s]; if (v != null) pts.push([left + slot * (k + 0.5), y(v), v, it.hero]); });
+          if (!pts.length) continue;
+          var line = pts.map(function (q) { return f1(q[0]) + ',' + f1(q[1]); }).join(' ');
+          // one series: the area under the line, in the series' color fading to nothing
+          if (S === 1 && pts.length > 1) out.push('<polygon class="chart-area" fill="url(#' + id + 'a1)" points="' + f1(pts[0][0]) + ',' + f1(y(Math.max(min, 0))) + ' ' + line + ' ' + f1(pts[pts.length - 1][0]) + ',' + f1(y(Math.max(min, 0))) + '"/>');
+          out.push('<polyline class="chart-line chart-s' + (s + 1) + '"' + k_(s) + ' pathLength="1" points="' + line + '"/>');
+          pts.forEach(function (q, k) {
+            out.push('<circle class="chart-dot chart-s' + (s + 1) + (q[3] ? ' is-hero' : '') + '"' + k_(Math.round(k * 12 / Math.max(pts.length, 1))) + ' cx="' + f1(q[0]) + '" cy="' + f1(q[1]) + '" r="' + (q[3] ? 8 : 5) + '"/>');
+            // one series: every point says its value when there is room, else the first, the last and the hero; several: the last only
+            var say = S === 1 ? (pts.length <= 12 || q[3] || k === 0 || k === pts.length - 1) : k === pts.length - 1;
+            if (say) out.push('<text class="chart-value"' + k_(Math.round(k * 12 / Math.max(pts.length, 1))) + ' x="' + f1(q[0]) + '" y="' + f1(q[1] - 14) + '" text-anchor="middle" font-size="' + fs + '">' + lbl(q[2]) + '</text>');
+          });
+        }
+      }
+      out.push('<line class="chart-axis" x1="' + left + '" x2="' + (W - right) + '" y1="' + f1(y(0)) + '" y2="' + f1(y(0)) + '"/>');
+    }
+    return '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-hidden="true">' + out.join('') + '</svg>';
+  }
+  // what a screen reader and a copy-paste get: the numbers as text, hidden under the drawing
+  function chartText(c) {
+    return '<table class="chart-data">' + (c.series.length ? '<tr><th></th>' + c.series.map(function (s) { return '<th>' + inline(s) + '</th>'; }).join('') + '</tr>' : '') +
+      c.items.map(function (it) { return '<tr><th>' + inline(it.label) + '</th>' + it.raw.map(function (v) { return '<td>' + inline(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
+  }
+
+  /* ───────────────────────── diagram: Mermaid read, drawn by us (spec/charts.md) ─────────────────────────
+     The text is Mermaid's flowchart — what every model writes, what Docs, GitHub and Notion draw — but no Mermaid runs: a
+     subset is read here, laid out in layers here, and the SVG is built from numbers and escaped labels only, like a chart.
+     `style`, `classDef`, `linkStyle`, `class` and `%%{init}%%` put colors in the source: ignored, and the linter says so.
+     `click` binds code to a node: refused. The one mark read is the hero: `{.hero}`, or Mermaid's `:::hero`. Nothing the author writes reaches an attribute. */
+  var DIAGRAM_KINDS = ['flowchart', 'graph'];
+  // the other Mermaid families: the block of ours that already draws them
+  var DIAGRAM_ROUTE = { pie: '`::: chart {.pie}`', 'xychart-beta': '`::: chart`', xychart: '`::: chart`', timeline: '`::: timeline`', journey: '`::: timeline`', gantt: '`::: timeline` or `::: table`', mindmap: '`::: cards`', quadrantchart: '`::: compare`' };
+  var DIAGRAM_MAX = { slide: 10, story: 7, doc: 14, webpage: 14 };
+  var DIAGRAM_MIN_TYPE = 14;
+  var DIAGRAM_GROW = 1.3;
+  var DIAGRAM_LAYOUT_MAX = 60; // past it the layout is not even tried — the linter has said `max-items` long before; the text is shown // the most a diagram is grown to fill its box // the smallest type a fitted diagram may be read at, in design px
+  var DIAGRAM_SHAPES = [ // [opener, closer, shape] — the longest opener first
+    ['(((', ')))', 'circle'], ['([', '])', 'stadium'], ['((', '))', 'circle'], ['[(', ')]', 'cylinder'], ['[[', ']]', 'subroutine'],
+    ['{{', '}}', 'hexagon'], ['[/', '/]', 'rect'], ['[/', '\\]', 'rect'], ['[\\', '\\]', 'rect'], ['[\\', '/]', 'rect'],
+    ['[', ']', 'rect'], ['(', ')', 'round'], ['{', '}', 'diamond'], ['>', ']', 'rect']
+  ];
+  var DG_ID = /^[\wÀ-ɏ]+(?:-[\wÀ-ɏ]+)*/;
+  var DG_EDGE_TEXT = /^(<)?(--|==|-\.)\s+(.+?)\s*(-{2,}>|-{3,}|={2,}>|={3,}|\.-+>|\.-)/;
+  var DG_EDGE = /^(<)?(-{2,}|={2,}|-\.+-|~{3,})(>|x(?=\s)|o(?=\s))?/; // `~~~` links without a line: it places, it does not draw
+  // a label as Mermaid writes it: `<br>` is a new line, quotes and markdown backticks are wrapping, any other tag is text
+  function dgLabel(s) { return String(s).replace(/^"([^]*)"$/, '$1').replace(/^`([^]*)`$/, '$1').replace(/<br\s*\/?>/gi, '\n').replace(/\\n/g, '\n').trim(); }
+  // split a line on `;` outside quotes and brackets
+  function dgStatements(l) {
+    var out = [], cur = '', q = false, depth = 0;
+    for (var i = 0; i < l.length; i++) {
+      var ch = l[i];
+      if (ch === '"') q = !q;
+      else if (!q && '[({'.indexOf(ch) >= 0) depth++;
+      else if (!q && '])}'.indexOf(ch) >= 0) depth = Math.max(0, depth - 1);
+      if (ch === ';' && !q && !depth) { out.push(cur); cur = ''; } else cur += ch;
+    }
+    out.push(cur);
+    return out.map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+  function diagram(b) {
+    var d = { kind: '', dir: 'TD', nodes: [], edges: [], byId: {}, ignored: [], refused: [], bad: [] };
+    function node(id, line) {
+      if (!d.byId[id]) { d.byId[id] = { id: id, label: id, shape: 'rect', hero: false, line: line, k: d.nodes.length }; d.nodes.push(d.byId[id]); }
+      return d.byId[id];
+    }
+    function chain(s, line) {
+      var pos = 0;
+      function ws() { while (pos < s.length && /\s/.test(s[pos])) pos++; }
+      function nodeAt() {
+        var m = DG_ID.exec(s.slice(pos));
+        if (!m) return null;
+        pos += m[0].length;
+        var n = node(m[0], line);
+        for (var i = 0; i < DIAGRAM_SHAPES.length && !/^\{\.[\w-]/.test(s.slice(pos)); i++) { // `A{.hero}` is a modifier, not a decision labelled `.hero`
+          var sh = DIAGRAM_SHAPES[i];
+          if (s.slice(pos, pos + sh[0].length) !== sh[0]) continue;
+          var p = pos + sh[0].length, end;
+          while (s[p] === ' ') p++;
+          if (s[p] === '"') { var qe = s.indexOf('"', p + 1); if (qe < 0) continue; end = s.indexOf(sh[1], qe + 1); if (end < 0 || s.slice(qe + 1, end).trim()) continue; }
+          else end = s.indexOf(sh[1], p);
+          if (end < 0) continue;
+          n.label = dgLabel(s.slice(pos + sh[0].length, end)) || n.id; n.shape = sh[2]; n.line = line; // the line the editor opens: where the label is written
+          pos = end + sh[1].length;
+          break;
+        }
+        var c = /^:::([\w-]+)/.exec(s.slice(pos));
+        if (c) { pos += c[0].length; if (c[1].toLowerCase() === 'hero') n.hero = true; else d.ignored.push(':::' + c[1]); }
+        // `{.hero}`, the format's own modifier: what survives a channel that eats `:::` (SafeBrain masks it, spec/hosts.md)
+        var md = /^\s*\{(\s*\.[\w-]+)+\s*\}/.exec(s.slice(pos));
+        if (md) { pos += md[0].length; mods(md[0]).classes.forEach(function (k) { if (k === 'hero') n.hero = true; else d.ignored.push('{.' + k + '}'); }); }
+        return n;
+      }
+      function group() {
+        var list = [];
+        for (;;) {
+          ws(); var n = nodeAt(); if (!n) return list.length ? list : null;
+          list.push(n); ws();
+          if (s[pos] === '&') { pos++; continue; }
+          return list;
+        }
+      }
+      function edgeAt() {
+        var rest = s.slice(pos), m = DG_EDGE_TEXT.exec(rest), e;
+        if (m) e = { back: !!m[1], kind: m[2] === '==' ? 'thick' : m[2] === '-.' ? 'dotted' : 'solid', arrow: />$/.test(m[4]), label: dgLabel(m[3]) };
+        else if ((m = DG_EDGE.exec(rest))) e = { back: !!m[1], kind: m[2][0] === '=' ? 'thick' : m[2][0] === '~' ? 'hidden' : m[2].indexOf('.') >= 0 ? 'dotted' : 'solid', arrow: !!m[3], label: '' };
+        else return null;
+        pos += m[0].length; ws();
+        if (s[pos] === '|') { var pe = s.indexOf('|', pos + 1); if (pe > 0) { e.label = dgLabel(s.slice(pos + 1, pe)); pos = pe + 1; } }
+        return e;
+      }
+      var from = group();
+      if (!from) return false;
+      for (;;) {
+        ws(); if (pos >= s.length) return true;
+        var e = edgeAt(); if (!e) return false;
+        var to = group(); if (!to) return false;
+        from.forEach(function (a) { to.forEach(function (z) { d.edges.push({ from: a, to: z, kind: e.kind, arrow: e.arrow, back: e.back, label: e.label, line: line }); }); });
+        from = to;
+      }
+    }
+    var head = true;
+    b.lines.forEach(function (raw, k) {
+      var line = b.map[0] + 1 + k, l = raw.trim();
+      if (/^%%\{/.test(l)) { d.ignored.push('%%{init}%%'); return; }
+      l = l.replace(/%%.*$/, '').trim();
+      if (!l) return;
+      if (head) {
+        head = false;
+        var m = /^([A-Za-z-]+)(?:\s+(TD|TB|BT|LR|RL))?\s*;?$/i.exec(l);
+        d.kind = (m ? m[1] : l.split(/\s+/)[0]).toLowerCase();
+        if (m && m[2]) d.dir = m[2].toUpperCase() === 'TB' ? 'TD' : m[2].toUpperCase();
+        return;
+      }
+      if (DIAGRAM_KINDS.indexOf(d.kind) < 0) return;
+      dgStatements(l).forEach(function (s) {
+        var w = s.split(/\s+/)[0].toLowerCase();
+        if (w === 'subgraph' || w === 'end' || w === 'direction') { d.ignored.push(w === 'end' ? 'subgraph' : w); return; }
+        if (w === 'style' || w === 'classdef' || w === 'linkstyle' || w === 'class') { d.ignored.push(w); return; }
+        if (w === 'click' || w === 'call' || w === 'href') { d.refused.push({ text: s, line: line }); return; }
+        if (!chain(s, line)) d.bad.push({ text: s, line: line });
+      });
+    });
+    return d;
+  }
+
+  // the drawing box per layout, in design units, and the type the diagram is laid out at
+  function diagramBox(ctx, right) {
+    var lay = ctx && ctx.layout;
+    if (lay === 'story') return { w: 560, h: 860, fs: 24 };
+    if (lay === 'doc') return { w: 1060, h: right ? 520 : 760, fs: 18 };
+    if (right) return { w: 544, h: 460, fs: 18 };
+    return { w: 1100, h: lay === 'webpage' ? 560 : 430, fs: 20 };
+  }
+  function dgWrap(text, max) {
+    var out = [];
+    String(text).split('\n').forEach(function (para) {
+      var cur = '';
+      para.split(/\s+/).filter(Boolean).forEach(function (w) {
+        if (cur && (cur + ' ' + w).length > max) { out.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+      });
+      out.push(cur);
+    });
+    return out;
+  }
+  // least squares with a minimum gap between neighbours, order kept: pool adjacent violators on the shifted positions
+  function dgPlace(want, gap) {
+    var off = [0], n = want.length, i;
+    for (i = 1; i < n; i++) off[i] = off[i - 1] + gap[i - 1];
+    var blocks = [];
+    for (i = 0; i < n; i++) {
+      blocks.push({ sum: want[i] - off[i], n: 1 });
+      while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) {
+        var top = blocks.pop(); blocks[blocks.length - 1].sum += top.sum; blocks[blocks.length - 1].n += top.n;
+      }
+    }
+    var out = [], k = 0;
+    blocks.forEach(function (bl) { for (var j = 0; j < bl.n; j++, k++) out.push(bl.sum / bl.n + off[k]); });
+    return out;
+  }
+  /* A layered layout (Sugiyama, small): cycles broken by a depth-first walk, ranks by longest path, a dummy node every rank a
+     long edge crosses, the order of each rank by barycenters (the sweep with the fewest crossings kept), positions across the
+     ranks by least squares toward the neighbours, gaps sized by the labels that sit in them. Laid out top-down, turned after. */
+  function diagramLayout(d, fs, dir) {
+    var horiz = dir === 'LR' || dir === 'RL', CW = fs * 0.58, LH = fs * 1.22;
+    var maxCh = horiz ? 16 : 18;
+    var V = d.nodes.map(function (n) {
+      var lines = dgWrap(n.label, maxCh), sub = n.sub ? dgWrap(n.sub, Math.round(maxCh * 1.2)) : [];
+      var tw = Math.max(Math.max.apply(null, lines.map(function (l) { return l.length; })) * CW, sub.length ? Math.max.apply(null, sub.map(function (l) { return l.length; })) * CW * 0.8 : 0);
+      var th = lines.length * LH + (sub.length ? fs * 0.3 + sub.length * LH * 0.8 : 0);
+      var w = tw + fs * 2.2, h = th + fs * 1.5;
+      if (n.shape === 'stadium') w += fs;
+      if (n.shape === 'subroutine') w += fs;
+      if (n.shape === 'hexagon') w += h * 0.5;
+      if (n.shape === 'cylinder') h += fs * 0.7;
+      if (n.shape === 'diamond') { w = tw / 0.62 + fs * 1.4; h = th / 0.38 + fs * 0.8; }
+      if (n.shape === 'circle') { w = h = Math.max(tw, th) + fs * 2; }
+      w = Math.max(w, fs * 5);
+      return { n: n, lines: lines, sub: sub, w: w, h: h, out: [], inn: [], dummy: false };
+    });
+    var E = [];
+    d.edges.forEach(function (e) { if (e.from !== e.to) E.push({ e: e, u: V[e.from.k], v: V[e.to.k], rev: false }); });
+    // cycles: an edge back to a node still on the walk's stack is laid out reversed
+    var state = V.map(function () { return 0; });
+    function dfs(i) { state[i] = 1; E.forEach(function (x) { if (x.u === V[i] && !x.rev) { var j = V.indexOf(x.v); if (state[j] === 1) x.rev = true; else if (!state[j]) dfs(j); } }); state[i] = 2; }
+    V.forEach(function (_, i) { if (!state[i]) dfs(i); });
+    E.forEach(function (x) { if (x.rev) { var t = x.u; x.u = x.v; x.v = t; } x.u.out.push(x); x.v.inn.push(x); });
+    // ranks: longest path from the sources, then a sink pulled down to its first successor's rank minus one
+    var rank = V.map(function () { return -1; });
+    function rk(i) { if (rank[i] >= 0) return rank[i]; rank[i] = 0; var r = 0; V[i].inn.forEach(function (x) { r = Math.max(r, rk(V.indexOf(x.u)) + 1); }); return (rank[i] = r); }
+    V.forEach(function (_, i) { rk(i); });
+    V.forEach(function (v, i) { if (!v.inn.length && v.out.length) rank[i] = Math.min.apply(null, v.out.map(function (x) { return rank[V.indexOf(x.v)]; })) - 1; });
+    V.forEach(function (v, i) { v.r = rank[i]; });
+    var R = Math.max.apply(null, V.map(function (v) { return v.r; }).concat([0])) + 1;
+    // long edges: one dummy per rank crossed; an edge's points are its chain
+    var all = V.slice();
+    E.forEach(function (x) {
+      x.chain = [x.u];
+      for (var r = x.u.r + 1; r < x.v.r; r++) { var dm = { dummy: true, w: fs * 0.6, h: fs, r: r, out: [], inn: [] }; all.push(dm); x.chain.push(dm); }
+      x.chain.push(x.v);
+      for (var k = 0; k + 1 < x.chain.length; k++) { x.chain[k].out.push({ v: x.chain[k + 1] }); x.chain[k + 1].inn.push({ u: x.chain[k] }); }
+    });
+    // the chain links, not the edges, drive the ordering: keep only them
+    all.forEach(function (a) { a.up = a.inn.filter(function (l) { return !l.e; }).map(function (l) { return l.u; }); a.down = a.out.filter(function (l) { return !l.e; }).map(function (l) { return l.v; }); });
+    var layers = []; for (var r0 = 0; r0 < R; r0++) layers.push([]);
+    all.forEach(function (a) { layers[a.r].push(a); });
+    function index() { layers.forEach(function (L) { L.forEach(function (a, i) { a.o = i; }); }); }
+    function crossings() {
+      var c = 0;
+      for (var r = 0; r + 1 < R; r++) {
+        var segs = []; layers[r].forEach(function (a) { a.down.forEach(function (z) { segs.push([a.o, z.o]); }); });
+        for (var i = 0; i < segs.length; i++) for (var j = i + 1; j < segs.length; j++) if ((segs[i][0] - segs[j][0]) * (segs[i][1] - segs[j][1]) < 0) c++;
+      }
+      return c;
+    }
+    index();
+    var best = layers.map(function (L) { return L.slice(); }), bestC = crossings();
+    for (var it = 0; it < 12 && bestC; it++) {
+      var down = it % 2 === 0;
+      for (var q = down ? 1 : R - 2; down ? q < R : q >= 0; q += down ? 1 : -1) {
+        layers[q].forEach(function (a) { var nb = down ? a.up : a.down; a.bc = nb.length ? nb.reduce(function (s, z) { return s + z.o; }, 0) / nb.length : a.o; });
+        layers[q].sort(function (a, z) { return a.bc - z.bc || a.o - z.o; });
+        layers[q].forEach(function (a, i) { a.o = i; });
+      }
+      var c = crossings();
+      if (c < bestC) { bestC = c; best = layers.map(function (L) { return L.slice(); }); }
+    }
+    layers = best; index();
+    // across: each node's size along the rank and across it, depending on the direction
+    function across(a) { return horiz ? a.h : a.w; }
+    function along(a) { return horiz ? a.w : a.h; }
+    var sep = fs * 1.4;
+    layers.forEach(function (L) { var x = 0; L.forEach(function (a) { a.x = x + across(a) / 2; x += across(a) + sep; }); });
+    function relax(L, nbOf) {
+      if (!L.length) return;
+      var want = L.map(function (a) { var nb = nbOf(a); return nb.length ? nb.reduce(function (s, z) { return s + z.x; }, 0) / nb.length : a.x; });
+      var gap = []; for (var i = 0; i + 1 < L.length; i++) gap.push((across(L[i]) + across(L[i + 1])) / 2 + (L[i].dummy && L[i + 1].dummy ? fs * 0.6 : sep));
+      var x = dgPlace(want, gap); L.forEach(function (a, i) { a.x = x[i]; });
+    }
+    for (var pass = 0; pass < 8; pass++) {
+      for (var r1 = 1; r1 < R; r1++) relax(layers[r1], function (a) { return a.up; });
+      for (var r2 = R - 2; r2 >= 0; r2--) relax(layers[r2], function (a) { return a.down; });
+    }
+    // along: each rank as thick as its biggest node; each gap as wide as the labels that sit in it need
+    var label = function (t) { var ls = dgWrap(t, 16); return { lines: ls, w: Math.max.apply(null, ls.map(function (l) { return l.length; })) * fs * 0.52 + fs * 0.9, h: ls.length * fs * 1.12 + fs * 0.45 }; };
+    var gaps = []; for (var g = 0; g + 1 < R; g++) gaps.push(fs * 2.4);
+    E.forEach(function (x) {
+      if (!x.e.label) return;
+      x.lab = label(x.e.label);
+      var gi = x.u.r; if (gi < gaps.length) gaps[gi] = Math.max(gaps[gi], (horiz ? x.lab.w + fs * 3 : x.lab.h + fs * 1.6));
+    });
+    var thick = layers.map(function (L) { return Math.max.apply(null, L.map(along).concat([fs])); });
+    var y = 0; layers.forEach(function (L, r) { L.forEach(function (a) { a.y = y + thick[r] / 2; }); y += thick[r] + (gaps[r] || 0); });
+    // edges: ports spread on a node's side, a curve through the dummies, the arrow on the last stretch
+    var AL = fs * 0.62;
+    function ports(a, list, key) {
+      list.sort(function (p, z) { return p[key].x - z[key].x; });
+      var room = (d.ortho || (a.n && (a.n.shape === 'diamond' || a.n.shape === 'circle'))) ? 0 : Math.min(across(a) * 0.5, list.length * fs * 1.2);
+      list.forEach(function (x, i) { x[key === 'next' ? 'p0' : 'p1'] = list.length > 1 ? (i / (list.length - 1) - 0.5) * room : 0; });
+    }
+    V.forEach(function (a) {
+      var outs = E.filter(function (x) { return x.u === a; }).map(function (x) { x.next = x.chain[1]; return x; });
+      var ins = E.filter(function (x) { return x.v === a; }).map(function (x) { x.prev = x.chain[x.chain.length - 2]; return x; });
+      ports(a, outs, 'next'); ports(a, ins, 'prev');
+    });
+    E.forEach(function (x) {
+      var pts = [{ x: x.u.x + x.p0, y: x.u.y + along(x.u) / 2 }];
+      for (var k = 1; k + 1 < x.chain.length; k++) pts.push({ x: x.chain[k].x, y: x.chain[k].y });
+      pts.push({ x: x.v.x + x.p1, y: x.v.y - along(x.v) / 2 });
+      if (x.v.n.shape === 'diamond' || x.v.n.shape === 'circle') pts[pts.length - 1].y += 0;
+      x.pts = pts;
+      if (x.lab) x.labAt = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    });
+    // extent, then the turn: top-down is the frame everything above was computed in
+    var minX = Infinity, maxX = -Infinity, H = y - (gaps[R - 1] || 0);
+    all.forEach(function (a) { minX = Math.min(minX, a.x - across(a) / 2); maxX = Math.max(maxX, a.x + across(a) / 2); });
+    E.forEach(function (x) { if (x.lab) { minX = Math.min(minX, x.labAt.x - (horiz ? x.lab.h : x.lab.w) / 2); maxX = Math.max(maxX, x.labAt.x + (horiz ? x.lab.h : x.lab.w) / 2); } });
+    var pad = fs * 0.3, W = maxX - minX;
+    function turn(p) {
+      var a = p.x - minX + pad, b = p.y + pad;
+      if (dir === 'BT') b = H + 2 * pad - b;
+      if (dir === 'LR') return { x: b, y: a };
+      if (dir === 'RL') return { x: H + 2 * pad - b, y: a };
+      return { x: a, y: b };
+    }
+    var out = { w: (horiz ? H : W) + 2 * pad, h: (horiz ? W : H) + 2 * pad, fs: fs, dir: dir, AL: AL, nodes: [], edges: [] };
+    V.forEach(function (a) { var c = turn(a); out.nodes.push({ n: a.n, lines: a.lines, sub: a.sub, x: c.x, y: c.y, w: a.w, h: a.h, r: a.r }); });
+    E.forEach(function (x) {
+      var pts = x.pts.map(turn);
+      if (x.rev) pts.reverse();
+      out.edges.push({ e: x.e, pts: pts, r: Math.min(x.u.r, x.v.r), lab: x.lab, labAt: x.labAt && turn(x.labAt) });
+    });
+    d.edges.forEach(function (e) { if (e.from === e.to) { var a = out.nodes[e.from.k]; out.edges.push({ e: e, self: true, x: a.x + a.w / 2, y: a.y, r: a.r }); } });
+    return out;
+  }
+  function diagramSvg(d, box, dir) {
+    var L = diagramLayout(d, box.fs, dir), fs = L.fs, horiz = dir === 'LR' || dir === 'RL';
+    var s = Math.min(DIAGRAM_GROW, box.w / L.w, box.h / L.h), out = [], bk = L.nodes.map(function () { return []; }); // one step per node: it arrives with the edges that reach it (an explain slide shows them click by click) // shrunk to its box, grown a little into it: a small flow should not sit lost in a slide
+    var f = function (p) { return f1(p.x) + ',' + f1(p.y); };
+    var axis = { TD: [0, 1], BT: [0, -1], LR: [1, 0], RL: [-1, 0] }[dir];
+    L.edges.forEach(function (x, k) {
+      if (x.e.kind === 'hidden') return;
+      var e = x.e, o = bk[e.to.k], cls = 'dg-edge dg-' + e.kind, kk = ' style="--k:' + (x.r + 0.55) + '"';
+      if (x.self) {
+        o.push('<path class="' + cls + '"' + kk + ' pathLength="1" d="M' + f1(x.x) + ',' + f1(x.y - fs * 0.5) + 'c' + f1(fs * 1.6) + ',' + f1(-fs * 1.2) + ' ' + f1(fs * 1.6) + ',' + f1(fs * 2.2) + ' 0,' + f1(fs) + '"/>');
+        return;
+      }
+      var p = x.pts.slice(), last = p[p.length - 1], first = p[0];
+      var endDir = p.length > 1 ? [Math.sign(last.x - p[p.length - 2].x) * Math.abs(axis[0]), Math.sign(last.y - p[p.length - 2].y) * Math.abs(axis[1])] : axis;
+      var startDir = [-Math.sign(p[1].x - first.x) * Math.abs(axis[0]), -Math.sign(p[1].y - first.y) * Math.abs(axis[1])];
+      var heads = [];
+      function head(at, v) { // the arrow tip on the node's border, the line stopping at its base
+        var bx = at.x - v[0] * L.AL, by = at.y - v[1] * L.AL, wx = -v[1] * L.AL * 0.5, wy = v[0] * L.AL * 0.5;
+        heads.push('<polygon class="dg-head dg-' + e.kind + '" style="--k:' + (x.r + 1) + '" points="' + f(at) + ' ' + f1(bx + wx) + ',' + f1(by + wy) + ' ' + f1(bx - wx) + ',' + f1(by - wy) + '"/>');
+        return { x: bx, y: by };
+      }
+      if (e.arrow) p[p.length - 1] = head(last, endDir);
+      if (e.arrow && e.back) p[0] = head(first, startDir);
+      var dpath = 'M' + f(p[0]);
+      for (var i = 1; i < p.length; i++) {
+        var a = p[i - 1], z = p[i];
+        if (d.ortho) { var mid = horiz ? (a.x + z.x) / 2 : (a.y + z.y) / 2; dpath += horiz ? 'H' + f1(mid) + 'V' + f1(z.y) + 'H' + f1(z.x) : 'V' + f1(mid) + 'H' + f1(z.x) + 'V' + f1(z.y); continue; } // an org chart's elbows
+        dpath += horiz ? 'C' + f1((a.x + z.x) / 2) + ',' + f1(a.y) + ' ' + f1((a.x + z.x) / 2) + ',' + f1(z.y) + ' ' + f(z)
+          : 'C' + f1(a.x) + ',' + f1((a.y + z.y) / 2) + ' ' + f1(z.x) + ',' + f1((a.y + z.y) / 2) + ' ' + f(z);
+      }
+      o.push('<path class="' + cls + '"' + kk + (e.kind === 'dotted' ? '' : ' pathLength="1"') + ' d="' + dpath + '"/>'); // a dash pattern counts in pathLength units: only a line that draws itself gets one
+      o.push.apply(o, heads);
+    });
+    L.edges.forEach(function (x) {
+      if (!x.lab) return;
+      var lw = x.lab.w, lh = x.lab.h, c = x.labAt, lf = fs * 0.82;
+      bk[x.e.to.k].push('<g class="dg-label" style="--k:' + (x.r + 1) + '"><rect x="' + f1(c.x - lw / 2) + '" y="' + f1(c.y - lh / 2) + '" width="' + f1(lw) + '" height="' + f1(lh) + '" rx="' + f1(lh / 2) + '"/>' +
+        dgText(x.lab.lines, c, lf, lf * 1.12) + '</g>');
+    });
+    L.nodes.forEach(function (a) {
+      var n = a.n, x0 = a.x - a.w / 2, y0 = a.y - a.h / 2, sh;
+      if (n.shape === 'diamond') sh = '<polygon points="' + f1(a.x) + ',' + f1(y0) + ' ' + f1(x0 + a.w) + ',' + f1(a.y) + ' ' + f1(a.x) + ',' + f1(y0 + a.h) + ' ' + f1(x0) + ',' + f1(a.y) + '"/>';
+      else if (n.shape === 'circle') sh = '<circle cx="' + f1(a.x) + '" cy="' + f1(a.y) + '" r="' + f1(a.w / 2) + '"/>';
+      else if (n.shape === 'hexagon') { var ix = a.h * 0.28; sh = '<polygon points="' + f1(x0 + ix) + ',' + f1(y0) + ' ' + f1(x0 + a.w - ix) + ',' + f1(y0) + ' ' + f1(x0 + a.w) + ',' + f1(a.y) + ' ' + f1(x0 + a.w - ix) + ',' + f1(y0 + a.h) + ' ' + f1(x0 + ix) + ',' + f1(y0 + a.h) + ' ' + f1(x0) + ',' + f1(a.y) + '"/>'; }
+      else if (n.shape === 'cylinder') { var ry = fs * 0.35, rx = a.w / 2; sh = '<path d="M' + f1(x0) + ',' + f1(y0 + ry) + 'a' + f1(rx) + ',' + f1(ry) + ' 0 0,0 ' + f1(a.w) + ',0a' + f1(rx) + ',' + f1(ry) + ' 0 0,0 ' + f1(-a.w) + ',0v' + f1(a.h - 2 * ry) + 'a' + f1(rx) + ',' + f1(ry) + ' 0 0,0 ' + f1(a.w) + ',0v' + f1(-(a.h - 2 * ry)) + '"/>'; }
+      else {
+        var rr = n.shape === 'stadium' ? a.h / 2 : n.shape === 'round' ? Math.min(a.h / 2, fs * 0.9) : fs * 0.4;
+        sh = '<rect x="' + f1(x0) + '" y="' + f1(y0) + '" width="' + f1(a.w) + '" height="' + f1(a.h) + '" rx="' + f1(rr) + '"/>';
+        if (n.shape === 'subroutine') sh += '<path class="dg-inner" d="M' + f1(x0 + fs * 0.5) + ',' + f1(y0) + 'v' + f1(a.h) + 'M' + f1(x0 + a.w - fs * 0.5) + ',' + f1(y0) + 'v' + f1(a.h) + '"/>';
+      }
+      var ty = n.shape === 'cylinder' ? a.y + fs * 0.2 : a.y;
+      bk[n.k].push('<g class="dg-node dg-' + n.shape + (n.root ? ' dg-root' : '') + (n.hero ? ' is-hero' : '') + '" style="--k:' + a.r + '"' + (n.line != null ? ' data-node-line="' + (+n.line) + '"' : '') + '>' + sh + dgNodeText(a, ty, fs) + '</g>');
+    });
+    L.nodes.map(function (a, k) { return { a: a, k: k }; }).sort(function (p, q) { return p.a.r - q.a.r || (horiz ? p.a.y - q.a.y : p.a.x - q.a.x); })
+      .forEach(function (z) { out.push('<g class="dg-step">' + bk[z.k].join('') + '</g>'); });
+    return { svg: '<svg class="diagram-svg" viewBox="0 0 ' + f1(L.w) + ' ' + f1(L.h) + '" width="' + f1(L.w * s) + '" height="' + f1(L.h * s) + '" role="img" aria-hidden="true">' + out.join('') + '</svg>', scale: s, fs: fs, w: L.w * s, h: L.h * s };
+  }
+  // a node's words: its label, and under it, smaller, the role a tree gives it (`- name | role`)
+  function dgNodeText(a, y, fs) {
+    var LH = fs * 1.22, SF = fs * 0.8, SL = SF * 1.22, th = a.lines.length * LH + (a.sub.length ? fs * 0.3 + a.sub.length * SL : 0), y0 = y - th / 2 + LH / 2, out = [];
+    a.lines.forEach(function (l, i) { out.push('<tspan x="' + f1(a.x) + '" y="' + f1(y0 + i * LH) + '">' + esc(l) + '</tspan>'); });
+    var y1 = y0 + (a.lines.length - 1) * LH + LH / 2 + fs * 0.3 + SL / 2;
+    a.sub.forEach(function (l, i) { out.push('<tspan class="dg-sub" x="' + f1(a.x) + '" y="' + f1(y1 + i * SL) + '" font-size="' + f1(SF) + '">' + esc(l) + '</tspan>'); });
+    return '<text text-anchor="middle" dominant-baseline="central" font-size="' + f1(fs) + '">' + out.join('') + '</text>';
+  }
+  function dgText(lines, c, size, lh) {
+    var y0 = c.y - (lines.length - 1) * lh / 2;
+    return '<text x="' + f1(c.x) + '" y="' + f1(y0) + '" text-anchor="middle" dominant-baseline="central" font-size="' + f1(size) + '">' +
+      lines.map(function (l, i) { return '<tspan x="' + f1(c.x) + '"' + (i ? ' dy="' + f1(lh) + '"' : '') + '>' + esc(l) + '</tspan>'; }).join('') + '</text>';
+  }
+  // what the drawing says, as text: a screen reader, a copy
+  function diagramText(d) {
+    var linked = {};
+    var rows = d.edges.filter(function (e) { return e.kind !== 'hidden'; }).map(function (e) { linked[e.from.id] = linked[e.to.id] = 1; return '<li>' + esc(e.from.label) + (e.back ? ' ↔ ' : e.arrow ? ' → ' : ' — ') + esc(e.to.label) + (e.label ? ' (' + esc(e.label) + ')' : '') + '</li>'; });
+    d.nodes.forEach(function (n) { if (!linked[n.id]) rows.push('<li>' + esc(n.label) + '</li>'); });
+    return '<ul class="chart-data">' + rows.join('') + '</ul>';
+  }
+  function diagramDir(d, ctx) { return ctx && ctx.layout === 'story' ? (d.dir === 'BT' ? 'BT' : 'TD') : d.dir; } // a Story screen is tall: it reads down
+
+  /* The other grammar of `diagram`: a list given a form, the way a SmartArt is — `- title | text` items and the form as a
+     modifier, `{.cycle}` `{.pyramid}` `{.matrix}`. The words are HTML (inline Markdown, edited in place like a card's, native
+     text in a PowerPoint), the drawing around them is SVG from numbers only. */
+  var DIAGRAM_FORMS = { cycle: [3, 6], radial: [3, 8], pyramid: [2, 6], funnel: [2, 6], matrix: [4, 4], tree: [2, 14], venn: [2, 3], target: [2, 5], steps: [2, 6] }; // [min, max] items — a tree is also held to its layout's DIAGRAM_MAX
+  function diagramForm(b) { for (var i = 0; i < b.attrs.classes.length; i++) if (DIAGRAM_FORMS[b.attrs.classes[i]]) return b.attrs.classes[i]; return ''; }
+  function shaped(b) {
+    var opts = {};
+    b.lines.forEach(function (l) { var m = /^\s*(center|x|y)\s*:\s*(.*)$/i.exec(l); if (m) opts[m[1].toLowerCase()] = { text: m[2].trim(), line: b.map[0] + 1 + b.lines.indexOf(l) }; });
+    return { form: diagramForm(b), items: items(b).map(function (it) { return { title: it.cols[0] || '', text: it.cols[1] || '', hero: has(it.attrs, 'hero'), line: it.line }; }), opts: opts };
+  }
+  // `{.tree}`: the indent is the hierarchy — each item hangs from the last one written less indented; `- name | role`
+  function tree(b) {
+    var d = { kind: 'tree', dir: 'TD', nodes: [], edges: [], byId: {}, ignored: [], refused: [], bad: [], ortho: true }, stack = [];
+    b.lines.forEach(function (l, k) {
+      var m = /^(\s*)[-*]\s+(.*)$/.exec(l);
+      if (!m) return;
+      var ind = m[1].replace(/\t/g, '    ').length, it = splitItem(m[2]);
+      var n = { id: 'n' + d.nodes.length, label: it.cols[0] || '', sub: it.cols[1] || '', shape: 'rect', hero: has(it.attrs, 'hero'), line: b.map[0] + 1 + k, k: d.nodes.length };
+      d.nodes.push(n);
+      while (stack.length && stack[stack.length - 1].ind >= ind) stack.pop();
+      if (stack.length) d.edges.push({ from: stack[stack.length - 1].n, to: n, kind: 'solid', arrow: false, back: false, label: '', line: n.line });
+      else n.root = true;
+      stack.push({ ind: ind, n: n });
+    });
+    return d;
+  }
+  function dgCard(it, k, style, cls) {
+    return '<div class="dg-card' + (cls ? ' ' + cls : '') + (it.hero ? ' is-hero' : '') + '" style="--k:' + k + ';' + style + '"><b' + src(it.line, 0) + '>' + inline(it.title) + '</b>' +
+      (it.text ? '<span' + src(it.line, 1) + '>' + inline(it.text) + '</span>' : '') + '</div>';
+  }
+  // the height a card will take, estimated the way the layout estimates a node: the cycle needs it before the page exists
+  function dgCardH(it, w) {
+    var t = dgWrap(it.title, Math.floor((w - 28) / (20 * 0.56))).length, x = it.text ? dgWrap(it.text, Math.floor((w - 28) / (16 * 0.52))).length : 0;
+    return 26 + t * 25 + (x ? 6 + x * 21 : 0);
+  }
+  // `{.cycle}` and `{.radial}` share the ring: a cycle turns from card to card, a radial hangs its cards on a hub
+  function cycleHtml(s, box, radial) {
+    var n = s.items.length, W = box.w, H = box.h, cx = W / 2, cy = H / 2, cw, hs, rx, ry, at, rects;
+    var ang = s.items.map(function (_, k) { return -Math.PI / 2 + 2 * Math.PI * k / n; });
+    // the widest cards that do not touch: on a narrow screen the ring is tall and the cards of one row come close
+    for (cw = Math.min(250, Math.round(W * 0.42)); ; cw -= 10) {
+      hs = s.items.map(function (it) { return dgCardH(it, cw); });
+      var mh = Math.max.apply(null, hs);
+      rx = W / 2 - cw / 2 - 6; ry = H / 2 - mh / 2 - 6;
+      rx = Math.min(rx, ry * 2.3); ry = Math.min(ry, rx * 2.3);
+      at = function (a) { return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) }; };
+      rects = s.items.map(function (_, k) { var p = at(ang[k]); return { x0: p.x - cw / 2 - 12, x1: p.x + cw / 2 + 12, y0: p.y - hs[k] / 2 - 12, y1: p.y + hs[k] / 2 + 12 }; });
+      var touch = rects.some(function (r, i) { return rects.some(function (q, j) { return j > i && r.x0 + 12 < q.x1 - 12 && q.x0 + 12 < r.x1 - 12 && r.y0 + 12 < q.y1 - 12 && q.y0 + 12 < r.y1 - 12; }); });
+      if (!touch || cw <= 150) break;
+    }
+    var inside = function (p, r) { return p.x > r.x0 && p.x < r.x1 && p.y > r.y0 && p.y < r.y1; };
+    var arcs = [], AL = 14, hubR = Math.max(62, Math.min(110, Math.min(rx, ry) * 0.5));
+    if (radial) for (var j = 0; j < n; j++) { // a spoke from the hub to each card, out of both
+      var c = at(ang[j]), run = [];
+      for (var q2 = 0; q2 <= 60; q2++) { var pp = { x: cx + (c.x - cx) * q2 / 60, y: cy + (c.y - cy) * q2 / 60 }; if (Math.sqrt((pp.x - cx) * (pp.x - cx) + (pp.y - cy) * (pp.y - cy)) > hubR + 8 && !inside(pp, rects[j])) run.push(pp); }
+      if (run.length > 1) arcs.push('<line class="dg-edge dg-spoke" style="--k:' + (j + 0.4) + '" pathLength="1" x1="' + f1(run[0].x) + '" y1="' + f1(run[0].y) + '" x2="' + f1(run[run.length - 1].x) + '" y2="' + f1(run[run.length - 1].y) + '"/>');
+    }
+    for (var k = 0; k < n && !radial; k++) { // the arc from card k to the next: the ring between the two, out of both cards
+      var a0 = ang[k], a1 = k + 1 < n ? ang[k + 1] : ang[0] + 2 * Math.PI, pts = [];
+      for (var i = 0; i <= 90; i++) { var p = at(a0 + (a1 - a0) * i / 90); if (!inside(p, rects[k]) && !inside(p, rects[(k + 1) % n])) pts.push(p); }
+      if (pts.length < 3) continue;
+      var tip = pts[pts.length - 1], prev = pts[pts.length - 2], dx = tip.x - prev.x, dy = tip.y - prev.y, dl = Math.sqrt(dx * dx + dy * dy) || 1;
+      dx /= dl; dy /= dl;
+      while (pts.length > 2) { var q = pts[pts.length - 1]; if (Math.sqrt((q.x - tip.x) * (q.x - tip.x) + (q.y - tip.y) * (q.y - tip.y)) >= AL) break; pts.pop(); }
+      var bx = tip.x - dx * AL, by = tip.y - dy * AL;
+      arcs.push('<path class="dg-edge dg-arc" style="--k:' + (k + 0.6) + '" pathLength="1" d="M' + pts.map(function (q) { return f1(q.x) + ',' + f1(q.y); }).join('L') + 'L' + f1(bx) + ',' + f1(by) + '"/>' +
+        '<polygon class="dg-head" style="--k:' + (k + 1) + '" points="' + f1(tip.x) + ',' + f1(tip.y) + ' ' + f1(bx - dy * AL * 0.5) + ',' + f1(by + dx * AL * 0.5) + ' ' + f1(bx + dy * AL * 0.5) + ',' + f1(by - dx * AL * 0.5) + '"/>');
+    }
+    var center = radial ? '<div class="dg-hub" style="left:' + f1(cx) + 'px;top:' + f1(cy) + 'px;width:' + f1(hubR * 2) + 'px;height:' + f1(hubR * 2) + 'px"' + (s.opts.center ? src(s.opts.center.line) : '') + '>' + (s.opts.center ? inline(s.opts.center.text) : '') + '</div>'
+      : s.opts.center ? '<div class="dg-center" style="left:' + f1(cx) + 'px;top:' + f1(cy) + 'px;max-width:' + f1(Math.max(120, rx * 1.2 - cw / 2)) + 'px"' + src(s.opts.center.line) + '>' + inline(s.opts.center.text) + '</div>' : '';
+    return '<div class="dg-stage" style="width:' + W + 'px;height:' + H + 'px"><svg class="diagram-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">' + arcs.join('') + '</svg>' + center +
+      s.items.map(function (it, k) { var p = at(ang[k]); return dgCard(it, k, 'left:' + f1(p.x) + 'px;top:' + f1(p.y) + 'px;width:' + cw + 'px'); }).join('') + '</div>';
+  }
+  // `{.pyramid}` builds from its base, the first item on top; `{.funnel}` narrows from the first item down to the last
+  function pyramidHtml(s, box, funnel) {
+    var n = s.items.length, bh = Math.min(104, Math.floor(box.h / n)), ph = bh * n, pw = Math.min(Math.round(box.w * 0.44), Math.round(ph * 1.35)), top = funnel ? 0.2 : 0.08;
+    var hw = function (y) { return pw / 2 * (top + (1 - top) * (funnel ? 1 - y / ph : y / ph)); }, cx = pw / 2, bands = [];
+    var order = function (k) { return funnel ? k : n - 1 - k; };
+    s.items.forEach(function (it, k) {
+      var y0 = k * bh + (k ? 3 : 0), y1 = (k + 1) * bh - 3, t = n > 1 ? Math.round(funnel ? 38 + 62 * k / (n - 1) : 100 - 62 * k / (n - 1)) : 100;
+      bands.push('<polygon class="dg-band' + (it.hero ? ' is-hero' : '') + '" style="--k:' + order(k) + ';--t:' + t + '%" points="' + f1(cx - hw(y0)) + ',' + f1(y0) + ' ' + f1(cx + hw(y0)) + ',' + f1(y0) + ' ' + f1(cx + hw(y1)) + ',' + f1(y1) + ' ' + f1(cx - hw(y1)) + ',' + f1(y1) + '"/>' +
+        '<line class="dg-leader" style="--k:' + order(k) + '" x1="' + f1(cx + hw((y0 + y1) / 2) + 10) + '" x2="' + (pw + 28) + '" y1="' + f1((y0 + y1) / 2) + '" y2="' + f1((y0 + y1) / 2) + '"/>');
+    });
+    return '<div class="dg-pyramid" style="--bh:' + bh + 'px"><svg class="diagram-svg" viewBox="0 0 ' + (pw + 30) + ' ' + ph + '" width="' + (pw + 30) + '" height="' + ph + '" aria-hidden="true">' + bands.join('') + '</svg>' +
+      '<div class="dg-rows">' + s.items.map(function (it, k) { return dgCard(it, order(k), ''); }).join('') + '</div></div>';
+  }
+  function matrixHtml(s) {
+    var ax = function (o, cls) { if (!o) return ''; var p = o.text.split(COLS).map(function (x) { return x.trim(); }); return '<div class="dg-axis ' + cls + '"' + src(o.line) + '><span>' + inline(p[0] || '') + '</span>' + (p[1] ? '<span>' + inline(p[1]) + '</span>' : '') + '</div>'; };
+    return '<div class="dg-matrix' + (s.opts.y ? ' has-y' : '') + (s.opts.x ? ' has-x' : '') + '">' + ax(s.opts.y, 'dg-axis--y') + '<div class="dg-grid">' + s.items.map(function (it, k) { return dgCard(it, k, ''); }).join('') + (s.opts.center ? '<div class="dg-grid-center"' + src(s.opts.center.line) + '>' + inline(s.opts.center.text) + '</div>' : '') + '</div>' + ax(s.opts.x, 'dg-axis--x') + '</div>';
+  }
+  // `{.venn}`: two or three circles that overlap; `center:` names what they share
+  function vennHtml(s, box) {
+    var n = s.items.length, H = Math.min(box.h, 460), W = box.w, cx = W / 2, cy = H / 2, r, cs;
+    if (n === 2) { r = Math.min(H * 0.47, W * 0.27); cs = [{ x: cx - r * 0.62, y: cy, dx: -1, dy: 0 }, { x: cx + r * 0.62, y: cy, dx: 1, dy: 0 }]; }
+    else { r = Math.min(H * 0.3, W * 0.2); var dd = r * 0.68; cs = [-90, 30, 150].map(function (a) { var t = a * Math.PI / 180; return { x: cx + dd * Math.cos(t), y: cy + dd * 0.92 * Math.sin(t) + r * 0.08, dx: Math.cos(t), dy: Math.sin(t) }; }); }
+    var svg = cs.map(function (c, k) { return '<circle class="dg-set dg-v' + (k + 1) + (s.items[k].hero ? ' is-hero' : '') + '" style="--k:' + k + '" cx="' + f1(c.x) + '" cy="' + f1(c.y) + '" r="' + f1(r) + '"/>'; }).join('');
+    var tw = Math.round(r * (n === 2 ? 0.95 : 0.9)), off = n === 2 ? r * 0.42 : r * 0.42;
+    var center = s.opts.center ? '<div class="dg-center dg-center--venn" style="left:' + f1(cx) + 'px;top:' + f1(n === 2 ? cy : cy + r * 0.04) + 'px;max-width:' + f1(r * (n === 2 ? 0.7 : 0.6)) + 'px"' + src(s.opts.center.line) + '>' + inline(s.opts.center.text) + '</div>' : '';
+    return '<div class="dg-stage dg-venn" style="width:' + W + 'px;height:' + H + 'px"><svg class="diagram-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">' + svg + '</svg>' + center +
+      s.items.map(function (it, k) { var c = cs[k]; return dgCard(it, k, 'left:' + f1(c.x + c.dx * off) + 'px;top:' + f1(c.y + c.dy * off) + 'px;width:' + tw + 'px'); }).join('') + '</div>';
+  }
+  // `{.target}`: rings from the core out, the first item the core; each ring named beside it by a leader
+  function targetHtml(s, box) {
+    var n = s.items.length, H = Math.min(box.h, 480), R = H / 2 - 4, cx = R + 4, cy = H / 2, tx = R * 2 + 70, out = [];
+    for (var k = n - 1; k >= 0; k--) out.push('<circle class="dg-ring' + (s.items[k].hero ? ' is-hero' : '') + '" style="--k:' + k + ';--t:' + Math.round(100 - 62 * k / Math.max(1, n - 1)) + '%" cx="' + f1(cx) + '" cy="' + f1(cy) + '" r="' + f1(R * (k + 1) / n) + '"/>');
+    var rows = s.items.map(function (_, k) { return cy - R + (k + 0.5) * (2 * R / n); });
+    s.items.forEach(function (_, k) {
+      var rm = R * (k + 0.55) / n, th = (-55 + 110 * (n > 1 ? k / (n - 1) : 0.5)) * Math.PI / 180, px = cx + rm * Math.cos(th), py = cy + rm * Math.sin(th);
+      out.push('<polyline class="dg-leader dg-leader--solid" style="--k:' + k + '" points="' + f1(px) + ',' + f1(py) + ' ' + f1(R * 2 + 30) + ',' + f1(rows[k]) + ' ' + f1(tx - 10) + ',' + f1(rows[k]) + '"/><circle class="dg-dot" style="--k:' + k + '" cx="' + f1(px) + '" cy="' + f1(py) + '" r="5"/>');
+    });
+    return '<div class="dg-stage dg-target" style="width:100%;height:' + H + 'px"><svg class="diagram-svg" viewBox="0 0 ' + f1(tx) + ' ' + H + '" width="' + f1(tx) + '" height="' + H + '" aria-hidden="true">' + out.join('') + '</svg>' +
+      s.items.map(function (it, k) { return dgCard(it, k, 'left:' + f1(tx) + 'px;top:' + f1(rows[k]) + 'px'); }).join('') + '</div>';
+  }
+  // `{.steps}`: a staircase, each step a level higher — a maturity, a progression
+  function stepsHtml(s, box) {
+    var n = s.items.length, H = Math.min(box.h, 440), lo = Math.round(H * 0.34), inc = n > 1 ? (H - lo) / (n - 1) : 0;
+    return '<div class="dg-steps" style="height:' + H + 'px">' + s.items.map(function (it, k) {
+      return dgCard(it, k, 'height:' + Math.round(lo + inc * k) + 'px;--t:' + Math.round(15 + 57 * k / Math.max(1, n - 1)) + '%', 15 + 57 * k / Math.max(1, n - 1) >= 48 ? 'is-deep' : ''); // the words turn light where the step turns deep
+    }).join('') + '</div>';
+  }
+  function shapedHtml(b, ctx) {
+    var s = shaped(b), box = diagramBox(ctx, has(b.attrs, 'right'));
+    var f = s.form, body = f === 'cycle' || f === 'radial' ? cycleHtml(s, box, f === 'radial') : f === 'pyramid' || f === 'funnel' ? pyramidHtml(s, box, f === 'funnel')
+      : f === 'venn' ? vennHtml(s, box) : f === 'target' ? targetHtml(s, box) : f === 'steps' ? stepsHtml(s, box) : matrixHtml(s);
+    return '<figure class="diagram diagram--' + s.form + '">' + body + '</figure>';
+  }
+
+  /* A timeline in phases — the heading form, as `cards` has it: `### date — title` opens a phase, `-` lines are its details,
+     plain lines its text; `{.now}` `{.next}` on the heading. The dots and their line stay on top, each phase's detail in a
+     card under its dot — a project plan, a roadmap, the timeline + cards a user stacked by hand (2026-10-12) in one block. */
+  function phasesHtml(b) {
+    var ps = sections(b);
+    return '<div class="timeline timeline--phases" style="--n:' + ps.length + '">' + ps.map(function (p, k) {
+      var m = /^(.+?)\s+[—–]\s+(.+)$/.exec(p.title || ''), date = m ? m[1] : '', title = m ? m[2] : p.title;
+      var cls = 'tl-step' + (has(p.attrs, 'now') ? ' is-now' : '') + (has(p.attrs, 'next') ? ' is-next' : '') + (has(p.attrs, 'hero') ? ' is-hero' : '');
+      return '<div class="' + cls + '"><div class="dot">' + pad2(k + 1) + '</div>' +
+        (date ? '<div class="tl-date"' + src(p.line) + '>' + inline(date) + '</div>' : '') +
+        '<div class="tl-card">' + (title ? '<h4' + (date ? '' : src(p.line)) + '>' + inline(title) + '</h4>' : '') +
+        p.text.map(function (t, j) { return '<p' + src(p.textLines[j]) + '>' + inline(t) + '</p>'; }).join('') +
+        (p.items.length ? '<ul>' + p.items.map(function (t, j) { return '<li><span' + src(p.itemLines[j]) + '>' + inline(t) + '</span></li>'; }).join('') + '</ul>' : '') +
+        '</div></div>';
+    }).join('') + '</div>';
+  }
+
   /* ───────────────────────── blocks ───────────────────────── */
   var BLOCKS = {
     metrics: {
@@ -321,7 +1056,9 @@ globalThis.JMD = (function () {
     },
     timeline: {
       max: 6,
+      count: function (b) { return hasHeadings(b) ? sections(b).length : items(b).length; },
       render: function (b) {
+        if (hasHeadings(b)) return phasesHtml(b);
         var its = items(b);
         return '<div class="timeline' + (has(b.attrs, 'chevrons') ? ' timeline--chevrons' : '') + '">' + its.map(function (it, k) {
           var c = it.cols, title, text;
@@ -357,6 +1094,7 @@ globalThis.JMD = (function () {
           : items(b).map(function (it) { return { title: it.cols[0] || '', text: it.cols[1] ? [it.cols[1]] : [], items: [], attrs: it.attrs, line: it.line, textLines: [it.line], itemLines: [], col: 0 }; });
         var n = cards.filter(function (c) { return !has(c.attrs, 'wide'); }).length || 1;
         var numbered = has(b.attrs, 'numbered');
+        if (has(b.attrs, 'plain')) marker = 'none'; // the deck's own say over the theme's marker: no shape on these cards
         return '<div class="cards' + (brand['card-shadow'] === 'offset' ? ' cards--offset' : '') + '" style="--n:' + n + '">' + cards.map(function (c, k) {
           return '<div class="card' + (has(c.attrs, 'wide') ? ' card--wide' : '') + (has(c.attrs, 'hero') ? ' is-hero' : '') + (alt && !c.items.length && k % 2 === 0 ? ' card--vivid' : '') + '">' +
             (numbered ? '<div class="num">' + pad2(k + 1) + '</div>'
@@ -388,6 +1126,62 @@ globalThis.JMD = (function () {
           if (m) out.push('<div class="logo">' + imgTag(m[2], m[1], ctx) + '</div>');
         });
         return '<div class="logos' + (out.length > 18 ? ' logos--dense' : '') + '">' + out.join('') + '</div>';
+      }
+    },
+    // a Markdown pipe table: the row above `|---|` is the header, `:--:` aligns, a column of numbers aligns right by itself; `{.hero}` on a row
+    table: {
+      max: TABLE_SPLIT_MAX, // 12 rows in one table; past that it folds in two (the linter holds the rest: TABLE_MAX, TABLE_SPLIT_COLS)
+      count: function (b) { return table(b).rows.length; },
+      render: function (b) {
+        var t = table(b), numeric = [];
+        for (var j = 0; j < t.width; j++) numeric[j] = t.rows.length > 0 && t.rows.every(function (r) { return !r.cells[j] || !r.cells[j].text || num(r.cells[j].text) != null; });
+        function cell(tag, r, j, line) {
+          var c = r.cells[j], a = t.align[j] || (numeric[j] && tag === 'td' ? 'right' : '');
+          return '<' + tag + (a ? ' class="is-' + a + '"' : '') + (c ? src(line, c.col) : '') + '>' + (c ? inline(c.text) : '') + '</' + tag + '>';
+        }
+        function row(r, tag) { var cs = []; for (var j = 0; j < t.width; j++) cs.push(cell(tag, r, j, r.line)); return cs.join(''); }
+        function one(rows, compact) {
+          return '<div class="table-wrap"><table class="table' + (compact ? ' table--compact' : '') + '" style="--cols:' + t.width + '">' +
+            (t.head ? '<thead><tr>' + row(t.head, 'th') + '</tr></thead>' : '') +
+            '<tbody>' + rows.map(function (r) { return '<tr' + (has(r.attrs, 'hero') ? ' class="is-hero"' : '') + '>' + row(r, 'td') + '</tr>'; }).join('') + '</tbody></table></div>';
+        }
+        /* A long list folds in two (seen in the field, 2026-10-12: 14 companies became two hand-made pairs of columns, unequal, and a hero
+           that lit both halves of a row): past 12 rows, or on `{.split}`, two tables of equal width, the header repeated,
+           the first half the longer — a row's `{.hero}` lights that row alone. */
+        if (tableSplit(b, t)) {
+          var h = Math.ceil(t.rows.length / 2);
+          return '<div class="table-split">' + one(t.rows.slice(0, h), has(b.attrs, 'compact') || h > 7) + one(t.rows.slice(h), has(b.attrs, 'compact') || h > 7) + '</div>';
+        }
+        return one(t.rows, has(b.attrs, 'compact') || t.rows.length > 7);
+      }
+    },
+    // numbers drawn: `- label | value` items (several values = several series), `{.bar}` (default) `{.hbar}` `{.line}` `{.pie}` on the block
+    chart: { // its maximum depends on its type: the linter says it (CHART_MAX)
+      count: function (b) { return items(b).length; },
+      render: function (b, ctx) {
+        var c = chart(b), box = chartBox(ctx, has(b.attrs, 'right'));
+        c.dec = /^(fr|de|es|it|pt|nl|pl|ru|sv|da|fi|nb|nn|no|cs|tr)\b/i.test((ctx && ctx.lang) || '') ? ',' : '.';
+        var keys = c.type === 'pie' ? (function () {
+          var tot = c.items.reduce(function (s, it) { return s + Math.max(0, it.values[0] || 0); }, 0) || 1;
+          return '<ul class="chart-keys">' + c.items.map(function (it, k) {
+            var v = it.values[0] || 0;
+            return '<li class="chart-key chart-c' + (k % 6 + 1) + (it.hero ? ' is-hero' : '') + '"><i></i><span class="k"' + src(it.line, 0) + '>' + inline(it.label) + '</span><span class="p">' + Math.round(Math.max(0, v) / tot * 100) + '\u00A0%</span></li>';
+          }).join('') + '</ul>';
+        })() : '';
+        return '<figure class="chart chart--' + c.type + '" style="--chart-h:' + box.h + 'px">' + chartLegend(c) +
+          '<div class="chart-plot">' + chartSvg(c, box, 'jc-' + (ctx ? (ctx.charts = (ctx.charts || 0) + 1) : 1) + '-') + keys + '</div>' + chartText(c) + '</figure>';
+      }
+    },
+    // boxes and arrows: a Mermaid flowchart, read and drawn here (no Mermaid runs); `{.right}` beside an image's column
+    diagram: { // its maximum depends on the layout: the linter says it (DIAGRAM_MAX)
+      count: function (b) { return diagramForm(b) ? items(b).length : diagram(b).nodes.length; },
+      render: function (b, ctx) {
+        var form = diagramForm(b);
+        if (form && form !== 'tree') return shapedHtml(b, ctx);
+        var d = form ? tree(b) : diagram(b);
+        if ((!form && DIAGRAM_KINDS.indexOf(d.kind) < 0) || !d.nodes.length || d.nodes.length > DIAGRAM_LAYOUT_MAX || d.edges.length > 3 * DIAGRAM_LAYOUT_MAX) return '<figure class="diagram diagram--none"><pre>' + esc(b.lines.join('\n')) + '</pre></figure>';
+        var dir = form ? diagramDir({ dir: has(b.attrs, 'lr') ? 'LR' : 'TD' }, ctx) : diagramDir(d, ctx), g = diagramSvg(d, diagramBox(ctx, has(b.attrs, 'right')), dir);
+        return '<figure class="diagram diagram--' + dir.toLowerCase() + '" style="--chart-h:' + Math.round(g.h) + 'px">' + g.svg + diagramText(d) + '</figure>';
       }
     },
     statement: {
@@ -501,16 +1295,18 @@ globalThis.JMD = (function () {
       if (rightBlock) inner += '<div class="split-block">' + BLOCKS[rightBlock.name].render(rightBlock, ctx) + '</div>';
       if (cover) inner += '<div class="cover-art">' + imgTag(cover.src, cover.alt, ctx) + '</div>';
     }
-    // the watermark: a brand feature, never on a slide that has its own decoration
+    // the watermark: a brand feature, never on a slide that has its own decoration. With `mark` it is the deck's glyph — one shape
+    // for the whole deck, posed by the intent (engine.css), carried from slide to slide by the presenter; `celebrate` multiplies it
     var wm = ctx.brand.watermark || 'mark', decorated = full || right || cover;
+    var glyph = '<use href="#' + (+ctx.brand.glyphs ? 'brand-glyph-1' : 'brand-mark') + '"/>';
     var watermark = wm === 'none' || decorated ? ''
-      : '<div class="wm wm--' + esc(wm) + ' wm--' + (idx % 2 ? 'b' : 'a') + '" aria-hidden="true">' + (wm === 'mark' ? '<svg><use href="#' + (+ctx.brand.glyphs ? 'brand-glyph-' + (idx % 2 ? 2 : 1) : 'brand-mark') + '"/></svg>' : '') + '</div>';
+      : '<div class="wm wm--' + esc(wm) + ' wm--' + (idx % 2 ? 'b' : 'a') + '" aria-hidden="true">' + (wm === 'mark' ? '<svg class="wm-g">' + glyph + '</svg>' + (intent === 'celebrate' ? new Array(7).join('<svg class="wm-bit">' + glyph + '</svg>') : '') : '') + '</div>';
     return '<section class="' + classes.join(' ') + '"' + notes + (intent ? ' data-intent="' + intent + '"' : '') + ' data-start="' + slide.map[0] + '">' + watermark + chrome + inner + tag + '</section>';
   }
 
   function render(doc, ctx) {
     ctx_lines_cache = doc.lines || null;
-    var c = { brand: (ctx && ctx.brand) || {}, assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '' };
+    var c = { brand: (ctx && ctx.brand) || {}, assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', lang: doc.meta.lang || '' };
     return doc.slides.map(function (s, i) { return renderSlide(s, i, c); }).join('\n');
   }
 
@@ -540,13 +1336,16 @@ globalThis.JMD = (function () {
      One line of help and a minimal valid snippet per shape — the editor's palette and contextual hint read this table. */
   var SHAPES = [
     { name: 'metrics', hint: '- value | label | comment · 4 max · {.hero} on the one that matters', snippet: '::: metrics\n- 42 % | label | One line of context.\n- 3× | label | One line of context.\n:::' },
-    { name: 'timeline', hint: '- date — title | text · 6 max · {.now} {.next} on an item · {.chevrons} on the block', snippet: '::: timeline\n- 2024 — Step one | What happened.\n- 2025 — Step two | What happened. {.now}\n:::' },
-    { name: 'cards', hint: '- title | text, or ### Title + bullets · 5 max (3 with a lead, ≤ 3 short bullets each) · {.numbered} {.right} on the block · {.wide} on a card', snippet: '::: cards\n- Title | One line of text.\n- Title | One line of text.\n- Title | One line of text.\n:::' },
+    { name: 'timeline', hint: '- date — title | text, or ### date — title + bullets (phases) · 6 max · {.now} {.next} on an item · {.chevrons} on the block', snippet: '::: timeline\n- 2024 — Step one | What happened.\n- 2025 — Step two | What happened. {.now}\n:::' },
+    { name: 'cards', hint: '- title | text, or ### Title + bullets · 5 max (3 with a lead, ≤ 3 short bullets each) · {.numbered} {.plain} {.right} on the block · {.wide} on a card', snippet: '::: cards\n- Title | One line of text.\n- Title | One line of text.\n- Title | One line of text.\n:::' },
     { name: 'compare', hint: '### Left + bullets, ### Right + bullets · 2 columns, ≤ 4 one-line bullets each · {.light}', snippet: '::: compare\n### Before\n- One point.\n- Another.\n\n### After\n- One point.\n- Another.\n:::' },
     { name: 'statement', hint: 'one sentence, alone on the slide · optional — attribution line', snippet: '::: statement\nOne sentence that carries the slide.\n— Who said it\n:::' },
     { name: 'section', hint: 'a divider: the part title · {.numbered}', snippet: '::: section\nPart title\n:::' },
     { name: 'pills', hint: '- word · 8 max', snippet: '::: pills\n- One\n- Two\n- Three\n:::' },
     { name: 'logos', hint: '- ![Name](file) · 40 max', snippet: '::: logos\n- ![Acme](assets/logo-acme.svg)\n- ![Globex](assets/logo-globex.svg)\n:::' },
+    { name: 'table', hint: '| a | b | rows · the row above |---|---| is the header · |--:| aligns right · 12 rows, 6 columns · 13–24 rows of ≤ 3 columns fold in two · {.split} · {.hero} on a row', snippet: '::: table\n| Offer | Users | Price |\n|---|---|---|\n| Starter | 10 | 5 € |\n| Pro | 100 | 9 € | {.hero}\n:::' },
+    { name: 'chart', hint: '- label | value · {.bar} {.hbar} {.line} {.pie} on the block · unit: € · series: A | B for two columns of values · {.hero} on an item', snippet: '::: chart {.bar}\nunit: k€\n- Q1 | 120\n- Q2 | 180\n- Q3 | 240 {.hero}\n:::' },
+    { name: 'diagram', hint: 'Mermaid: flowchart LR or TD, then A[Step] --> B{Choice} lines · -->|label| · -.-> dotted · A[Text]{.hero} · or a list with a form: {.tree} (indent) {.cycle} {.radial} {.pyramid} {.funnel} {.steps} {.venn} {.target} {.matrix} · center: x: y:', snippet: '::: diagram\nflowchart LR\n  A[Request] --> B{Approved?}\n  B -->|Yes| C[Publish]{.hero}\n  B -->|No| D[Revise]\n  D -.-> A\n:::' },
     { name: 'image', hint: '![alt](file){.right} beside the text · {.cover} decoration · {.wide} below', snippet: '![](assets/image.png){.right}' },
     { name: 'link', hint: '[Label →](url){.cta} a button · [text](url) inline', snippet: '[Learn more →](https://example.com){.cta}' }
   ];
@@ -593,9 +1392,17 @@ globalThis.JMD = (function () {
 
       // HTML in a text is shown as text — the format has no raw HTML (spec/security.md §1). Said once per slide, so `<b>` is not mistaken for formatting.
       var markup = null;
-      [title && title.text, lead && lead.text, m.notes].concat(s.nodes.filter(function (x) { return x.type === 'prose' || x.type === 'block'; }).flatMap(function (x) { return x.lines; }))
+      [title && title.text, lead && lead.text, m.notes].concat(s.nodes.filter(function (x) { return x.type === 'prose' || x.type === 'block'; }).flatMap(function (x) { return x.name === 'diagram' ? x.lines.map(function (l) { return l.replace(/<br\s*\/?>/gi, ' '); }) : x.lines; }))
         .some(function (t) { var mm = t && /<\/?[a-zA-Z][^>]*>/.exec(t); if (mm) markup = mm[0]; return !!mm; });
       if (markup) info(n, null, 'literal-markup', 'the text contains HTML (`' + markup.slice(0, 20) + '`): it is shown as-is, the format has no raw HTML — use **bold**, *italic*, a new line');
+
+      // An image inside a text — a card title, a bullet, a cell — is neither drawn nor printed (inline drops it): an image
+      // stands alone on its line. Seen in the field (2026-10-12): an icon put in each card title to replace the theme's
+      // marker, printed as `![](img:…)` on the slide; the marker is the block's to remove, `{.plain}`.
+      var inImg = null;
+      [title && title.text, lead && lead.text].concat(s.nodes.filter(function (x) { return x.type === 'prose' || (x.type === 'block' && x.name !== 'logos'); }).flatMap(function (x) { return x.lines; }))
+        .some(function (t) { if (t && t.search(INLINE_IMG) >= 0 && !IMG.test(t)) inImg = t.trim(); INLINE_IMG.lastIndex = 0; return !!inImg; });
+      if (inImg) err(n, null, 'inline-image', '`' + cut(inImg, 60) + '`: an image inside a text is not drawn — an image stands alone on its line, `![caption](src){.right}`; to take the theme\'s marker off cards, `::: cards {.plain}`');
 
       blocks.forEach(function (b) {
         var def = BLOCKS[b.name];
@@ -604,6 +1411,60 @@ globalThis.JMD = (function () {
         var count = def.count ? def.count(b) : items(b).length;
         if (def.max && count > def.max) err(n, b.name, 'max-items', count + ' items, maximum ' + def.max + ': remove an item or use another block');
         if (b.name === 'compare' && count < 2) err(n, b.name, 'two-columns', 'compare needs exactly two `###` columns');
+        if (b.name === 'table') {
+          var t = table(b);
+          if (!t.rows.length) err(n, b.name, 'table-rows', 'a table without rows: write `| a | b |` lines, the header above a `|---|---|` line');
+          if (t.width > 6) err(n, b.name, 'table-columns', t.width + ' columns, maximum 6: split the table, or keep the columns that carry the point');
+          else if (tableSplit(b, t) && t.width > TABLE_SPLIT_COLS) err(n, b.name, t.rows.length > TABLE_MAX ? 'max-items' : 'table-columns', (t.rows.length > TABLE_MAX ? t.rows.length + ' rows: past ' + TABLE_MAX + ' a table folds in two, side by side, and ' : 'a `{.split}` table folds in two, side by side, and ') + 'each half holds ' + TABLE_SPLIT_COLS + ' columns at most, this one ' + t.width + ': keep the columns that carry the point, or two slides');
+          if (has(b.attrs, 'split') && t.rows.length < 4) warn(n, b.name, 'table-split', '`{.split}` on ' + t.rows.length + ' rows: a fold is for a long list');
+          b.attrs.classes.forEach(function (m) { if (['compact', 'split', 'right'].indexOf(m) < 0) warn(n, b.name, 'table-modifier', '`{.' + m + '}` is not a table modifier: {.compact} {.split}'); });
+        }
+        if (b.name === 'diagram' && diagramForm(b)) {
+          var sf = diagramForm(b), sn = items(b).length, sr = DIAGRAM_FORMS[sf];
+          if (sn < sr[0] || sn > sr[1]) err(n, b.name, 'max-items', 'a ' + sf + ' holds ' + (sr[0] === sr[1] ? sr[0] : sr[0] + ' to ' + sr[1]) + ' items, this one ' + sn + (sf === 'matrix' ? ': one per quadrant, top left, top right, bottom left, bottom right' : ''));
+          if (/^\s*(flowchart|graph)\b/i.test(b.lines.join('\n').trim())) warn(n, b.name, 'diagram-form', '`{.' + sf + '}` draws `- title | text` items: the Mermaid lines are not read — remove the modifier to draw the flowchart');
+          if (sf === 'tree' && sn >= sr[0]) {
+            var tl = layout(doc), tmax = DIAGRAM_MAX[tl] || DIAGRAM_MAX.slide;
+            if (sn > tmax) err(n, b.name, 'max-items', sn + ' people or boxes, maximum ' + tmax + ' on a ' + tl + ': show one branch per slide, or the levels that carry the point');
+            else { var tf = diagramSvg(tree(b), diagramBox({ layout: tl }, has(b.attrs, 'right')), diagramDir({ dir: has(b.attrs, 'lr') ? 'LR' : 'TD' }, { layout: tl })); if (tf.fs * tf.scale < DIAGRAM_MIN_TYPE) err(n, b.name, 'diagram-dense', 'drawn at ' + Math.round(tf.fs * tf.scale) + ' px to fit, too small to read: fewer boxes on the widest level, shorter names, or one branch per slide'); }
+          }
+          if (sf === 'radial' && !shaped(b).opts.center) err(n, b.name, 'diagram-center', 'a radial hangs its items on a hub: name it with a `center:` line');
+          b.attrs.classes.forEach(function (m) { if (m !== 'right' && !(m === 'lr' && sf === 'tree') && !DIAGRAM_FORMS[m]) warn(n, b.name, 'diagram-form', '`{.' + m + '}` is not a form: ' + Object.keys(DIAGRAM_FORMS).join(', ') + ' (`{.tree .lr}` left to right), or none for a Mermaid flowchart'); });
+        } else if (b.name === 'diagram') {
+          var dg = diagram(b), lay = layout(doc), dmax = DIAGRAM_MAX[lay] || DIAGRAM_MAX.slide;
+          if (!dg.kind) err(n, b.name, 'diagram-empty', 'an empty diagram: write `flowchart TD` (or LR), then `A[Step] --> B[Next]` lines — or `- title | text` items under a form, `::: diagram {.cycle}`: ' + Object.keys(DIAGRAM_FORMS).join(', '));
+          else if (dg.kind === '-') err(n, b.name, 'diagram-form', 'a list without a form: say which, `::: diagram {.cycle}` — ' + Object.keys(DIAGRAM_FORMS).join(', '));
+          else if (DIAGRAM_KINDS.indexOf(dg.kind) < 0) err(n, b.name, 'diagram-type', DIAGRAM_ROUTE[dg.kind] ? 'a Mermaid `' + dg.kind + '` is drawn by ' + DIAGRAM_ROUTE[dg.kind] + ': use that block' : 'a Mermaid `' + dg.kind + '` is not drawn: only `flowchart` (or `graph`) — draw it as boxes and arrows, or bring an image');
+          else {
+            if (!dg.nodes.length) err(n, b.name, 'diagram-empty', 'a diagram without nodes: write `A[Step] --> B[Next]` lines under `' + dg.kind + '`');
+            dg.bad.forEach(function (x) { err(n, b.name, 'diagram-syntax', 'line ' + x.line + ': `' + cut(x.text, 60) + '` is not read — write `A[Text] --> B[Text]`, a label as `-->|label|`, one statement a line'); });
+            dg.refused.forEach(function (x) { err(n, b.name, 'diagram-click', 'line ' + x.line + ': `' + x.text.split(/\s+/)[0] + '` binds code to a node, and a deck is data — remove the line'); });
+            var ign = dg.ignored.filter(function (w, i) { return dg.ignored.indexOf(w) === i; });
+            if (ign.indexOf('subgraph') >= 0) warn(n, b.name, 'diagram-subgraph', '`subgraph` is not drawn yet: its nodes are, without the frame');
+            ign = ign.filter(function (w) { return w !== 'subgraph' && w !== 'direction'; });
+            if (ign.length) warn(n, b.name, 'diagram-style', ign.join(', ') + ' ignored: the brand colors the diagram — `{.hero}` (or `:::hero`) is the one mark read');
+            if (dg.nodes.length > dmax) err(n, b.name, 'max-items', dg.nodes.length + ' nodes, maximum ' + dmax + ' on a ' + lay + ': split the diagram over two ' + (lay === 'story' ? 'screens' : 'slides') + ', or keep the steps that carry the point');
+            else if (dg.nodes.length) {
+              var dctx = { layout: lay }, fit = diagramSvg(dg, diagramBox(dctx, has(b.attrs, 'right')), diagramDir(dg, dctx));
+              if (fit.fs * fit.scale < DIAGRAM_MIN_TYPE) err(n, b.name, 'diagram-dense', 'drawn at ' + Math.round(fit.fs * fit.scale) + ' px to fit, too small to read: fewer nodes, shorter labels, or the other direction (' + (/LR|RL/.test(dg.dir) ? 'TD' : 'LR') + ')');
+            }
+          }
+        }
+        if (b.name === 'chart') {
+          var c = chart(b), cmax = CHART_MAX[c.type];
+          if (!c.items.length) err(n, b.name, 'chart-items', 'a chart without values: write `- label | value` lines');
+          if (c.items.length > cmax) err(n, b.name, 'max-items', c.items.length + ' values, maximum ' + cmax + ' for a ' + c.type + ' chart' + (c.type === 'pie' ? ': group the small ones in one slice' : ': keep the ones that carry the point'));
+          if (c.n > SERIES_MAX) err(n, b.name, 'chart-series', c.n + ' series, maximum ' + SERIES_MAX);
+          if (c.type === 'pie' && c.n > 1) err(n, b.name, 'chart-series', 'a pie has one series: one value per slice');
+          c.items.forEach(function (it) {
+            if (!it.raw.length) err(n, b.name, 'chart-value', '`' + it.label + '` has no value: write `- ' + it.label + ' | 42`');
+            it.raw.forEach(function (r, k) {
+              if (it.values[k] == null && r !== '') err(n, b.name, 'chart-value', '`' + r + '` (' + it.label + ') is not a number: write the number alone, the unit once in `unit:`');
+              else if (c.type === 'pie' && it.values[k] < 0) err(n, b.name, 'chart-value', 'a pie slice cannot be negative (' + it.label + '): use a bar chart');
+            });
+          });
+          b.attrs.classes.forEach(function (m) { if (['right', 'donut'].indexOf(m) < 0 && CHART_TYPES.indexOf(m) < 0) warn(n, b.name, 'chart-type', '`{.' + m + '}` is not a chart type: ' + CHART_TYPES.join(', ') + ' (bar when none)'); });
+        }
       });
 
       // Content that fell out of its block. A fence written with anything but three ASCII colons (`:: cards`, `:[ip 1] cards`
@@ -685,6 +1546,29 @@ globalThis.JMD = (function () {
     return out;
   }
 
+  // The glyph's poses that depend on where things landed: `act` beside its button, `decide` behind the recommended option
+  // (the `.hero` item, else the last — the rule engine.css applies). Numbers read off the DOM, never off the source; in design
+  // px, so the screen's scale does not matter. Run after fitOverflow (a fitted body moves its button).
+  function placeGlyphs(track, lay) {
+    var page = PAGES[lay] || PAGES.slide;
+    Array.prototype.forEach.call(track.querySelectorAll('.slide'), function (sec) {
+      var g = sec.querySelector('.wm--mark .wm-g'); if (!g) return;
+      ['--gx', '--gy', '--gs', '--gr', '--gc', '--go'].forEach(function (p) { g.style.removeProperty(p); });
+      var it = sec.getAttribute('data-intent'), el, pose = null;
+      var r0 = sec.getBoundingClientRect(), k = r0.width / page.w;
+      var box = function (e) { var r = e.getBoundingClientRect(); return { x: (r.left - r0.left) / k, y: (r.top - r0.top) / k, w: r.width / k, h: r.height / k }; };
+      if (it === 'act' && (el = sec.querySelector('a.cta'))) {
+        var b = box(el); pose = { gx: b.x + b.w + 64, gy: b.y + b.h / 2, gs: 72, gr: -20, gc: 'var(--jp-yellow-500)', go: 1 };
+      } else if (it === 'decide' && (el = sec.querySelector('.card.is-hero, .col.is-hero') || [].slice.call(sec.querySelectorAll('.cards > .card, .compare > .col')).pop())) {
+        var d = box(el); pose = { gx: d.x + d.w / 2, gy: d.y + d.h / 2, gs: Math.min(Math.max(d.w, d.h) * 1.4, page.w * 0.6), gr: 45, gc: 'var(--brand-accent)', go: 0.24 };
+      }
+      if (!pose) return;
+      g.style.setProperty('--gx', Math.round(pose.gx) + 'px'); g.style.setProperty('--gy', Math.round(pose.gy) + 'px');
+      g.style.setProperty('--gs', Math.round(pose.gs / (parseFloat(getComputedStyle(g).getPropertyValue('--wm-k')) || 1)) + 'px');
+      g.style.setProperty('--gr', pose.gr + 'deg'); g.style.setProperty('--gc', pose.gc); g.style.setProperty('--go', String(pose.go));
+    });
+  }
+
   // Overflow measured in the DOM: the last body element must stay above the bottom margin of the page (the rects are read at
   // screen scale, so the zoom that makes a Doc page A4 is already in them). A webpage has no bottom: only the boxes are checked.
   function lintOverflow(track, out, lay) {
@@ -700,9 +1584,12 @@ globalThis.JMD = (function () {
       Array.prototype.forEach.call(sec.querySelectorAll('.metric, .card, .col, .tl-step'), function (el) {
         if (el.scrollHeight > el.clientHeight + 1) out.push({ level: 'error', slide: i + 1, block: el.className.split(' ')[0], rule: 'overflow', message: 'text overflows its box (' + el.className + ')' });
       });
+      Array.prototype.forEach.call(sec.querySelectorAll('.table-wrap'), function (el) {
+        if (el.scrollWidth > el.clientWidth + 1) out.push({ level: 'error', slide: i + 1, block: 'table', rule: 'overflow', message: 'the table is wider than the page: fewer columns, or shorter cells' });
+      });
     });
     return out;
   }
 
-  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
+  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, fileName: fileName, withTitle: withTitle, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
 })();

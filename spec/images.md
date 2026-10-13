@@ -56,6 +56,28 @@ Hosted only. The agent calls `jmd_upload` (`action: open` — a required argumen
 
 The rules of a box (the hosted service's upload page, with its own adversarial cases there): it takes files for one hour and is removed after 24 h; ten files, 2 MB each, 20 MB in all; a file is an image by its first bytes or it is refused (415), whatever its name says; an SVG with script, event handlers, `foreignObject` or an outside reference is refused; the stored name is letters, digits and dashes plus the extension of what the bytes are, a second same name gets a suffix; the page has its own CSP (its script by hash, no frame); an unknown, malformed or traversing box id is a 404 and nothing else; a body without `content-length` is refused before a byte is read, a body above the cap is cut mid-stream. Nothing is fetched, nothing is indexed, nothing is kept: a mailbox, not a bank. `jmd vendor` copies a dropped file to `assets/drop/<name>`.
 
+**And when the host reads nothing at all, the tool has to leave the list** *(1.5.5 and 1.5.6, the same day)*. 1.5.4 made every answer one constant line: the journal shows SafeBrain answering it **twelve times in a row**, `out_bytes` 527, two seconds apart, each call preceded by its own `initialize` — its loop reads no tool result. So 1.5.5 stopped offering the tool to a caller past the count (`hiddenFor(ctx)`, applied where `mcp/server.mjs` registers the tools; back after two minutes, or the moment `receive()` sees a file land in that caller's box). It called it **eight more times against `-32602 Tool jmd_upload not found`**: SafeBrain keeps its own copy of the tool list (`mcp_tools`, refreshed by its *Synchroniser* button), so nothing a server answers — not a line, not an error, not the absence of the tool — interrupts it. Hence the last lever, `JMD_DROP_BOX=off` (1.5.6): the deployment declares it has **no door for a file at all**, `jmd_upload` and `jmd_import` leave the list together (hosted, the import has no other door, and a tool whose only answer is *open a drop box* would be the next thing looped on), and the instructions stop naming a door that is not there. The host drops them at its next sync. This is a workaround for a client that ignores its own protocol, not a design: on a host that reads what it is answered, the box stays.
+
+**And every answer that hands something new is fuel** *(1.5.4, the same loop, four hours later)*. 1.5.2 was not enough, because it left one answer that counted as progress: an id that was not one (0.4.1's rule for a host that fills every field) meant *no id at all*, so a **`list` opened a box** and came back with a fresh link. At 17:26 the model listed `unused-not-needed`, then `will-not-use`, `test`, `check`, `abc` — twelve calls, twelve new boxes, and the per-box counter of 1.5.2 never fired because no two calls named the same box. The lesson, dearly bought: a loop does not feed on errors, it feeds on **novelty**. So now — a `list` opens nothing, ever (a non-id is answered with nothing to chase, and at most the link of the box already open); a second `open` while the caller's box is still empty hands back **the same link**; and past two fruitless answers to the same caller in two minutes (`noteFruitless`, `FRUITLESS_MAX`) every further call gets one constant line with no link, no id and nothing in it, which is the only shape a loop cannot chase. One more thing to remember about the hosts: **SafeBrain does not pass the server instructions** (`INSTRUCTION_LINES` never reaches the model there) — a tool's description and, above all, **its answers** are the only place a rule can be written.
+
+**A box waits for a human, and a tool call cannot** *(1.5.2 → 1.5.8, and see [spec/hosts.md](hosts.md) for the day this cost)*.
+Between the two rounds there is a person who has to open a page and drop a file. A host that runs its whole agent loop before
+speaking cannot hand the turn back in the middle of it, and on SafeBrain no wording in an answer changes that — measured, six
+times, in `spec/hosts.md`. What is left, and what holds regardless of any host, is the shape of the tool:
+
+- **a `list` opens nothing, whatever it is given** (1.5.4). Until then an id that was not one counted as *no id at all* (0.4.1's
+  rule for a host that fills every field), so `abc`, `test`, `will-not-use` each came back with a brand-new box and a fresh
+  link — a tool saying yes to a word it was never given. An id with fewer than six distinct characters is a placeholder, not an
+  id (`isBoxId`: sixteen random base64url characters practically never repeat that much);
+- **the empty box says whose move it is**, and a second list of the same box says it is the second (`noteList`, counted **per
+  box** — never per caller: hosted, the transport is stateless and there is no caller to count, see hosts.md);
+- **a deployment may have no drop box at all**: `JMD_DROP_BOX=off` takes `jmd_upload` and `jmd_import` away together (hosted, the
+  import has no other door), the start-up line says `dropBox: off`, and the instructions stop naming a door that is not there.
+
+What was tried and taken back out, because it was aimed at a host that reads nothing: a constant refusal line past a count, and
+hiding the tool from `tools/list` for a caller (1.5.5, 1.5.7 — both keyed on a caller the hosted transport cannot identify, which
+was a leak between callers before it was anything else).
+
 The `up:` form is strict (`up:<16 chars>/<name.ext>`, lowercase): no path can be built from it, the file is under the uploads folder or it is *no file "x" in this drop box*, a `missing-asset` error like the others.
 
 ### A PowerPoint through the same box — `jmd_import` hosted

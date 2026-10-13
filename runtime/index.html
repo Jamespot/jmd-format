@@ -26,16 +26,12 @@
 <div id="stage"><div id="track"></div></div>
 
 <div id="hud">
-  <span><kbd>←</kbd> <kbd>→</kbd> navigate</span>
-  <span><kbd>F</kbd> fullscreen</span>
-  <span><kbd>N</kbd> notes</span>
-  <span><kbd>I</kbd> info</span>
-  <span><kbd>M</kbd> motion</span>
-  <span><kbd>?</kbd> help</span>
-  <span><kbd>E</kbd> edit slide</span>
-  <span><kbd>P</kbd> print PDF</span>
-  <span><kbd>S</kbd> save .james-jmd.html</span>
-  <span><kbd>O</kbd> open</span>
+  <span><kbd>←</kbd> <kbd>→</kbd><span class="w"> navigate</span></span>
+  <span><kbd>F</kbd><span class="w"> present</span></span>
+  <span><kbd>E</kbd><span class="w"> edit</span></span>
+  <button type="button" id="hud-dl"><kbd>D</kbd><span class="w"> download</span></button>
+  <span id="hud-open"><kbd>O</kbd><span class="w"> open</span></span>
+  <span><kbd>?</kbd><span class="w"> all keys</span></span>
 </div>
 <div id="counter"></div>
 <div id="notes"><div class="lbl">Speaker notes</div><div class="txt" id="notes-txt"></div></div>
@@ -45,18 +41,25 @@
   <dl>
     <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Space</kbd></dt><dd>previous / next slide · in <em>step</em> motion, the next item first</dd>
     <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>first / last slide</dd>
-    <dt><kbd>F</kbd></dt><dd>fullscreen</dd>
+    <dt><kbd>F</kbd></dt><dd>present: the deck full screen (F again, or Esc, to leave)</dd>
     <dt><kbd>N</kbd></dt><dd>speaker notes</dd>
     <dt><kbd>M</kbd></dt><dd>motion: <em>none · soft · slide · zoom · step</em> — one mode for the whole deck, remembered here</dd>
     <dt><kbd>I</kbd></dt><dd>info: the file, its brand, its author, its size — and how the linter sees it</dd>
     <dt><kbd>E</kbd></dt><dd>edit: the slide's source on the right; click a text in the slide to edit it in place · <em>document</em> opens the header (layout, title, brand…)</dd>
-    <dt><kbd>⌘S</kbd> / <kbd>S</kbd></dt><dd>save the <code>.jmd</code> (in edit mode) / save this deck as a self-contained <code>.james-jmd.html</code></dd>
-    <dt><kbd>P</kbd></dt><dd>print to PDF (waits for the linter's errors)</dd>
+    <dt><kbd>D</kbd></dt><dd>download: <kbd>S</kbd> the deck as one page, <kbd>P</kbd> a PDF — and on its own page on the server <kbd>X</kbd> PowerPoint, <kbd>I</kbd> images · <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> work too</dd>
+    <dt><kbd>⌘S</kbd></dt><dd>save the <code>.jmd</code> (in edit mode)</dd>
+    <dt><kbd>Q</kbd></dt><dd>the QR code of this deck, for the room to scan — on a shared deck (its <code>/deck/…</code> page)</dd>
     <dt><kbd>O</kbd></dt><dd>open another <code>.jmd</code> — or drop one on the window</dd>
     <dt><kbd>?</kbd> <kbd>Esc</kbd></dt><dd>this help / close</dd>
   </dl>
   <p class="foot">A <code>.jmd</code> is Markdown with blocks. The theme decides the look, the brand its colors and shapes, the linter what fits. Format, contract and samples: <code>jmd spec</code>, or the <code>jmd_spec</code> tool of the connector.</p>
 </div></div>
+<div id="dl"><div class="box" role="dialog" aria-labelledby="dl-lbl">
+  <div class="lbl" id="dl-lbl">Download</div>
+  <div id="dl-list"></div>
+  <p class="foot">The <code>.jmd</code> stays the source: a file edited elsewhere does not come back into it.</p>
+</div></div>
+<div id="dl-toast" role="status" aria-live="polite"><span class="t"></span><span class="bar"><i></i></span></div>
 <div id="edit">
   <div class="lbl"><span id="edit-title">Slide</span><button id="edit-target" type="button" title="edit the document header: layout, title, brand, language, date, author">document</button><button id="edit-status" type="button" title="show the details"></button><span class="hint">click a text to edit it · Esc close · ⌘S save</span></div>
   <textarea id="edit-src" spellcheck="false" wrap="off"></textarea>

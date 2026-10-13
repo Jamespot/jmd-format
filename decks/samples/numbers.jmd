@@ -1,0 +1,100 @@
+---
+format: jmd/1
+layout: slide
+title: Northwind Ops — the year in numbers
+lang: en
+date: 2026-10-04
+author: Northwind finance
+---
+
+---
+intent: hook
+notes: One sentence: the numbers below all tell the same story, the second half of the year.
+---
+# The year in numbers
+Northwind Ops, 2026 — a table, then four charts.
+
+---
+section: Revenue
+notes: The table first: what each offer brought, and the one that carried the year.
+---
+## Three offers, one carried the year
+
+::: table
+| Offer | Customers | Revenue | Growth |
+|---|--:|--:|--:|
+| Starter | 1 240 | 0.4 M€ | +4 % |
+| Team | 310 | 1.9 M€ | +18 % |
+| Enterprise | 42 | 2.9 M€ | +41 % | {.hero}
+:::
+
+---
+intent: prove
+notes: Quarter by quarter: the curve bends in Q3, when Enterprise opened.
+---
+## Revenue grew every quarter
+
+::: chart {.bar}
+unit: k€
+- Q1 | 980
+- Q2 | 1 150
+- Q3 | 1 420
+- Q4 | 1 650 {.hero}
+:::
+
+---
+notes: Two years side by side: the gap opens in the second half.
+---
+## Monthly active users, 2025 and 2026
+
+::: chart {.line}
+series: 2025 | 2026
+unit: k
+- Jan | 12 | 14
+- Feb | 12 | 15
+- Mar | 13 | 17
+- Apr | 13 | 18
+- May | 14 | 20
+- Jun | 14 | 22
+- Jul | 13 | 23
+- Aug | 13 | 23
+- Sep | 15 | 27
+- Oct | 16 | 30
+- Nov | 16 | 33
+- Dec | 17 | 36
+:::
+
+---
+intent: reveal
+notes: Where the revenue comes from: Enterprise is more than half of it.
+---
+## Enterprise is more than half of the revenue
+
+::: chart {.pie}
+- Enterprise | 2.9 {.hero}
+- Team | 1.9
+- Starter | 0.4
+:::
+
+---
+intent: problem
+notes: The ranking that matters for next year: time to the first response, by team.
+---
+## Support still answers too slowly
+
+::: chart {.hbar}
+unit: min
+- Night shift | 41 {.hero}
+- Weekend | 33
+- Billing | 18
+- Onboarding | 12
+- Day shift | 9
+:::
+
+---
+intent: act
+notes: Close on the one decision the numbers call for.
+---
+## Next: staff the night shift before Q1
+
+[Read the full report →](https://example.com/report){.cta}

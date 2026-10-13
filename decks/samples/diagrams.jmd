@@ -1,0 +1,151 @@
+---
+format: jmd/1
+layout: slide
+title: Northwind Ops — how the work is shaped
+lang: en
+date: 2026-10-12
+author: Northwind operations
+---
+
+---
+intent: hook
+notes: One sentence: every diagram here is a few lines of text, drawn in the brand.
+---
+# How the work is shaped
+A flow, a team, a loop, a stack and a choice — each written as text, drawn in the brand.
+
+---
+section: The flow
+notes: A flow with a decision is Mermaid — the same text Docs, GitHub and Notion draw. The dotted line is the way back.
+---
+## From request to shipped
+
+::: diagram
+flowchart LR
+    A([Request]) --> B[Triage]
+    B --> C{Approved?}
+    C -->|Yes| D[Build]
+    C -->|No| E[Revise]
+    E -.-> B
+    D ==> F([Shipped]){.hero}
+:::
+
+---
+section: The flow
+notes: Top-down, the same grammar: who talks to whom. The store is a cylinder, the agent a hexagon.
+---
+## What runs behind it
+
+::: diagram
+graph TD
+    U((User)) --> W[Web app]
+    U --> M[Mobile app]
+    W & M --> API[[Public API]]
+    API --> S[(Store)]
+    API --> AG{{Agent}}
+    AG -.->|reads| S
+:::
+
+---
+section: The team
+notes: An org chart is a list: the indent is the hierarchy, each line a name and a role.
+---
+## Who does what
+
+::: diagram {.tree}
+- Operations | COO
+  - Product | CPO
+    - Platform
+    - Mobile {.hero}
+  - Sales | CRO
+    - Inbound
+    - Partners
+  - Support | Head of care
+    - Level 1
+    - Level 2
+:::
+
+---
+section: The loop
+intent: explain
+notes: A cycle: the steps turn, the center says what they make.
+---
+## One loop a quarter
+
+::: diagram {.cycle}
+center: Every quarter
+- Listen | what customers say
+- Decide | one thing that matters
+- Ship | in small versions {.hero}
+- Measure | what actually changed
+:::
+
+---
+section: The stack
+notes: A pyramid: the first item is the top, the last one what everything stands on.
+---
+## What a good release stands on
+
+::: diagram {.pyramid}
+- Trust | customers rely on it {.hero}
+- Quality | tested before it ships
+- Process | the same road every time
+- Tools | one place for the work
+:::
+
+---
+section: The platform
+notes: A radial: a hub named by `center:`, the items around it, no order between them.
+---
+## One platform, its integrations
+
+::: diagram {.radial}
+center: Northwind
+- Email | the inbox
+- Calendar
+- Chat | the messages
+- CRM | the customer record {.hero}
+- Files
+:::
+
+---
+section: The pipeline
+notes: A funnel: the widest first, each stage narrower — the numbers are the source's.
+---
+## A quarter of sales
+
+::: diagram {.funnel}
+- Visitors | 12 000 on the site
+- Trials | 840 accounts
+- Demos | 120 meetings
+- Customers | 31 signed {.hero}
+:::
+
+---
+section: The choice
+intent: decide
+notes: A matrix: four quadrants, two axes named once.
+---
+## Where to start
+
+::: diagram {.matrix}
+x: Low effort | High effort
+y: High value | Low value
+- Quick wins | do them this week {.hero}
+- Big bets | plan them
+- Fill-ins | when there is time
+- Money pits | say no
+:::
+
+---
+intent: act
+notes: Who does what next — on the dark slide, the diagram turns white and yellow.
+---
+## Next quarter
+
+::: diagram
+flowchart LR
+    A[Pick the quick wins] --> B[Plan one big bet]
+    B --> C[Ship it in small versions]
+    C ==> D[Review in March]{.hero}
+:::

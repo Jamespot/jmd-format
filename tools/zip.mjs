@@ -2,7 +2,7 @@
    Zero dependencies: node's zlib inflates DEFLATE. No ZIP64, no encryption (Office never writes them).
    The bytes may come from outside (a .pptx dropped in a box): a truncated or lying directory is "not a zip file", an entry is
    inflated to ENTRY_MAX at most and a zip to TOTAL_MAX at most over its life — a bomb stops at the cap, in words. */
-import { inflateRawSync, crc32 } from 'node:zlib';
+import { inflateRawSync, deflateRawSync, crc32 } from 'node:zlib';
 
 export const ENTRY_MAX = 32 * 1024 * 1024, TOTAL_MAX = 256 * 1024 * 1024;
 const tooBig = name => Object.assign(new Error(`${name}: entry too large (${ENTRY_MAX >> 20} MB at most)`), { code: 'ZIP_TOO_LARGE' });
@@ -57,29 +57,34 @@ export function readZip(buf, { entryMax = ENTRY_MAX, totalMax = TOTAL_MAX } = {}
    save nothing. No dependency: `zlib.crc32` is in Node 22. No ZIP64 either, and that is a ceiling we say out loud — a member
    over 4 GB, or more than 65 535 of them, is refused rather than written as a file no reader would open. Names are ours
    (`<slug>-01.png`), never a caller's path: a name with a separator or a `..` in it is refused here too, because a zip is a
-   folder someone will unpack. */
+   folder someone will unpack.
+   An Office file is the one zip whose members live in folders (`ppt/slides/slide1.xml`, `[Content_Types].xml`): `paths: true`
+   lets a name hold `/` and the brackets, still never a `..`, a leading `/` or an empty segment — and these names are ours
+   too, written by lib/pptx.mjs. `deflate: true` compresses each member (XML shrinks tenfold; a PNG is stored as it is). */
 export const ZIP_MEMBER_MAX = 0xffffffff, ZIP_MEMBERS_MAX = 0xffff;
 const NAME_OK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const PATH_OK = /^(?:[A-Za-z0-9_.\[][A-Za-z0-9._\[\]-]{0,99}\/){0,8}[A-Za-z0-9_.\[][A-Za-z0-9._\[\]-]{0,99}$/;
 
-export function writeZip(files) {
+export function writeZip(files, { paths = false, deflate = false } = {}) {
   const names = Object.keys(files);
   if (names.length > ZIP_MEMBERS_MAX) throw new Error(`too many files for a zip without ZIP64 (${ZIP_MEMBERS_MAX} at most)`);
   const parts = [], dir = [];
   let at = 0;
   for (const name of names) {
-    if (!NAME_OK.test(name)) throw new Error(`${name}: a zip member is a plain name, no path, no separator`);
-    const body = Buffer.isBuffer(files[name]) ? files[name] : Buffer.from(files[name]);
-    if (body.length > ZIP_MEMBER_MAX) throw new Error(`${name}: too large for a zip without ZIP64`);
-    const nm = Buffer.from(name, 'utf8'), crc = crc32(body);
+    if (!(paths ? PATH_OK.test(name) && !name.split('/').some(s => /^\.+$/.test(s)) : NAME_OK.test(name))) throw new Error(`${name}: a zip member is a plain name, no path, no separator`);
+    const raw = Buffer.isBuffer(files[name]) ? files[name] : Buffer.from(files[name]);
+    if (raw.length > ZIP_MEMBER_MAX) throw new Error(`${name}: too large for a zip without ZIP64`);
+    const packed = deflate && !/\.(png|jpe?g|gif|zip)$/i.test(name) ? deflateRawSync(raw) : null, body = packed || raw, method = packed ? 8 : 0;
+    const nm = Buffer.from(name, 'utf8'), crc = crc32(raw);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(1 << 11, 6); // 2.0, names are UTF-8
-    local.writeUInt16LE(0, 8); local.writeUInt16LE(0, 10); local.writeUInt16LE(0x21, 12);            // stored; a fixed moment, not the clock
-    local.writeUInt32LE(crc, 14); local.writeUInt32LE(body.length, 18); local.writeUInt32LE(body.length, 22);
+    local.writeUInt16LE(method, 8); local.writeUInt16LE(0, 10); local.writeUInt16LE(0x21, 12);       // stored or deflated; a fixed moment, not the clock
+    local.writeUInt32LE(crc, 14); local.writeUInt32LE(body.length, 18); local.writeUInt32LE(raw.length, 22);
     local.writeUInt16LE(nm.length, 26); local.writeUInt16LE(0, 28);
     const entry = Buffer.alloc(46);
     entry.writeUInt32LE(0x02014b50, 0); entry.writeUInt16LE(20, 4); entry.writeUInt16LE(20, 6); entry.writeUInt16LE(1 << 11, 8);
-    entry.writeUInt16LE(0, 10); entry.writeUInt16LE(0, 12); entry.writeUInt16LE(0x21, 14);
-    entry.writeUInt32LE(crc, 16); entry.writeUInt32LE(body.length, 20); entry.writeUInt32LE(body.length, 24);
+    entry.writeUInt16LE(method, 10); entry.writeUInt16LE(0, 12); entry.writeUInt16LE(0x21, 14);
+    entry.writeUInt32LE(crc, 16); entry.writeUInt32LE(body.length, 20); entry.writeUInt32LE(raw.length, 24);
     entry.writeUInt16LE(nm.length, 28); entry.writeUInt32LE(at, 42);
     parts.push(local, nm, body); dir.push(entry, nm);
     at += 30 + nm.length + body.length;

@@ -4,7 +4,7 @@
 >
 > **What the format doesn't say, the theme decides.** No position, no size, no color in the source.
 
-Status: **J1 (V1 read-only)** — nine blocks, images, links, four layouts (Slide, Doc, Story, Webpage); validated on the reference deck (pixel test) and on a 26-slide sales deck (zero linter error).
+Status: **J1 (V1 read-only)** — eleven blocks (nine, and `table` / `chart` since 1.15.0), images, links, four layouts (Slide, Doc, Story, Webpage); validated on the reference deck (pixel test) and on a 26-slide sales deck (zero linter error).
 
 ## File structure
 
@@ -54,6 +54,8 @@ The same source, the same blocks, the same intents — a different page. `layout
 
 **Webpage** is the landing page, the article, the one page put online: `---` opens a section whose background (`bg:`, the intent's) becomes a band, and the section is as tall as its content — no overflow, no page number, the brand chrome once at the top. A `.right` image keeps the feature layout, a `statement` or a `section` is a band of its own. Printed, the page flows onto A4 sheets, each section kept whole.
 
+**On a phone** *(1.18.0)*: held upright, a Slide deck is read as a Story — the same source drawn in the other layout in the browser, one screen at a time, a tap or a swipe to turn and the story bar to jump; turned sideways, the slides again. Nothing is written back: the source keeps `layout: slide`. Doc, Webpage and Story are read as they are.
+
 `notes:` are kept in every layout (never printed).
 
 ## Slide keys
@@ -72,11 +74,11 @@ The same source, the same blocks, the same intents — a different page. `layout
 |---|---|---|
 | Title | first `#`, `##` or `###` of the slide | one only; `#` makes a **cover** (centered, 84 px), `##` the regular title; white on `indigo`/`accent`/`sky` |
 | Lead | first paragraph after the title | `.slide-lead` |
-| Block | `::: name` … `:::` | never nested; one block per component family. `::: cards {.right}` puts the block in a right column next to the text (any non-full block) |
+| Block | `::: name` … `:::` | never nested; one block per component family — two blocks of different families stack on a slide (a `timeline` over `cards`, a `metrics` over a `table`), the linter measures the whole. `::: cards {.right}` puts the block in a right column next to the text (any non-full block) |
 | Item | `- a | b | c` | columns separated by `|`; `\|` for a literal pipe |
 | Modifier | `{.hero}` at the end of an item | component class |
 | Inline | `*italic*` `**bold**` `` `code` `` `[text](url)` | nothing else; **no raw HTML**. `[Label →](url){.cta}` renders as a button |
-| Image | `![caption](file.png){.right \| .cover \| .wide}` alone on its line | paths are **relative to the `.jmd`**, or `img:<bank>/<slug>` from one of the brand's image banks, or an `https://` URL (spec/images.md); all embedded as data URIs at build, the deck loads nothing. `.right`: the feature layout (text left, image bleeding right); `.cover`: art under a level-1 title; `.wide`: full width; none: in a soft frame |
+| Image | `![caption](file.png){.right \| .cover \| .wide}` **alone on its line** — inside a text (a card title, a bullet, a cell) it is neither drawn nor printed: `inline-image` | paths are **relative to the `.jmd`**, or `img:<bank>/<slug>` from one of the brand's image banks, or an `https://` URL (spec/images.md); all embedded as data URIs at build, the deck loads nothing. `.right`: the feature layout (text left, image bleeding right); `.cover`: art under a level-1 title; `.wide`: full width; none: in a soft frame |
 | Plain Markdown | paragraphs, lists | rendered as a single column (`.prose`) |
 
 ## Blocks — V1
@@ -91,7 +93,7 @@ The same source, the same blocks, the same intents — a different page. `layout
 ```
 Columns: **value | label | comment** (comment optional). `{.hero}` puts the item in color.
 
-### `timeline` — up to 6 steps
+### `timeline` — up to 6 steps, two forms
 ```markdown
 ::: timeline
 - 1995 — Origins | Founded by two engineers, sold to a large group in 2003.
@@ -100,6 +102,20 @@ Columns: **value | label | comment** (comment optional). `{.hero}` puts the item
 :::
 ```
 Columns: **title | text**, or **date | title | text** (rendered "date — title"). Implicit numbering 01, 02… `{.now}` = current step (yellow dot), `{.next}` = upcoming step (dashed dot). `::: timeline {.chevrons}` renders the steps as colored chevrons.
+
+**Phases** (1.26.0) — the heading form, as `cards` has it, for a step that carries detail: a project plan, a roadmap.
+```markdown
+::: timeline
+### January to June — Scoping and setup
+- Kick-off
+- Workshop 1 · Brainstorm
+### July — Pilot {.now}
+A restricted group before the general rollout.
+### September — Rollout {.next}
+- Training plan
+:::
+```
+`### date — title` opens a phase (the date under the dot, the title in its card; no ` — `, the whole heading is the title), `-` lines are its details, plain lines its text; `{.now}` `{.next}` `{.hero}` on the heading. The dots and their line stay on top, each phase's detail in a card under its dot.
 
 ### `cards` — up to 5, two forms
 ```markdown
@@ -117,7 +133,7 @@ Columns: **title | text**, or **date | title | text** (rendered "date — title"
 Free text is allowed too. {.wide}
 :::
 ```
-One-line form: **title | text**. Heading form: `###` opens a card, `-` lines are its bullets, plain lines its text. `{.numbered}` on the block numbers the cards; `{.wide}` on a card spans the row; `{.right}` on the block puts the cards in a right column next to the text.
+One-line form: **title | text**. Heading form: `###` opens a card, `-` lines are its bullets, plain lines its text. `{.numbered}` on the block numbers the cards; `{.plain}` takes the theme's marker off (the shape or icon a brand puts on each card) — a marker is never replaced by an image in the title; `{.wide}` on a card spans the row; `{.right}` on the block puts the cards in a right column next to the text.
 
 ### `compare` — exactly 2 columns
 ```markdown
@@ -168,7 +184,79 @@ The part title, centered; a second line becomes a lead. `{.numbered}` adds the p
 ```
 Aligned on one height; denser above 18 logos. The alt text is the name.
 
-### Not yet: `principles`, `quote`, `agenda`, `table`, `mermaid`
+## Blocks — data (1.15.0)
+
+### `table` — a Markdown pipe table, up to 12 rows and 6 columns; 24 rows folded in two
+```markdown
+::: table
+| Offer | Customers | Revenue |
+|---|--:|--:|
+| Starter | 1 240 | 0.4 M€ |
+| Enterprise | 42 | 2.9 M€ | {.hero}
+:::
+```
+Rows are `|`-separated cells (the edge pipes are optional). The row right above a `|---|` line is the **header**; without one, every row is a body row. `:--` `:--:` `--:` align a column left, center, right; a column whose cells all read as numbers aligns right by itself. `{.hero}` at the end of a row puts it forward; `{.compact}` on the block tightens it (automatic above 7 rows). **Past 12 rows the table folds in two** (1.26.0): two tables of equal width side by side, the header repeated, the order running down the first half then the second; `{.hero}` lights its row alone. A folded half holds 3 columns at most, 24 rows in all; `{.split}` folds a shorter list on demand. Never fold a table by hand into pairs of columns. A cell is inline Markdown. Errors: no row (`table-rows`), more than 6 columns (`table-columns`), more than 24 rows, or past 12 with more than 3 columns (`max-items`), wider than the page (`overflow`, measured).
+
+### `chart` — numbers drawn: `bar` (default), `hbar`, `line`, `pie`
+```markdown
+::: chart {.line}
+series: 2025 | 2026
+unit: k
+- Jan | 12 | 14
+- Feb | 12 | 15
+- Mar | 13 | 17 {.hero}
+:::
+```
+One item per bar, point or slice: **label | value**, and one more value per extra series (≤ 4), named by an optional `series: A | B` line. A value is a **number alone** — spaces as thousands separators, a `,` or `.` decimal mark, a unit around it tolerated (`42 %`, `€5.2M` read as 42 and 5.2) — and the unit is said once by `unit:`, printed after every value. `{.hero}` on an item: the bar in color and the others quiet, the slice forward with its share in the hole of the donut, a bigger dot on the line.
+
+| Type | For | Max |
+|---|---|---|
+| `bar` | a few periods or categories, values on top of the bars | 12 |
+| `hbar` | a ranking, long labels | 8 |
+| `line` | a trend over many points; ticks on the left, one area under a single series | 24 |
+| `pie` (`donut`) | the parts of one whole, with their shares listed beside | 6, one series |
+
+The runtime draws it as SVG in the brand's colors (series: accent, deep, secondary, highlight), at the size of the layout (a Story screen, a Doc page, the right column of `{.right}`), with the decimal mark of `lang:`. It **arrives with motion** — bars grow from the axis, the line draws itself, the donut opens, the values land last — following the deck's motion mode; never in a Doc, a webpage, print, the editor, or for reduced motion. The numbers are also in the page as text (a hidden table), for a screen reader or a copy. Errors: no item (`chart-items`), a value that is not a number (`chart-value`), too many items for the type (`max-items`), more than 4 series or more than one on a pie (`chart-series`), a negative slice; an unknown `{.type}` is a warning.
+
+## Blocks — diagrams (1.25.0)
+
+### `diagram` — boxes and arrows (a Mermaid flowchart), or a list given a form
+
+Two grammars in one block, told apart by the modifier. **No form**: the body is a **Mermaid flowchart** — the text Docs, GitHub and Notion draw — read and drawn by the runtime; no Mermaid runs.
+
+```
+::: diagram
+flowchart LR
+    A([Request]) --> B{Approved?}
+    B -->|Yes| C[Ship]:::hero
+    B -->|No| D[Revise]
+    D -.-> A
+:::
+```
+
+The first line is `flowchart` or `graph`, with `TD` (default), `LR`, `BT` or `RL`; a Story screen draws `LR` top-down. Then statements, one a line or separated by `;`. Nodes: `A[box]` `A(round)` `A([stadium])` `A((circle))` `A{decision}` `A{{hexagon}}` `A[(cylinder)]` `A[[subroutine]]`, a label in quotes when it holds brackets, `<br/>` for a new line; `A{.hero}` — the format's modifier — or Mermaid's own `A:::hero` puts a node forward (the one class read). In the editor a press on a box opens the source on its line. Edges: `-->` `---` `-.->` (dotted) `==>` (strong) `<-->` `~~~` (places, draws nothing), labelled `-->|Yes|` or `-- Yes -->`, chained `A --> B --> C`, grouped `A & B --> C`. Laid out in layers (ranks by longest path, order by barycenters, positions by least squares), drawn as SVG in the brand's colors: a decision in the warm tint, a terminal (stadium, circle) in the deep color, the hero in the accent; a dark slide turns it. It arrives with motion — the nodes rank after rank, each edge drawing itself — within the deck's motion mode. The relations are also in the page as text, for a screen reader or a copy.
+
+**With a form**, the body is a list of `- title | text` items, `{.hero}` on one:
+
+| Form | For | Items |
+|---|---|---|
+| `{.tree}` | an org chart, a hierarchy: the indent is the parent, `- name \| role`; `{.tree .lr}` grows left to right | 2–14, and the layout's maximum |
+| `{.cycle}` | a loop: cards on a ring, an arrow between each; `center:` names the whole | 3–6 |
+| `{.radial}` | a hub and what hangs on it: `center:` names the hub (required), a spoke to each card | 3–8 |
+| `{.pyramid}` | levels: the first item is the top; the bands left, the words beside | 2–6 |
+| `{.funnel}` | stages that narrow: the first item is the widest | 2–6 |
+| `{.steps}` | a staircase: each step a level higher — a maturity, a progression | 2–6 |
+| `{.venn}` | sets that overlap; `center:` names what they share | 2–3 |
+| `{.target}` | rings from the core out, the first item the core, each named by a leader | 2–5 |
+| `{.matrix}` | four cases on two criteria: top left, top right, bottom left, bottom right; `x: left \| right`, `y: top \| bottom`, `center:` a label on the crossing | 4 |
+
+A form's words are HTML (inline Markdown, edited in place like a card's); a tree's are drawn like a flowchart's, with elbow connectors.
+
+**The intent changes the drawing**, as it does a card's: `explain` shows the diagram click by click (a flowchart node by node, each with the edges that reach it; a form card by card); `reveal` leaves the hero lit and the rest quiet, `decide` the same more gently; `prove` tightens the corners; a dark intent (`hook`, `problem`, `celebrate`, `act`) turns the colors.
+
+Errors: `diagram-center` — a radial without its hub; `diagram-empty`; `diagram-type` — another Mermaid family, with the block that draws it (`pie` → `chart {.pie}`, `timeline`/`journey` → `timeline`, `mindmap` → `cards`…) or none; `diagram-syntax` — a line not read; `diagram-click` — `click`/`call`/`href` bind code to a node, and a deck is data; `diagram-form` — a list without a form; `max-items` — more than 10 nodes on a slide (7 on a Story screen, 14 on a Doc page or a webpage), or a form's count; `diagram-dense` — the drawing would need type under 14 px to fit. Warnings: `diagram-style` — `style`, `classDef`, `linkStyle`, `class`, `%%{init}%%` ignored, the brand colors the diagram; `diagram-subgraph` — drawn without its frame; `diagram-form` — Mermaid lines under a form, an unknown form.
+
+### Not yet: `principles`, `quote`, `agenda`
 Reserved names; a block outside the vocabulary is **a linter error**, not a warning. See the PRD for the V2 families (data, rhythm) and V3 (Jamespot graph, interaction).
 
 ## The linter

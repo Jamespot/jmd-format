@@ -37,12 +37,27 @@ const ALIASES = { 'jamespot-2026': 'jamespot', 'jamespot-basic': 'jamespot' }; /
 /* The brand a deck gets when it names none. `mono` is the neutral default of this tree; a deployment that has a house brand
    declares it once in the environment (the hosted service sets JMD_DEFAULT_BRAND=jamespot) rather than patching this file. */
 export const DEFAULT_BRAND = process.env.JMD_DEFAULT_BRAND || 'mono';
+
+/* Whether a `.yaml` *path* may be a brand. Locally it must: `--brand=./ours.yaml` is the whole point of the flag, and the
+   disk belongs to whoever typed the command. Hosted it must not, and it was the one place left where a caller's words still
+   reached the server's disk — `dir` has been confined under a scratch folder for the call since spec/security.md §2
+   (mcp/tools.mjs withDir), while `brand` went straight to the readFileSync below. What that gave a caller of the connector:
+   any .yaml of the server read as a brand, one line of it quoted back verbatim by the shape error that refused it
+   (`brand accent: "…" is not a #hex color`, which mcp/tools.mjs hands to the client as is), and — because a file that is
+   there fails differently from a file that is not — an oracle for which paths exist. Hosted, the answer is the same
+   sentence whether or not the file is there, which is what closes the last of the three. mcp/tools.mjs setHosted flips it. */
+let brandPaths = true;
+export function setBrandPaths(v) { brandPaths = !!v; }
+
 export function loadBrand(name = DEFAULT_BRAND) {
   if (typeof name === 'object' && name) return name;
   if (/^[\w-]+$/.test(name)) name = name.toLowerCase(); // an id is case-insensitive (`Jamespot-Basic`); a path, a URL or YAML text is not touched
   if (ALIASES[name]) name = ALIASES[name];
   if (/\n/.test(name) || /^[a-z][\w-]*:\s/i.test(name)) return customBrand(parseBrand(name), 'custom');
-  if (/\.ya?ml$/.test(name) && existsSync(name)) return customBrand(parseBrand(readFileSync(name, 'utf8')), basename(name).replace(/\.ya?ml$/, ''));
+  if (/\.ya?ml$/.test(name)) {
+    if (!brandPaths) throw new Error('brand: a path is not a brand on this server, which has no disk of yours to read — name one of the brands (' + brands().map(b => b.id).join(', ') + '), the https URL of a brand.yaml, or pass the YAML itself');
+    if (existsSync(name)) return customBrand(parseBrand(readFileSync(name, 'utf8')), basename(name).replace(/\.ya?ml$/, ''));
+  }
   const file = join(brandsDir, name + '.yaml');
   if (!existsSync(file)) throw new Error(`unknown brand "${name}": not one of ${brands().map(b => b.id).join(', ')}, nor a .yaml path, URL or YAML text`);
   const b = validateBrand(parseBrand(readFileSync(file, 'utf8')), { marks: marks() }); b.id = name; return b;

@@ -48,6 +48,9 @@ Ten intents × nine blocks would be ninety rules. Instead each intent sets **six
 | emphasis | equal · hero | `reveal` `decide` `celebrate` hero |
 | alignment | left · centred | `hook` `reveal` `celebrate` `fun` centred |
 | rhythm | none · cascade · step | `explain` step; `prove` none — a modulation of the presenter's global motion mode, never a choice in the source |
+| glyph pose | where the deck's glyph stands, how big, which way, how loud | `hook` huge behind the words; `problem` cut by the corner; `reveal` opened behind the key idea; `prove` `explain` `recap` a small stamp; `decide` a halo behind the recommended option; `celebrate` multiplied; `fun` winking from the corner; `act` beside the button |
+
+**The glyph that travels** *(1.16.0)*. With `watermark: mark` a deck has one glyph — the first of the brand's shape family, the same on every slide — and the intent poses it. Presenting, it is not redrawn slide after slide: it flies from the pose it had to the one it gets, and on `explain` it lands on the corner of each step as the step arrives, like a tick. So the arc of the deck is something one sees before reading it, and every brand gets its own character from its own mark file, with nothing added to the source. A pose is static where nothing moves (motion none, Doc, Webpage, print, PNG, the editor); `act` and `decide` hang on a measure (the button, the recommended option), taken after the fit — numbers off the DOM, never off the source.
 
 Then a handful of targeted rules where the meaning demands it: `metrics` under `reveal` (one huge number), `cards` and lists under `explain` (numbered), `compare`/`cards` under `decide` (the recommended option forward), `cards`/lists under `recap` (ticks), the CTA under `act`, glyph play under `celebrate` and `fun`. About twenty rules, not ninety.
 
