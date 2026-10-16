@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.27.4';
+  var VERSION = '1.27.5';
   var FORMAT_MAX = 1;
   // layouts (spec/jmd.md): the page the deck is made of — one table, the runtime and the CSS read it.
   //   w, h   the page in design units (the slide's px: every block's CSS is written in them); h 0 = as tall as its content
@@ -773,7 +773,7 @@ globalThis.JMD = (function () {
       var gi = x.u.r; if (gi < gaps.length) gaps[gi] = Math.max(gaps[gi], (horiz ? x.lab.w + fs * 3 : x.lab.h + fs * 1.6));
     });
     var thick = layers.map(function (L) { return Math.max.apply(null, L.map(along).concat([fs])); });
-    var y = 0; layers.forEach(function (L, r) { L.forEach(function (a) { a.y = y + thick[r] / 2; }); y += thick[r] + (gaps[r] || 0); });
+    var mid = [], y = 0; layers.forEach(function (L, r) { L.forEach(function (a) { a.y = y + thick[r] / 2; }); mid.push(y + thick[r] + (gaps[r] || 0) / 2); y += thick[r] + (gaps[r] || 0); });
     // edges: ports spread on a node's side, a curve through the dummies, the arrow on the last stretch
     var AL = fs * 0.62;
     function ports(a, list, key) {
@@ -792,8 +792,17 @@ globalThis.JMD = (function () {
       pts.push({ x: x.v.x + x.p1, y: x.v.y - along(x.v) / 2 });
       if (x.v.n.shape === 'diamond' || x.v.n.shape === 'circle') pts[pts.length - 1].y += 0;
       x.pts = pts;
-      if (x.lab) x.labAt = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      if (x.lab) x.labAt = { x: (pts[0].x + pts[1].x) / 2, y: mid[x.u.r] };
     });
+    // the labels of one gap side by side, never on each other (two edges between the same boxes, a fan out of one box):
+    // pushed apart along the gap like the boxes of a rank, and each edge bent through its own label
+    for (var gl = 0; gl + 1 < R; gl++) {
+      var LB = E.filter(function (x) { return x.lab && x.u.r === gl; }).sort(function (p, z) { return p.labAt.x - z.labAt.x; });
+      if (!LB.length) continue;
+      var lgap = []; for (var li = 0; li + 1 < LB.length; li++) lgap.push(((horiz ? LB[li].lab.h + LB[li + 1].lab.h : LB[li].lab.w + LB[li + 1].lab.w)) / 2 + fs * 0.5);
+      var lx = dgPlace(LB.map(function (x) { return x.labAt.x; }), lgap);
+      LB.forEach(function (x, i) { x.labAt.x = lx[i]; x.pts.splice(1, 0, { x: x.labAt.x, y: x.labAt.y }); });
+    }
     // extent, then the turn: top-down is the frame everything above was computed in
     var minX = Infinity, maxX = -Infinity, H = y - (gaps[R - 1] || 0);
     all.forEach(function (a) { minX = Math.min(minX, a.x - across(a) / 2); maxX = Math.max(maxX, a.x + across(a) / 2); });
