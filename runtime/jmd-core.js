@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.30.1';
+  var VERSION = '1.31.0';
   var FORMAT_MAX = 1;
   // layouts (spec/jmd.md): the page the deck is made of — one table, the runtime and the CSS read it.
   //   w, h   the page in design units (the slide's px: every block's CSS is written in them); h 0 = as tall as its content
@@ -1315,14 +1315,15 @@ globalThis.JMD = (function () {
     },
     statement: {
       full: true,
-      render: function (b) {
+      render: function (b, ctx) {
         var paras = [], attr = null, paraLine = null, attrLine = null;
         b.lines.forEach(function (l, k) {
           if (!l.trim()) return;
           if (/^—\s/.test(l)) { attr = l.replace(/^—\s*/, ''); attrLine = b.map[0] + 1 + k; return; }
           paras.push(l.trim()); if (paraLine == null) paraLine = b.map[0] + 1 + k;
         });
-        return '<svg class="mark-blob mark-blob--statement" aria-hidden="true"><use href="#brand-mark"/></svg>' +
+        // a PNG logo is a picture, not a shape: no blob drawn from it (1.31.0)
+        return (ctx && ctx.brand && ctx.brand['logo-kind'] === 'raster' ? '' : '<svg class="mark-blob mark-blob--statement" aria-hidden="true"><use href="#brand-mark"/></svg>') +
           '<div class="statement"><div class="mark">&ldquo;</div>' +
           '<p class="q"' + src(paras.length === 1 ? paraLine : null) + '>' + inline(paras.join(' ')) + '</p>' +
           (attr ? '<div class="attr"' + src(attrLine) + '>' + inline(attr) + '</div>' : '') + '</div>';

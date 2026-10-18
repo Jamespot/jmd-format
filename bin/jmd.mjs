@@ -124,9 +124,9 @@ switch (cmd) {
      another client, which is the behaviour we want from a secret. */
   /* The look an organisation gets without naming it (spec/brand.md). A row is a domain and a brand spec — an id of the
      shipped looks, the https URL of a brand.yaml, or YAML text — and it is read only when nobody said which brand to use.
-     By hand here because that is our onboarding: a customer signs, a line is added. The two other ways in are the domain's
-     own `/.well-known/jmd/brand.yaml` and the card on /me, and a row written here wins over both, so a customer can be
-     fixed without asking them to touch their site. */
+     By hand here because that is our onboarding: a customer signs, a line is added. The two other ways in (1.31.0) are the
+     domain's own `/.well-known/jmd/brand.yaml` and the card on /me/brand, and a row written here (via = hand) wins over both,
+     so a customer can be fixed without asking them to touch their site. `add` over a row the card wrote takes it over. */
   case 'brand': {
     let openStore;
     try { ({ openStore } = await import('../mcp/store.mjs')); }
@@ -150,8 +150,9 @@ switch (cmd) {
       } else {
         const rows = await st.brands();
         if (!rows.length) { console.log('no domain brand yet — jmd brand add <domain> <brand>'); break; }
-        console.log('domain                        brand                                   changed     by');
-        for (const r of rows) console.log(`${String(r.domain).padEnd(30)}${(String(r.spec).length > 38 ? String(r.spec).slice(0, 35) + '...' : String(r.spec)).padEnd(40)}${String(r.updated_at).slice(0, 10)}  ${r.updated_by || '\u2014'}`);
+        // `via`: hand = ours, wins over the domain's own .well-known file; me = its people, from /me/brand, loses to that file
+        console.log('domain                        brand                                   changed     via   by');
+        for (const r of rows) console.log(`${String(r.domain).padEnd(30)}${(String(r.spec).replace(/\n/g, ' ').length > 38 ? String(r.spec).replace(/\n/g, ' ').slice(0, 35) + '...' : String(r.spec)).padEnd(40)}${new Date(r.updated_at).toISOString().slice(0, 10)}  ${String(r.via || 'hand').padEnd(6)}${r.updated_by || '\u2014'}`);
       }
     } finally { await st.close(); }
     break;

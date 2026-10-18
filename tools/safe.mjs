@@ -40,7 +40,7 @@ export function validateBrand(b, { marks = [] } = {}) {
       if (typeof v !== 'string' || !(/^https:\/\/\S+$/.test(v) || testHttp || /^[\w./-]+\/?$/.test(v)) || v.split('/').includes('..')) badBank(k, `is not an https folder nor a path next to the brand.yaml: ${JSON.stringify(String(v))}`);
     }
   }
-  if (b.logo !== undefined && b.logo !== '' && b.logo !== 'custom' && !/^https?:\/\/\S+$/.test(b.logo) && !/^[\w./-]+\.svg$/.test(b.logo) && !(MARK_ID.test(b.logo) && marks.includes(b.logo)))
+  if (b.logo !== undefined && b.logo !== '' && b.logo !== 'custom' && !/^https?:\/\/\S+$/.test(b.logo) && !/^[\w./-]+\.(svg|png)$/.test(b.logo) && !(MARK_ID.test(b.logo) && marks.includes(b.logo)))
     bad('logo', `is not one of the marks (${marks.join(', ')}) nor an https URL`);
   return b;
 }
@@ -188,4 +188,27 @@ export function confinedDir(dir, scratch) {
   const d = String(dir);
   if (/^([a-zA-Z]:)?[\\/]/.test(d) || d.split(/[\\/]/).includes('..')) throw new Error('absolute paths and `..` are refused on a hosted server: the server\'s disk is not yours, pass images by building next to them locally');
   return resolve(scratch, d);
+}
+
+/* A logo that only exists as a PNG (1.31.0). A raster is not a shape: it cannot be the watermark, the statement's blob or a
+   card's marker, so it is only ever the lockup's picture (lib/jmd.mjs turns those decorations off). What is checked here is
+   that it is a PNG and nothing else — the signature, an IHDR first with sane dimensions, an IEND last with nothing after it
+   (so a file that is a PNG *and* something else is refused, not carried) — and its size. It then travels as base64 in a
+   `data:image/png` URI inside the brand-mark symbol: a picture the deck's policy already allows (`img-src data:`), never
+   markup, never a fetch. */
+export const PNG_MAX = 300 * 1024;
+export function pngInfo(bytes) {
+  const b = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
+  if (b.length > PNG_MAX) throw new Error(`the PNG is ${Math.round(b.length / 1024)} KB, the limit is ${PNG_MAX / 1024} KB`);
+  if (b.length < 57 || b.readUInt32BE(0) !== 0x89504e47 || b.readUInt32BE(4) !== 0x0d0a1a0a) throw new Error('not a PNG file');
+  if (b.readUInt32BE(8) !== 13 || b.toString('latin1', 12, 16) !== 'IHDR') throw new Error('not a PNG file: no header first');
+  const width = b.readUInt32BE(16), height = b.readUInt32BE(20);
+  if (!width || !height || width > 8192 || height > 8192) throw new Error(`a PNG of ${width}×${height} pixels: 1 to 8192 on each side`);
+  if (b.toString('latin1', b.length - 8, b.length - 4) !== 'IEND' || b.readUInt32BE(b.length - 12) !== 0) throw new Error('not a PNG file: it does not end where a PNG ends');
+  return { width, height };
+}
+/** { symbol, width, height } — the `<symbol id="brand-mark">` of a PNG logo: one <image>, its own size as the viewBox. */
+export function rasterMark(bytes) {
+  const { width, height } = pngInfo(bytes);
+  return { width, height, symbol: `<symbol id="brand-mark" viewBox="0 0 ${width} ${height}"><image width="${width}" height="${height}" href="data:image/png;base64,${Buffer.from(bytes).toString('base64')}"/></symbol>` };
 }
