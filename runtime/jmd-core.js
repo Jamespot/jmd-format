@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.27.5';
+  var VERSION = '1.30.1';
   var FORMAT_MAX = 1;
   // layouts (spec/jmd.md): the page the deck is made of — one table, the runtime and the CSS read it.
   //   w, h   the page in design units (the slide's px: every block's CSS is written in them); h 0 = as tall as its content
@@ -562,10 +562,19 @@ globalThis.JMD = (function () {
     return out.map(function (s) { return s.trim(); }).filter(Boolean);
   }
   function diagram(b) {
-    var d = { kind: '', dir: 'TD', nodes: [], edges: [], byId: {}, ignored: [], refused: [], bad: [] };
+    var d = { kind: '', dir: 'TD', nodes: [], edges: [], byId: {}, groups: [], toFrame: [], ignored: [], refused: [], bad: [] }, open = [];
     function node(id, line) {
-      if (!d.byId[id]) { d.byId[id] = { id: id, label: id, shape: 'rect', hero: false, line: line, k: d.nodes.length }; d.nodes.push(d.byId[id]); }
-      return d.byId[id];
+      if (!d.byId[id]) { d.byId[id] = { id: id, label: id, shape: 'rect', hero: false, line: line, k: d.nodes.length, group: null }; d.nodes.push(d.byId[id]); }
+      var n = d.byId[id];
+      if (open.length && !n.placed) { n.group = open[open.length - 1]; n.placed = true; } // a box is in the frame it is first named in (Mermaid's: a frame may just list ids drawn elsewhere)
+      return n;
+    }
+    // `subgraph id [Title]`, `subgraph "Title"`, `subgraph Title` … `end`: a frame around the boxes named inside, frames in frames
+    function frame(rest, line) {
+      var m = /^([^\s\[\]"]+)\s*\[([^]*)\]$/.exec(rest), id, title;
+      if (m) { id = m[1]; title = dgLabel(m[2]); } else { title = dgLabel(rest); id = title || 'frame-' + d.groups.length; }
+      var g = { id: id, title: title, parent: open.length ? open[open.length - 1] : null, line: line, k: d.groups.length };
+      d.groups.push(g); open.push(g);
     }
     function chain(s, line) {
       var pos = 0;
@@ -638,12 +647,25 @@ globalThis.JMD = (function () {
       if (DIAGRAM_KINDS.indexOf(d.kind) < 0) return;
       dgStatements(l).forEach(function (s) {
         var w = s.split(/\s+/)[0].toLowerCase();
-        if (w === 'subgraph' || w === 'end' || w === 'direction') { d.ignored.push(w === 'end' ? 'subgraph' : w); return; }
+        if (w === 'subgraph') { frame(s.slice(8).trim(), line); return; }
+        if (w === 'end' && s.trim().toLowerCase() === 'end') { if (open.length) open.pop(); else d.bad.push({ text: s, line: line }); return; }
+        if (w === 'direction') { d.ignored.push(w); return; }
         if (w === 'style' || w === 'classdef' || w === 'linkstyle' || w === 'class') { d.ignored.push(w); return; }
         if (w === 'click' || w === 'call' || w === 'href') { d.refused.push({ text: s, line: line }); return; }
         if (!chain(s, line)) d.bad.push({ text: s, line: line });
       });
     });
+    if (d.groups.length) {
+      // an arrow to a frame's id named a box that is not one: it is not drawn, and the linter says so
+      var gid = {}; d.groups.forEach(function (g) { gid[g.id] = g; });
+      var isFrame = function (n) { return n.label === n.id && n.shape === 'rect' ? gid[n.id] : null; }; // a bare id that is a frame's: the frame, not a box
+      d.edges = d.edges.filter(function (e) { var f = isFrame(e.from) || isFrame(e.to); if (f) d.toFrame.push({ frame: f, line: e.line }); return !f; });
+      d.nodes = d.nodes.filter(function (n) { return !isFrame(n); });
+      d.nodes.forEach(function (n, k) { n.k = k; });
+      var used = {}; d.nodes.forEach(function (n) { for (var g = n.group; g; g = g.parent) used[g.k] = 1; });
+      d.groups = d.groups.filter(function (g) { return used[g.k]; }); // a frame with no box draws nothing
+      d.groups.forEach(function (g, k) { g.k = k; g.depth = 0; for (var p = g.parent; p; p = p.parent) g.depth++; });
+    }
     return d;
   }
 
@@ -681,11 +703,14 @@ globalThis.JMD = (function () {
     blocks.forEach(function (bl) { for (var j = 0; j < bl.n; j++, k++) out.push(bl.sum / bl.n + off[k]); });
     return out;
   }
+  // the frames a box sits in, outermost first; how many two such lists share
+  function dgPath(g) { var p = []; for (; g; g = g.parent) p.unshift(g); return p; }
+  function dgCommon(a, b) { var c = 0; while (c < a.length && c < b.length && a[c] === b[c]) c++; return c; }
   /* A layered layout (Sugiyama, small): cycles broken by a depth-first walk, ranks by longest path, a dummy node every rank a
      long edge crosses, the order of each rank by barycenters (the sweep with the fewest crossings kept), positions across the
      ranks by least squares toward the neighbours, gaps sized by the labels that sit in them. Laid out top-down, turned after. */
   function diagramLayout(d, fs, dir) {
-    var horiz = dir === 'LR' || dir === 'RL', CW = fs * 0.58, LH = fs * 1.22;
+    var horiz = dir === 'LR' || dir === 'RL', CW = fs * 0.58, LH = fs * 1.22, GR = d.groups || []; // a tree has no frames
     var maxCh = horiz ? 16 : 18;
     var V = d.nodes.map(function (n) {
       var lines = dgWrap(n.label, maxCh), sub = n.sub ? dgWrap(n.sub, Math.round(maxCh * 1.2)) : [];
@@ -699,7 +724,7 @@ globalThis.JMD = (function () {
       if (n.shape === 'diamond') { w = tw / 0.62 + fs * 1.4; h = th / 0.38 + fs * 0.8; }
       if (n.shape === 'circle') { w = h = Math.max(tw, th) + fs * 2; }
       w = Math.max(w, fs * 5);
-      return { n: n, lines: lines, sub: sub, w: w, h: h, out: [], inn: [], dummy: false };
+      return { n: n, lines: lines, sub: sub, w: w, h: h, out: [], inn: [], dummy: false, path: dgPath(n.group) };
     });
     var E = [];
     d.edges.forEach(function (e) { if (e.from !== e.to) E.push({ e: e, u: V[e.from.k], v: V[e.to.k], rev: false }); });
@@ -719,7 +744,7 @@ globalThis.JMD = (function () {
     var all = V.slice();
     E.forEach(function (x) {
       x.chain = [x.u];
-      for (var r = x.u.r + 1; r < x.v.r; r++) { var dm = { dummy: true, w: fs * 0.6, h: fs, r: r, out: [], inn: [] }; all.push(dm); x.chain.push(dm); }
+      for (var r = x.u.r + 1; r < x.v.r; r++) { var dm = { dummy: true, w: fs * 0.6, h: fs, r: r, out: [], inn: [], path: x.u.path.slice(0, dgCommon(x.u.path, x.v.path)) }; all.push(dm); x.chain.push(dm); }
       x.chain.push(x.v);
       for (var k = 0; k + 1 < x.chain.length; k++) { x.chain[k].out.push({ v: x.chain[k + 1] }); x.chain[k + 1].inn.push({ u: x.chain[k] }); }
     });
@@ -749,29 +774,89 @@ globalThis.JMD = (function () {
       if (c < bestC) { bestC = c; best = layers.map(function (L) { return L.slice(); }); }
     }
     layers = best; index();
+    // frames: the boxes of one frame side by side in every rank, and the frames in the same order from rank to rank
+    if (GR.length) {
+      var gk = GR.map(function (g) { var t = 0, c = 0; all.forEach(function (a) { if (a.path.indexOf(g) >= 0) { t += a.o; c++; } }); return c ? t / c : 0; });
+      var arrange = function (items, depth) {
+        var blocks = [], by = {};
+        items.forEach(function (a) {
+          var g = a.path[depth];
+          if (!g) { blocks.push({ key: a.o, items: [a] }); return; }
+          if (!by[g.k]) blocks.push(by[g.k] = { g: g, items: [] });
+          by[g.k].items.push(a);
+        });
+        blocks.forEach(function (b) { if (b.g) { b.key = b.items.reduce(function (t, a) { return t + a.o; }, 0) / b.items.length; b.items = arrange(b.items, depth + 1); } });
+        blocks.sort(function (p, q) { return p.key - q.key; });
+        var slots = [], gs = []; blocks.forEach(function (b, i) { if (b.g) { slots.push(i); gs.push(b); } });
+        gs.sort(function (p, q) { return gk[p.g.k] - gk[q.g.k]; }); slots.forEach(function (i, j) { blocks[i] = gs[j]; });
+        return [].concat.apply([], blocks.map(function (b) { return b.items; }));
+      };
+      layers = layers.map(function (L) { return arrange(L, 0); }); index();
+    }
     // across: each node's size along the rank and across it, depending on the direction
     function across(a) { return horiz ? a.h : a.w; }
     function along(a) { return horiz ? a.w : a.h; }
-    var sep = fs * 1.4;
-    layers.forEach(function (L) { var x = 0; L.forEach(function (a) { a.x = x + across(a) / 2; x += across(a) + sep; }); });
+    var sep = fs * 1.4, FP = fs * 0.55, FT = fs * 1.2; // a frame's padding, and the band its title sits in (above it, whatever the direction)
+    function border(a, b) { var c = dgCommon(a.path, b.path), ends = a.path.length - c, starts = b.path.length - c; return (ends + starts) * FP + (horiz ? starts * FT : 0); }
+    var label = function (t) { var ls = dgWrap(t, 16); return { lines: ls, w: Math.max.apply(null, ls.map(function (l) { return l.length; })) * fs * 0.52 + fs * 0.9, h: ls.length * fs * 1.12 + fs * 0.45 }; };
+    E.forEach(function (x) { if (x.e.label) x.lab = label(x.e.label); });
+    // in a frame, a box holds the room of the labels that leave it side by side: they stay inside the frame, under its title
+    if (GR.length) V.forEach(function (a) { var ls = E.filter(function (x) { return x.lab && x.u === a; }).map(function (x) { return horiz ? x.lab.h : x.lab.w; }); if (ls.length) a.room = ls.reduce(function (t, w) { return t + w; }, 0) + (ls.length - 1) * fs * 0.5; });
+    function slot(a) { return Math.max(across(a), a.room || 0); }
+    layers.forEach(function (L) { var x = 0; L.forEach(function (a, i) { a.x = x + slot(a) / 2; x += slot(a) + sep + (L[i + 1] ? border(a, L[i + 1]) : 0); }); });
     function relax(L, nbOf) {
       if (!L.length) return;
       var want = L.map(function (a) { var nb = nbOf(a); return nb.length ? nb.reduce(function (s, z) { return s + z.x; }, 0) / nb.length : a.x; });
-      var gap = []; for (var i = 0; i + 1 < L.length; i++) gap.push((across(L[i]) + across(L[i + 1])) / 2 + (L[i].dummy && L[i + 1].dummy ? fs * 0.6 : sep));
+      var gap = []; for (var i = 0; i + 1 < L.length; i++) gap.push((slot(L[i]) + slot(L[i + 1])) / 2 + (L[i].dummy && L[i + 1].dummy ? fs * 0.6 : sep) + border(L[i], L[i + 1]));
       var x = dgPlace(want, gap); L.forEach(function (a, i) { a.x = x[i]; });
     }
     for (var pass = 0; pass < 8; pass++) {
       for (var r1 = 1; r1 < R; r1++) relax(layers[r1], function (a) { return a.up; });
       for (var r2 = R - 2; r2 >= 0; r2--) relax(layers[r2], function (a) { return a.down; });
     }
+    // a frame is a rectangle over every rank it spans: a box of a rank that is not in it is pushed out of its width, to the side it is on
+    if (GR.length) for (var cp = 0; cp < 3; cp++) {
+      var ext = GR.map(function (g) {
+        var e = { x0: Infinity, x1: -Infinity, r0: Infinity, r1: -Infinity };
+        all.forEach(function (a) { var i = a.path.indexOf(g); if (i < 0) return; var lev = a.path.length - i; e.x0 = Math.min(e.x0, a.x - slot(a) / 2 - lev * (FP + (horiz ? FT : 0))); e.x1 = Math.max(e.x1, a.x + slot(a) / 2 + lev * FP); e.r0 = Math.min(e.r0, a.r); e.r1 = Math.max(e.r1, a.r); });
+        return e;
+      });
+      layers.forEach(function (L, r) {
+        GR.forEach(function (g, k) {
+          var e = ext[k]; if (r < e.r0 || r > e.r1) return;
+          var inside = L.map(function (a) { return a.path.indexOf(g) >= 0; }), first = inside.indexOf(true), last = inside.lastIndexOf(true), c = (e.x0 + e.x1) / 2;
+          L.forEach(function (a, i) {
+            if (inside[i]) return;
+            var right = first >= 0 ? i > last : a.x > c;
+            if (right) a.x = Math.max(a.x, e.x1 + sep + slot(a) / 2); else a.x = Math.min(a.x, e.x0 - sep - slot(a) / 2);
+          });
+        });
+        for (var i = 1; i < L.length; i++) L[i].x = Math.max(L[i].x, L[i - 1].x + (slot(L[i - 1]) + slot(L[i])) / 2 + sep + border(L[i - 1], L[i])); // the order kept, the gaps kept
+      });
+    }
     // along: each rank as thick as its biggest node; each gap as wide as the labels that sit in it need
-    var label = function (t) { var ls = dgWrap(t, 16); return { lines: ls, w: Math.max.apply(null, ls.map(function (l) { return l.length; })) * fs * 0.52 + fs * 0.9, h: ls.length * fs * 1.12 + fs * 0.45 }; };
     var gaps = []; for (var g = 0; g + 1 < R; g++) gaps.push(fs * 2.4);
     E.forEach(function (x) {
-      if (!x.e.label) return;
-      x.lab = label(x.e.label);
+      if (!x.lab) return;
       var gi = x.u.r; if (gi < gaps.length) gaps[gi] = Math.max(gaps[gi], (horiz ? x.lab.w + fs * 3 : x.lab.h + fs * 1.6));
     });
+    // a frame's title: on one line across a left-to-right flow (the frame runs along it), wrapped to the frame's width down a
+    // top-down one — never widening the frame over a box beside it; its band as tall as its lines
+    var TF = fs * 0.72;
+    GR.forEach(function (g) {
+      g.tl = [g.title]; g.ft = FT;
+      if (horiz || !g.title) return;
+      var x0 = Infinity, x1 = -Infinity; V.forEach(function (a) { if (a.path.indexOf(g) >= 0) { x0 = Math.min(x0, a.x - slot(a) / 2); x1 = Math.max(x1, a.x + slot(a) / 2); } });
+      g.tl = dgWrap(g.title, Math.max(8, Math.floor((x1 - x0 + FP * 0.4) / (TF * 0.56)))); g.ft = FT + (g.tl.length - 1) * TF * 1.2;
+    });
+    if (GR.length) {
+      var span = GR.map(function () { return [Infinity, -Infinity]; });
+      all.forEach(function (a) { a.path.forEach(function (g) { span[g.k][0] = Math.min(span[g.k][0], a.r); span[g.k][1] = Math.max(span[g.k][1], a.r); }); });
+      var need = function (a, r, side, titled) { return a.path.filter(function (g) { return span[g.k][side] === r; }).reduce(function (t, g) { return t + FP + (titled ? g.ft : 0); }, 0); };
+      for (var gb = 0; gb + 1 < R; gb++) {
+        gaps[gb] += Math.max.apply(null, layers[gb].map(function (a) { return need(a, gb, 1, dir === 'BT'); }).concat([0])) + Math.max.apply(null, layers[gb + 1].map(function (a) { return need(a, gb + 1, 0, dir === 'TD'); }).concat([0]));
+      }
+    }
     var thick = layers.map(function (L) { return Math.max.apply(null, L.map(along).concat([fs])); });
     var mid = [], y = 0; layers.forEach(function (L, r) { L.forEach(function (a) { a.y = y + thick[r] / 2; }); mid.push(y + thick[r] + (gaps[r] || 0) / 2); y += thick[r] + (gaps[r] || 0); });
     // edges: ports spread on a node's side, a curve through the dummies, the arrow on the last stretch
@@ -803,19 +888,44 @@ globalThis.JMD = (function () {
       var lx = dgPlace(LB.map(function (x) { return x.labAt.x; }), lgap);
       LB.forEach(function (x, i) { x.labAt.x = lx[i]; x.pts.splice(1, 0, { x: x.labAt.x, y: x.labAt.y }); });
     }
+    // frames: around their boxes and the frames inside them, the innermost first; the title's band on the side that ends up on top
+    var F = GR.slice().sort(function (p, q) { return q.depth - p.depth; }).map(function (g) {
+      var r = { g: g, x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }, take = function (cx, cy, w, h) { r.x0 = Math.min(r.x0, cx - w / 2); r.x1 = Math.max(r.x1, cx + w / 2); r.y0 = Math.min(r.y0, cy - h / 2); r.y1 = Math.max(r.y1, cy + h / 2); };
+      V.forEach(function (a) { if (a.path.indexOf(g) >= 0) take(a.x, a.y, across(a), along(a)); });
+      E.forEach(function (x) { if (x.lab && x.u.path.indexOf(g) >= 0 && x.v.path.indexOf(g) >= 0) take(x.labAt.x, x.labAt.y, horiz ? x.lab.h : x.lab.w, horiz ? x.lab.w : x.lab.h); }); // and the labels of the arrows inside it
+      return r;
+    });
+    F.forEach(function (r) {
+      F.forEach(function (c) { if (c.g.parent === r.g) { r.x0 = Math.min(r.x0, c.x0); r.x1 = Math.max(r.x1, c.x1); r.y0 = Math.min(r.y0, c.y0); r.y1 = Math.max(r.y1, c.y1); } });
+      r.x0 -= FP; r.x1 += FP; r.y0 -= FP; r.y1 += FP;
+      if (dir === 'TD') r.y0 -= r.g.ft; else if (dir === 'BT') r.y1 += r.g.ft; else r.x0 -= FT;
+      var tw = Math.max.apply(null, r.g.tl.map(function (l) { return l.length; })) * TF * 0.56 + FP * 1.6, have = horiz ? r.y1 - r.y0 : r.x1 - r.x0; // the title on one line: a frame is at least as wide as it
+      if (tw > have) { if (horiz) { r.y0 -= (tw - have) / 2; r.y1 += (tw - have) / 2; } else { r.x0 -= (tw - have) / 2; r.x1 += (tw - have) / 2; } }
+    });
     // extent, then the turn: top-down is the frame everything above was computed in
-    var minX = Infinity, maxX = -Infinity, H = y - (gaps[R - 1] || 0);
+    var minX = Infinity, maxX = -Infinity, minY = 0, maxY = y - (gaps[R - 1] || 0);
     all.forEach(function (a) { minX = Math.min(minX, a.x - across(a) / 2); maxX = Math.max(maxX, a.x + across(a) / 2); });
     E.forEach(function (x) { if (x.lab) { minX = Math.min(minX, x.labAt.x - (horiz ? x.lab.h : x.lab.w) / 2); maxX = Math.max(maxX, x.labAt.x + (horiz ? x.lab.h : x.lab.w) / 2); } });
-    var pad = fs * 0.3, W = maxX - minX;
+    F.forEach(function (r) { minX = Math.min(minX, r.x0); maxX = Math.max(maxX, r.x1); minY = Math.min(minY, r.y0); maxY = Math.max(maxY, r.y1); });
+    var pad = fs * 0.3, W = maxX - minX, H = maxY - minY;
     function turn(p) {
-      var a = p.x - minX + pad, b = p.y + pad;
+      var a = p.x - minX + pad, b = p.y - minY + pad;
       if (dir === 'BT') b = H + 2 * pad - b;
       if (dir === 'LR') return { x: b, y: a };
       if (dir === 'RL') return { x: H + 2 * pad - b, y: a };
       return { x: a, y: b };
     }
-    var out = { w: (horiz ? H : W) + 2 * pad, h: (horiz ? W : H) + 2 * pad, fs: fs, dir: dir, AL: AL, nodes: [], edges: [] };
+    var out = { w: (horiz ? H : W) + 2 * pad, h: (horiz ? W : H) + 2 * pad, fs: fs, dir: dir, AL: AL, nodes: [], edges: [], frames: [], clash: [] };
+    F.slice().reverse().forEach(function (r) { // outermost first: drawn under the frames they hold
+      var p = turn({ x: r.x0, y: r.y0 }), q = turn({ x: r.x1, y: r.y1 });
+      out.frames.push({ g: r.g, x: Math.min(p.x, q.x), y: Math.min(p.y, q.y), w: Math.abs(q.x - p.x), h: Math.abs(q.y - p.y), FP: FP, FT: FT, TF: TF });
+    });
+    // what a frame covers that is not in it: a box ranked between two of its own, or a sibling frame — the linter says it
+    var hit = function (a, b) { return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1; };
+    F.forEach(function (r) {
+      V.forEach(function (a) { if (a.path.indexOf(r.g) < 0 && hit(r, { x0: a.x - across(a) / 2, x1: a.x + across(a) / 2, y0: a.y - along(a) / 2, y1: a.y + along(a) / 2 })) out.clash.push({ frame: r.g, box: a.n }); });
+      F.forEach(function (o) { if (o.g.k > r.g.k && dgPath(o.g).indexOf(r.g) < 0 && dgPath(r.g).indexOf(o.g) < 0 && hit(r, o)) out.clash.push({ frame: r.g, other: o.g }); });
+    });
     V.forEach(function (a) { var c = turn(a); out.nodes.push({ n: a.n, lines: a.lines, sub: a.sub, x: c.x, y: c.y, w: a.w, h: a.h, r: a.r }); });
     E.forEach(function (x) {
       var pts = x.pts.map(turn);
@@ -878,9 +988,18 @@ globalThis.JMD = (function () {
       var ty = n.shape === 'cylinder' ? a.y + fs * 0.2 : a.y;
       bk[n.k].push('<g class="dg-node dg-' + n.shape + (n.root ? ' dg-root' : '') + (n.hero ? ' is-hero' : '') + '" style="--k:' + a.r + '"' + (n.line != null ? ' data-node-line="' + (+n.line) + '"' : '') + '>' + sh + dgNodeText(a, ty, fs) + '</g>');
     });
+    L.frames.forEach(function (r) { // under everything, there from the start: a frame is the scene the steps happen in
+      out.push('<g class="dg-frame"><rect x="' + f1(r.x) + '" y="' + f1(r.y) + '" width="' + f1(r.w) + '" height="' + f1(r.h) + '" rx="' + f1(fs * 0.7) + '"/></g>');
+    });
+    var titles = L.frames.filter(function (r) { return r.g.title; }).map(function (r) { // over the arrows: one that enters the frame from above passes under its title
+      var tw = Math.max.apply(null, r.g.tl.map(function (l) { return l.length; })) * r.TF * 0.52 + r.TF * 0.7, th = r.g.tl.length * r.TF * 1.2, x0 = r.x + r.FP - r.TF * 0.5, y0 = r.y + r.FT * 0.55 - r.TF * 0.6;
+      return '<g class="dg-frame-title"><rect x="' + f1(x0) + '" y="' + f1(y0) + '" width="' + f1(tw) + '" height="' + f1(th) + '" rx="' + f1(th / 2 > r.TF ? r.TF * 0.5 : th / 2) + '"/><text dominant-baseline="central" font-size="' + f1(r.TF) + '">' +
+        r.g.tl.map(function (l, i) { return '<tspan x="' + f1(r.x + r.FP) + '" y="' + f1(r.y + r.FT * 0.55 + i * r.TF * 1.2) + '">' + esc(l) + '</tspan>'; }).join('') + '</text></g>';
+    });
     L.nodes.map(function (a, k) { return { a: a, k: k }; }).sort(function (p, q) { return p.a.r - q.a.r || (horiz ? p.a.y - q.a.y : p.a.x - q.a.x); })
       .forEach(function (z) { out.push('<g class="dg-step">' + bk[z.k].join('') + '</g>'); });
-    return { svg: '<svg class="diagram-svg" viewBox="0 0 ' + f1(L.w) + ' ' + f1(L.h) + '" width="' + f1(L.w * s) + '" height="' + f1(L.h * s) + '" role="img" aria-hidden="true">' + out.join('') + '</svg>', scale: s, fs: fs, w: L.w * s, h: L.h * s };
+    out.push.apply(out, titles);
+    return { svg: '<svg class="diagram-svg" viewBox="0 0 ' + f1(L.w) + ' ' + f1(L.h) + '" width="' + f1(L.w * s) + '" height="' + f1(L.h * s) + '" data-fs="' + f1(fs) + '" data-s="' + s.toFixed(3) + '" role="img" aria-hidden="true">' + out.join('') + '</svg>', scale: s, fs: fs, w: L.w * s, h: L.h * s, clash: L.clash }; // data-fs, data-s: what fitOverflow needs to resize it to the room the slide has
   }
   // a node's words: its label, and under it, smaller, the role a tree gives it (`- name | role`)
   function dgNodeText(a, y, fs) {
@@ -900,6 +1019,7 @@ globalThis.JMD = (function () {
     var linked = {};
     var rows = d.edges.filter(function (e) { return e.kind !== 'hidden'; }).map(function (e) { linked[e.from.id] = linked[e.to.id] = 1; return '<li>' + esc(e.from.label) + (e.back ? ' ↔ ' : e.arrow ? ' → ' : ' — ') + esc(e.to.label) + (e.label ? ' (' + esc(e.label) + ')' : '') + '</li>'; });
     d.nodes.forEach(function (n) { if (!linked[n.id]) rows.push('<li>' + esc(n.label) + '</li>'); });
+    (d.groups || []).forEach(function (g) { rows.push('<li>' + esc(g.title || g.id) + ' : ' + d.nodes.filter(function (n) { return dgPath(n.group).indexOf(g) >= 0; }).map(function (n) { return esc(n.label); }).join(', ') + '</li>'); });
     return '<ul class="chart-data">' + rows.join('') + '</ul>';
   }
   function diagramDir(d, ctx) { return ctx && ctx.layout === 'story' ? (d.dir === 'BT' ? 'BT' : 'TD') : d.dir; } // a Story screen is tall: it reads down
@@ -1449,12 +1569,13 @@ globalThis.JMD = (function () {
             dg.bad.forEach(function (x) { err(n, b.name, 'diagram-syntax', 'line ' + x.line + ': `' + cut(x.text, 60) + '` is not read — write `A[Text] --> B[Text]`, a label as `-->|label|`, one statement a line'); });
             dg.refused.forEach(function (x) { err(n, b.name, 'diagram-click', 'line ' + x.line + ': `' + x.text.split(/\s+/)[0] + '` binds code to a node, and a deck is data — remove the line'); });
             var ign = dg.ignored.filter(function (w, i) { return dg.ignored.indexOf(w) === i; });
-            if (ign.indexOf('subgraph') >= 0) warn(n, b.name, 'diagram-subgraph', '`subgraph` is not drawn yet: its nodes are, without the frame');
-            ign = ign.filter(function (w) { return w !== 'subgraph' && w !== 'direction'; });
+            dg.toFrame.forEach(function (x) { warn(n, b.name, 'diagram-subgraph', 'line ' + x.line + ': an arrow to the frame `' + x.frame.id + '` is not drawn — point it at a box inside the frame'); });
+            ign = ign.filter(function (w) { return w !== 'direction'; });
             if (ign.length) warn(n, b.name, 'diagram-style', ign.join(', ') + ' ignored: the brand colors the diagram — `{.hero}` (or `:::hero`) is the one mark read');
             if (dg.nodes.length > dmax) err(n, b.name, 'max-items', dg.nodes.length + ' nodes, maximum ' + dmax + ' on a ' + lay + ': split the diagram over two ' + (lay === 'story' ? 'screens' : 'slides') + ', or keep the steps that carry the point');
             else if (dg.nodes.length) {
               var dctx = { layout: lay }, fit = diagramSvg(dg, diagramBox(dctx, has(b.attrs, 'right')), diagramDir(dg, dctx));
+              fit.clash.forEach(function (c) { warn(n, b.name, 'diagram-subgraph', 'the frame `' + (c.frame.title || c.frame.id) + '` covers ' + (c.box ? 'the box `' + c.box.label.replace(/\n/g, ' ') + '`, which is not in it' : 'the frame `' + (c.other.title || c.other.id) + '`') + ' — link its boxes to each other, or move that box into it'); });
               if (fit.fs * fit.scale < DIAGRAM_MIN_TYPE) err(n, b.name, 'diagram-dense', 'drawn at ' + Math.round(fit.fs * fit.scale) + ' px to fit, too small to read: fewer nodes, shorter labels, or the other direction (' + (/LR|RL/.test(dg.dir) ? 'TD' : 'LR') + ')');
             }
           }
@@ -1535,6 +1656,31 @@ globalThis.JMD = (function () {
   // author is told. Why: the model writes without measuring; nine overflows out of ten are a few lines over, and a second
   // build for them is a call some hosts do not leave. A statement or a divider is one sentence: never fitted.
   var FIT_MIN = 0.85;
+  /* A flowchart takes the height its slide has left (1.30.0): drawn for a fixed box, it is shrunk when the slide runs over — never
+     under DIAGRAM_MIN_TYPE — and grown into the room left below, within its column and DIAGRAM_GROW. Its own size first, the
+     whole slide's zoom (fit) only after. Measured in design px; the size it was drawn at is kept to start from on every pass. */
+  function roomDiagrams(body, measure, limit, scale) {
+    var svgs = [].slice.call(body.querySelectorAll('svg.diagram-svg[data-fs]'));
+    if (!svgs.length) return;
+    svgs.forEach(function (g) {
+      if (!g.dataset.w) { g.dataset.w = g.getAttribute('width'); g.dataset.h = g.getAttribute('height'); }
+      g.setAttribute('width', g.dataset.w); g.setAttribute('height', g.dataset.h);
+    });
+    var size = function (g, k) { g.setAttribute('width', (g.dataset.w * k).toFixed(1)); g.setAttribute('height', (g.dataset.h * k).toFixed(1)); };
+    var floor = function (g) { return DIAGRAM_MIN_TYPE / (g.dataset.fs * g.dataset.s); }, ceil = function (g) { return DIAGRAM_GROW / g.dataset.s; };
+    var bottom = measure(), tall = svgs.reduce(function (t, g) { return t + +g.dataset.h; }, 0);
+    if (bottom > limit) {
+      for (var pass = 0; pass < 3 && bottom > limit; pass++) { // side by side, two diagrams do not add up: measured again after each try
+        var k = Math.max(0, (tall - (bottom - limit)) / tall);
+        svgs.forEach(function (g) { size(g, Math.min(1, Math.max(floor(g), k * (g.getAttribute('height') / g.dataset.h)))); });
+        bottom = measure();
+      }
+    } else if (svgs.length === 1) { // one diagram, room below: it grows into it, as wide as its column lets it
+      var g = svgs[0], col = g.parentNode.getBoundingClientRect().width / scale, w = +g.dataset.w, h = +g.dataset.h;
+      var grow = Math.min(1 + (limit - bottom) / h, col / w, ceil(g));
+      if (grow > 1.02) { size(g, grow); if (measure() > limit) size(g, 1); }
+    }
+  }
   function fitOverflow(track, out, lay) {
     var page = PAGES[lay] || PAGES.slide, slides = track.querySelectorAll('.slide');
     if (!page.limit) return out;
@@ -1542,9 +1688,11 @@ globalThis.JMD = (function () {
       var body = sec.querySelector('.body-pad'); if (!body) return;
       body.style.zoom = ''; body.style.width = ''; sec.classList.remove('is-fit'); delete sec.dataset.fit;
       var last = body.lastElementChild; if (!last) return;
-      var r0 = sec.getBoundingClientRect(), rb = body.getBoundingClientRect(), r1 = last.getBoundingClientRect();
-      var scale = r0.width / page.w;
-      var top = (rb.top - r0.top) / scale, bottom = (r1.bottom - r0.top) / scale, width = rb.width / scale;
+      var r0 = sec.getBoundingClientRect(), scale = r0.width / page.w;
+      var measure = function () { return (last.getBoundingClientRect().bottom - r0.top) / scale; };
+      roomDiagrams(body, measure, page.limit, scale);
+      var rb = body.getBoundingClientRect();
+      var top = (rb.top - r0.top) / scale, bottom = measure(), width = rb.width / scale;
       if (bottom <= page.limit) return;
       var s = Math.floor(((page.limit - top) / (bottom - top)) * 0.99 * 100) / 100; // a hair under, so the measure that follows is clean
       if (s < FIT_MIN) return;

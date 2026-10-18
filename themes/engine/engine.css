@@ -418,6 +418,8 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
 .dg-head{fill:var(--d-edge)}.dg-head.dg-thick{fill:var(--d-line)}
 .dg-label rect{fill:var(--d-label-bg)}
 .dg-label text{fill:var(--d-label);font-weight:700}
+.dg-frame rect{fill:color-mix(in srgb,var(--d-line) 7%,transparent);stroke:var(--d-line);stroke-width:2}
+.dg-frame-title rect{fill:var(--d-label-bg)}.dg-frame-title text{fill:var(--d-label);font-weight:800}
 .diagram--none pre{margin:0;font-size:16px;color:var(--jp-ink-soft);white-space:pre-wrap}
 .body-pad:has(> .diagram){--body-gap:32px}
 .dg-card{box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:13px 14px;border:2.5px solid var(--d-line);border-radius:14px;background:var(--d-fill);color:var(--d-text);text-align:center}
