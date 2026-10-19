@@ -609,7 +609,13 @@
       var at = hostedDeck(), item = function (tag, attrs, title, about, key) {
         return '<' + tag + ' ' + attrs + ' data-key="' + key + '"><b>' + title + '</b><kbd>' + key + '</kbd><small>' + about + '</small></' + tag + '>';
       };
-      dlList.innerHTML = item('button', 'type="button" data-dl="html"', 'Page · .html', 'the deck in one file — opens in any browser, offline, and keeps its source · runtime ' + RUNTIME_VERSION, 'S')
+      /* Share in Jamespot (1.32.0), first: the server puts its address in the page it serves (`#dl-jamespot`, mcp/chrome.mjs)
+         only for the deck's owner, signed in, where Jamespot answers — so a file, a stranger or a 24-hour link never sees it.
+         The page may not post (its CSP), so it is a link, to a new tab: the round trip to Jamespot leaves the deck open. */
+      var jp = document.getElementById('dl-jamespot'), jpHref = jp && /^\/home\/share\?id=[A-Za-z0-9_-]{16}$/.test(jp.getAttribute('href')) ? jp.getAttribute('href') : '';
+      document.getElementById('dl-lbl').textContent = jpHref ? 'Share or download' : 'Download';
+      dlList.innerHTML = (jpHref ? item('a', 'href="' + jpHref + '" target="_blank" rel="noopener" data-share-jamespot', 'Share in Jamespot', 'publish it in a group of your platform, as a link to this deck — never its edit link', 'J') : '')
+        + item('button', 'type="button" data-dl="html"', 'Page · .html', 'the deck in one file — opens in any browser, offline, and keeps its source · runtime ' + RUNTIME_VERSION, 'S')
         + (at ? item('a', 'href="' + at + '/deck.pdf" download', 'PDF · .pdf', 'to send or print — every page, drawn by the server', 'P')
               : item('button', 'type="button" data-dl="pdf"', 'PDF · .pdf', 'through the print dialog: choose Save as PDF — waits for the errors the check reports', 'P'))
         + (at && state.layout !== 'webpage' ? item('a', 'href="' + at + '/deck.pptx" download', 'PowerPoint · .pptx', 'for PowerPoint, Keynote, OnlyOffice — the text stays editable, the motion stays here', 'X') : '')
@@ -646,12 +652,13 @@
   }
   dlList.addEventListener('click', function (e) {
     var b = e.target.closest('[data-dl]'), a = e.target.closest('a');
+    if (a && a.hasAttribute('data-share-jamespot')) { setTimeout(closeDownload, 0); return; } // a page in a new tab, not a file
     if (b) { closeDownload(); if (b.getAttribute('data-dl') === 'pdf') printPDF(); else exportSelfContained(); }
     else if (a) { watchDownload(a); setTimeout(closeDownload, 0); } // the href carries the token before the browser follows it
   });
   dlEl.addEventListener('click', function (e) { if (!e.target.closest('.box')) closeDownload(); });
   /* The menu without a mouse (2026-10-07): ↑ ↓ move (round the list), Enter takes the one in focus, each format has
-     its letter — S the page, P the PDF, X PowerPoint (.pptX: P is the PDF's), I images — and Esc or D closes. Every file
+     its letter — J sharing in Jamespot where it is offered, S the page, P the PDF, X PowerPoint (.pptX: P is the PDF's), I images — and Esc or D closes. Every file
      leaves through here: S and P are no longer keys of their own (2026-10-07: a PDF is a download, not a print). While the
      menu is open these keys are the menu's: an arrow does not move the slides behind it, Enter does not turn the page. */
   function downloadKey(e) {
