@@ -19,9 +19,97 @@
   try { brand = JSON.parse(document.getElementById('brand').textContent || '{}'); } catch (e) { }
   try { assets = JSON.parse(document.getElementById('assets').textContent || '{}'); } catch (e) { }
   var template = '<!doctype html>\n' + document.documentElement.outerHTML; // pristine template, for the self-contained export
+  /* ── the words of the page, in the reader's language (1.34.0, Alain, 2026-10-19: « suivre le navigateur du lecteur, comme le
+     reste du site ») ──
+     `?lang=fr|en` in the address wins, else the browser's first language: French when it begins with fr, English otherwise —
+     the rule of every page of the site (mcp/chrome.mjs homeLang), here from `navigator`, so a file opened from a disk follows
+     it too. The deck's own `lang:` is not consulted: it says what the slides are written in, not who reads them. Only the
+     page's own words move; the linter's findings and the format's hints stay in English, the language agents read them in.
+     The template above is taken before anything is translated, so a downloaded page translates itself for its own reader. */
+  var UI_LANG = (function () {
+    var q = /[?&]lang=(fr|en)\b/.exec(location.search); if (q) return q[1];
+    var n = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+    return /^fr\b/i.test(n) ? 'fr' : 'en';
+  })();
+  var s_ = function (n, one, many) { return n + ' ' + (n === 1 ? one : many); };
+  var UI = {
+    en: {
+      screens: 'Screens', screen: function (k) { return 'Screen ' + k; }, motion: 'motion: ', noNotes: 'No notes on this slide.',
+      status: function (e, w) { return e ? s_(e, 'error', 'errors') : w ? s_(w, 'remark', 'remarks') : 'clean'; },
+      valid: '✓ valid jmd/1', noNotesN: function (n) { return s_(n, 'slide', 'slides') + ' without speaker notes (N shows them while presenting)'; },
+      kb: ' KB', mb: ' MB',
+      row: { file: 'file', runtime: 'runtime', author: 'author', slides: 'slides', layout: 'layout', brand: 'brand', theme: 'theme', story: 'story', language: 'language', date: 'date', images: 'images', size: 'size', source: 'imported from', format: 'format' },
+      built: ' · built ', withNotes: ' with notes', asks: function (b) { return ' (the deck asks for ' + b + ')'; }, noIntents: '— (no intents)',
+      layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'screen', 'screens'); },
+      layoutWeb: function (n) { return 'webpage · one page, ' + s_(n, 'section', 'sections'); }, embedded: function (n) { return n + ' embedded'; }, none: 'none', srcSize: ' · source ',
+      info: 'Info', editHeader: 'edit the header', lintSays: 'the linter has something to say', lintHappy: 'the linter is happy',
+      document: 'Document', slide: 'Slide', lines: function (a, b) { return ' · lines ' + a + '–' + b; }, noHeader: ' · no header yet', edited: ' · edited',
+      headerClean: '✓ the header is clean', slideClean: function (n) { return '✓ slide ' + n + ' is clean'; }, unknownBlock: 'unknown block — ',
+      cycleLayout: 'cycle the layout: ', cycleBg: 'cycle the slide background', saved: function (f) { return '✓ saved ' + f; }, jmdFile: 'jmd presentation',
+      pdfWaits: 'The PDF waits for the errors below — they would print as they look.',
+      shareOrDl: 'Share or download', dl: 'Download', jp: 'Share in Jamespot', jpAbout: 'publish it in a group of your platform, as a link to this deck — never its edit link',
+      page: 'Page · .html', pageAbout: function (v) { return 'the deck in one file — opens in any browser, offline, and keeps its source · runtime ' + v; },
+      pdfServer: 'to send or print — every page, drawn by the server', pdfPrint: 'through the print dialog: choose Save as PDF — waits for the errors the check reports',
+      pptxAbout: 'for PowerPoint, Keynote, OnlyOffice — the text stays editable, the motion stays here', images: 'Images · .zip', imagesAbout: 'one PNG per screen, in a zip',
+      drawing: function (k, s) { return 'Drawing ' + { pptx: 'the PowerPoint', pdf: 'the PDF', png: 'the images' }[k] + ' · ' + s + ' s'; },
+      ready: function (k) { return 'Ready — ' + { pptx: 'the PowerPoint is', pdf: 'the PDF is', png: 'the images are' }[k] + ' in your downloads'; },
+      busy: 'The server is drawing other files — try again in a few seconds', cannot: { pptx: 'This deck cannot leave as PowerPoint', pdf: 'This deck cannot leave as a PDF', png: 'This deck cannot leave as images' },
+      gone: 'This deck is no longer on the server', silent: 'Nothing came back in two minutes — try again', copied: 'link copied',
+    },
+    fr: {
+      screens: 'Écrans', screen: function (k) { return 'Écran ' + k; }, motion: 'mouvement : ', noNotes: 'Pas de notes sur cette slide.',
+      status: function (e, w) { return e ? s_(e, 'erreur', 'erreurs') : w ? s_(w, 'remarque', 'remarques') : 'propre'; },
+      valid: '✓ jmd/1 valide', noNotesN: function (n) { return s_(n, 'slide', 'slides') + ' sans notes de l’orateur (N les montre pendant la présentation)'; },
+      kb: ' Ko', mb: ' Mo',
+      row: { file: 'fichier', runtime: 'moteur', author: 'auteur', slides: 'slides', layout: 'layout', brand: 'marque', theme: 'thème', story: 'récit', language: 'langue', date: 'date', images: 'images', size: 'taille', source: 'importé de', format: 'format' },
+      built: ' · construit le ', withNotes: ' avec notes', asks: function (b) { return ' (le deck demande ' + b + ')'; }, noIntents: '— (pas d’intents)',
+      layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'écran', 'écrans'); },
+      layoutWeb: function (n) { return 'webpage · une page, ' + s_(n, 'section', 'sections'); }, embedded: function (n) { return n + (n === 1 ? ' intégrée' : ' intégrées'); }, none: 'aucune', srcSize: ' · source ',
+      info: 'Infos', editHeader: 'modifier l’en-tête', lintSays: 'le linter a quelque chose à dire', lintHappy: 'le linter est content',
+      document: 'Document', slide: 'Slide', lines: function (a, b) { return ' · lignes ' + a + '–' + b; }, noHeader: ' · pas encore d’en-tête', edited: ' · modifié',
+      headerClean: '✓ l’en-tête est propre', slideClean: function (n) { return '✓ la slide ' + n + ' est propre'; }, unknownBlock: 'bloc inconnu — ',
+      cycleLayout: 'changer de layout : ', cycleBg: 'changer le fond de la slide', saved: function (f) { return '✓ ' + f + ' enregistré'; }, jmdFile: 'présentation jmd',
+      pdfWaits: 'Le PDF attend que les erreurs ci-dessous soient corrigées : elles s’imprimeraient telles quelles.',
+      shareOrDl: 'Partager ou télécharger', dl: 'Télécharger', jp: 'Partager dans Jamespot', jpAbout: 'la publier dans un groupe de votre plateforme, en lien vers ce deck — jamais son lien de modification',
+      page: 'Page · .html', pageAbout: function (v) { return 'le deck en un fichier — s’ouvre dans tout navigateur, hors ligne, et garde sa source · moteur ' + v; },
+      pdfServer: 'à envoyer ou imprimer — toutes les pages, dessinées par le serveur', pdfPrint: 'par la fenêtre d’impression : choisissez Enregistrer en PDF — attend que les erreurs signalées soient corrigées',
+      pptxAbout: 'pour PowerPoint, Keynote, OnlyOffice — le texte reste modifiable, le mouvement reste ici', images: 'Images · .zip', imagesAbout: 'un PNG par écran, dans un zip',
+      drawing: function (k, s) { return 'Dessin ' + { pptx: 'du PowerPoint', pdf: 'du PDF', png: 'des images' }[k] + ' · ' + s + ' s'; },
+      ready: function (k) { return { pptx: 'Prêt — le PowerPoint est', pdf: 'Prêt — le PDF est', png: 'Prêt — les images sont' }[k] + ' dans vos téléchargements'; },
+      busy: 'Le serveur dessine d’autres fichiers — réessayez dans quelques secondes', cannot: { pptx: 'Ce deck ne peut pas sortir en PowerPoint', pdf: 'Ce deck ne peut pas sortir en PDF', png: 'Ce deck ne peut pas sortir en images' },
+      gone: 'Ce deck n’est plus sur le serveur', silent: 'Rien n’est revenu en deux minutes — réessayez', copied: 'lien copié',
+    },
+  }[UI_LANG];
+  /* The page's fixed words (runtime/index.html), in French: each element carries `data-ui`, and its English stays in the
+     template — the default, and what an export starts from. Ours, so innerHTML is safe here; nothing of a deck goes in. */
+  var STATIC_FR = {
+    'hud.nav': ' naviguer', 'hud.present': ' présenter', 'hud.edit': ' modifier', 'hud.dl': ' télécharger', 'hud.open': ' ouvrir', 'hud.keys': ' toutes les touches',
+    'notes': 'Notes de l’orateur', 'help.lbl': 'james-jmd — touches',
+    'help.dl': '<dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Espace</kbd></dt><dd>slide précédente / suivante · en mouvement <em>step</em>, l’élément suivant d’abord</dd>'
+      + '<dt><kbd>Début</kbd> <kbd>Fin</kbd></dt><dd>première / dernière slide</dd>'
+      + '<dt><kbd>F</kbd></dt><dd>présenter : le deck en plein écran (F de nouveau, ou Échap, pour sortir)</dd>'
+      + '<dt><kbd>N</kbd></dt><dd>notes de l’orateur</dd>'
+      + '<dt><kbd>M</kbd></dt><dd>mouvement : <em>none · soft · slide · zoom · step</em> — un seul mode pour tout le deck, retenu ici</dd>'
+      + '<dt><kbd>I</kbd></dt><dd>infos : le fichier, sa marque, son auteur, sa taille — et ce qu’en dit le linter</dd>'
+      + '<dt><kbd>E</kbd></dt><dd>modifier : la source de la slide à droite ; cliquez un texte de la slide pour le modifier sur place · <em>document</em> ouvre l’en-tête (layout, titre, marque…)</dd>'
+      + '<dt><kbd>D</kbd></dt><dd>partager ou télécharger : <kbd>J</kbd> dans Jamespot, sur un deck à vous en ligne · <kbd>S</kbd> le deck en une page, <kbd>P</kbd> un PDF — et sur sa page du serveur <kbd>X</kbd> PowerPoint, <kbd>I</kbd> images · <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Entrée</kbd> marchent aussi</dd>'
+      + '<dt><kbd>⌘S</kbd></dt><dd>enregistrer le <code>.jmd</code> (en mode modification)</dd>'
+      + '<dt><kbd>Q</kbd></dt><dd>le QR code de ce deck, que la salle scanne — sur un deck partagé (sa page <code>/deck/…</code>)</dd>'
+      + '<dt><kbd>O</kbd></dt><dd>ouvrir un autre <code>.jmd</code> — ou en déposer un sur la fenêtre</dd>'
+      + '<dt><kbd>?</kbd> <kbd>Échap</kbd></dt><dd>cette aide / fermer</dd>',
+    'help.foot': 'Un <code>.jmd</code>, c’est du Markdown avec des blocs. Le thème décide de l’allure, la marque de ses couleurs et de ses formes, le linter de ce qui tient. Format, contrat et exemples : <code>jmd spec</code>, ou l’outil <code>jmd_spec</code> du connecteur.',
+    'dl.lbl': 'Télécharger', 'dl.foot': 'Le <code>.jmd</code> reste la source : un fichier modifié ailleurs n’y revient pas.',
+    'edit.hint': 'cliquez un texte · Échap fermer · ⌘S', // no longer than the English: the bar is narrow
+    'open.p': 'Déposez un fichier <code>.jmd</code> ici, ou ouvrez-en un. Il s’affiche aux couleurs de sa marque, s’imprime en PDF, et repart en <code>.james-jmd.html</code> autonome.',
+    'open.label': 'Ouvrir un .jmd',
+  };
+  if (UI_LANG === 'fr') {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ui]'), function (el) { var v = STATIC_FR[el.getAttribute('data-ui')]; if (v != null) el.innerHTML = v; });
+    var et = document.getElementById('edit-target'); if (et) et.title = 'modifier l’en-tête du document : layout, titre, marque, langue, date, auteur';
+  }
   /* Where one is, on a touch screen (1.17.0): no key to press, no counter one reads at a glance — the segmented bar of a story,
      one segment a screen, the ones seen filled; a tap on a segment goes there. Shown by engine.css on a coarse pointer only. */
-  var progress = document.createElement('nav'); progress.id = 'progress'; progress.setAttribute('aria-label', 'Screens'); document.body.appendChild(progress);
+  var progress = document.createElement('nav'); progress.id = 'progress'; progress.setAttribute('aria-label', UI.screens); document.body.appendChild(progress);
   /* The bar is white over the dark band around a screen and over a dark screen, ink over a light one (2026-10-07: on a
      white slide it was gone). What is under it is measured, not guessed: a phone less tall than an iPhone puts the bar on the
      screen itself, a taller one in the band. */
@@ -78,7 +166,7 @@
     if (isDoc()) return;
     var next = MOTIONS[(MOTIONS.indexOf(state.motion) + 1) % MOTIONS.length];
     setMotion(next, true);
-    counter.textContent = 'motion: ' + next; wake();
+    counter.textContent = UI.motion + next; wake();
     clearTimeout(cycleMotion.t); cycleMotion.t = setTimeout(function () { counter.textContent = pad2(state.i + 1) + ' / ' + state.slides.length; }, 1400);
   }
   // step mode: the items of the current slide are revealed one by one on →, the slide changes when none is left
@@ -157,7 +245,7 @@
     counter.textContent = pad2(state.i + 1) + ' / ' + state.slides.length;
     Array.prototype.forEach.call(progress.children, function (b, k) { b.classList.toggle('is-done', k <= state.i); b.setAttribute('aria-current', k === state.i ? 'step' : 'false'); });
     tintProgress();
-    notesTxt.innerHTML = state.slides[state.i].dataset.notes || '<span style="opacity:.4">No notes on this slide.</span>';
+    notesTxt.innerHTML = state.slides[state.i].dataset.notes || '<span style="opacity:.4">' + UI.noNotes + '</span>';
     try { history.replaceState(null, '', '#' + (state.i + 1)); } catch (e) { }
     if (state.editing) editorFill();
   }
@@ -169,7 +257,7 @@
     var e = 0, w = 0; L.forEach(function (x) { if (x.level === 'error') e++; else if (x.level === 'warning') w++; });
     return { errors: e, warnings: w };
   }
-  function statusText(c) { return c.errors ? c.errors + ' error' + (c.errors === 1 ? '' : 's') : c.warnings ? c.warnings + ' remark' + (c.warnings === 1 ? '' : 's') : 'clean'; }
+  function statusText(c) { return UI.status(c.errors, c.warnings); }
   function statusClass(el, c) { el.classList.toggle('is-err', c.errors > 0); el.classList.toggle('is-warn', !c.errors && c.warnings > 0); el.classList.toggle('is-clean', !c.errors && !c.warnings); }
   function findingLine(x) {
     return '<div class="' + (x.level === 'error' ? 'err' : x.level === 'info' ? 'info' : 'warn') + '"><span class="s">' + pad2(x.slide) + '</span>' + esc((x.block ? x.block + ' — ' : '') + x.message) + '</div>';
@@ -178,14 +266,14 @@
   function reportHtml() {
     var L = state.lint, c = counts(L), html = '';
     if (infoNote) html += '<div class="note">' + esc(infoNote) + '</div>';
-    if (!c.errors && !c.warnings) html += '<div class="ok">✓ valid jmd/1</div>';
+    if (!c.errors && !c.warnings) html += '<div class="ok">' + UI.valid + '</div>';
     L.filter(function (x) { return x.level !== 'info'; }).forEach(function (x) { html += findingLine(x); });
     var infos = L.filter(function (x) { return x.level === 'info'; });
-    if (infos.length) html += '<div class="info" style="margin-top:14px">' + infos.length + ' slide' + (infos.length === 1 ? '' : 's') + ' without speaker notes (N shows them while presenting)</div>';
+    if (infos.length) html += '<div class="info" style="margin-top:14px">' + UI.noNotesN(infos.length) + '</div>';
     return html;
   }
   function showLint() { showInfo(); }
-  function fmtSize(n) { return n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+  function fmtSize(n) { return n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + UI.kb : (UI_LANG === 'fr' ? (n / 1048576).toFixed(1).replace('.', ',') : (n / 1048576).toFixed(1)) + UI.mb; }
   // the file's card — and, at the bottom, how the linter sees it (the report unfolds under it)
   function showInfo() {
     var m = state.doc ? state.doc.meta : {}, c = counts(state.lint), n = state.slides.length;
@@ -193,17 +281,17 @@
     var imgs = Object.keys(assets).length;
     var fileSize = new Blob([document.documentElement.outerHTML]).size, srcSize = new Blob([state.src]).size;
     var rows = [
-      ['file', state.name], ['runtime', 'james-jmd ' + RUNTIME_VERSION + (BUILT ? ' · built ' + BUILT : '')], m.author ? ['author', m.author] : null, ['slides', n + (withNotes ? ' · ' + withNotes + ' with notes' : '')],
-      ['layout', state.layout === 'doc' ? 'doc · A4 portrait, ' + n + ' page' + (n === 1 ? '' : 's') : state.layout === 'story' ? 'story · 9:16, ' + n + ' screen' + (n === 1 ? '' : 's') : state.layout === 'webpage' ? 'webpage · one page, ' + n + ' section' + (n === 1 ? '' : 's') : 'slide · 16:9'], ['brand', (brand.name || '—') + (brand.id ? ' · ' + brand.id : '') + (m.brand && brand.id && m.brand !== brand.id ? ' (the deck asks for ' + m.brand + ')' : '')], ['theme', m.theme || '—'],
-      ['story', (function () { var arc = state.slides.map(function (sec) { return sec.getAttribute('data-intent') || '·'; }); return arc.some(function (a) { return a !== '·'; }) ? arc.join(' › ') : '— (no intents)'; })()],
-      ['language', m.lang || '—'], ['date', m.date || '—'], ['images', imgs ? imgs + ' embedded' : 'none'],
-      ['size', fmtSize(fileSize) + ' · source ' + fmtSize(srcSize)],
-      m.source ? ['imported from', m.source] : null, ['format', m.format || '—']
+      ['file', state.name], ['runtime', 'james-jmd ' + RUNTIME_VERSION + (BUILT ? UI.built + BUILT : '')], m.author ? ['author', m.author] : null, ['slides', n + (withNotes ? ' · ' + withNotes + UI.withNotes : '')],
+      ['layout', state.layout === 'doc' ? UI.layoutDoc(n) : state.layout === 'story' ? UI.layoutStory(n) : state.layout === 'webpage' ? UI.layoutWeb(n) : 'slide · 16:9'], ['brand', (brand.name || '—') + (brand.id ? ' · ' + brand.id : '') + (m.brand && brand.id && m.brand !== brand.id ? UI.asks(m.brand) : '')], ['theme', m.theme || '—'],
+      ['story', (function () { var arc = state.slides.map(function (sec) { return sec.getAttribute('data-intent') || '·'; }); return arc.some(function (a) { return a !== '·'; }) ? arc.join(' › ') : UI.noIntents; })()],
+      ['language', m.lang || '—'], ['date', m.date || '—'], ['images', imgs ? UI.embedded(imgs) : UI.none],
+      ['size', fmtSize(fileSize) + UI.srcSize + fmtSize(srcSize)],
+      m.source ? ['source', m.source] : null, ['format', m.format || '—']
     ].filter(Boolean);
     var HEADER_ROWS = ['layout', 'brand', 'theme', 'language', 'date', 'author']; // what the document header sets: a click opens it in the editor
-    infoEl.innerHTML = '<div class="lbl">Info</div><h2 data-edit="header" title="edit the header">' + esc(m.title || state.name) + '</h2><dl>' +
-      rows.map(function (r) { var ed = HEADER_ROWS.indexOf(r[0]) >= 0 ? ' data-edit="header" title="edit the header"' : ''; return '<dt>' + esc(r[0]) + '</dt><dd' + ed + '>' + esc(String(r[1])) + '</dd>'; }).join('') + '</dl>' +
-      '<div class="row"><span>' + (c.errors || c.warnings ? 'the linter has something to say' : 'the linter is happy') + '</span><button type="button" class="light' + (c.errors ? ' is-err' : c.warnings ? ' is-warn' : '') + '" id="info-lint">' + esc(statusText(c)) + '</button></div>' +
+    infoEl.innerHTML = '<div class="lbl">' + UI.info + '</div><h2 data-edit="header" title="' + UI.editHeader + '">' + esc(m.title || state.name) + '</h2><dl>' +
+      rows.map(function (r) { var ed = HEADER_ROWS.indexOf(r[0]) >= 0 ? ' data-edit="header" title="' + UI.editHeader + '"' : ''; return '<dt>' + esc(UI.row[r[0]] || r[0]) + '</dt><dd' + ed + '>' + esc(String(r[1])) + '</dd>'; }).join('') + '</dl>' +
+      '<div class="row"><span>' + (c.errors || c.warnings ? UI.lintSays : UI.lintHappy) + '</span><button type="button" class="light' + (c.errors ? ' is-err' : c.warnings ? ' is-warn' : '') + '" id="info-lint">' + esc(statusText(c)) + '</button></div>' +
       '<div class="report" id="info-report">' + reportHtml() + '</div>';
   }
   function toggleInfo() { infoEl.classList.toggle('is-open'); if (!infoEl.classList.contains('is-open')) { infoEl.classList.remove('is-report'); infoNote = null; } }
@@ -235,7 +323,7 @@
     if (!state.motion) { var saved = null; try { saved = localStorage.getItem('james-jmd.motion'); } catch (e) { } setMotion(saved || brand.motion || 'soft', false); } else setMotion(state.motion, false);
     track.innerHTML = render(view, { brand: brand, assets: assets });
     state.slides = Array.prototype.slice.call(track.querySelectorAll('.slide'));
-    progress.innerHTML = state.slides.map(function (s, k) { return '<button type="button" aria-label="Screen ' + (k + 1) + '"><i></i></button>'; }).join('');
+    progress.innerHTML = state.slides.map(function (s, k) { return '<button type="button" aria-label="' + UI.screen(k + 1) + '"><i></i></button>'; }).join('');
     document.title = (doc.meta.title || state.name) + ' — james-jmd';
     openEl.classList.remove('is-open');
     state.lint = lint(view, { assets: assets, assetsAuthoritative: false });
@@ -270,7 +358,7 @@
     var lines = state.src.split('\n');
     editSrc.value = r[1] > r[0] ? lines.slice(r[0], r[1]).join('\n') : '---\nformat: jmd/1\nlayout: slide\n---';
     editSrc.dataset.range = r[0] + ',' + r[1];
-    editTitle.textContent = (header ? 'Document' + (r[1] > r[0] ? ' · lines ' + (r[0] + 1) + '–' + r[1] : ' · no header yet') : 'Slide ' + pad2(state.i + 1) + ' · lines ' + (r[0] + 1) + '–' + r[1]) + (state.dirty ? ' · edited' : '');
+    editTitle.textContent = (header ? UI.document + (r[1] > r[0] ? UI.lines(r[0] + 1, r[1]) : UI.noHeader) : UI.slide + ' ' + pad2(state.i + 1) + UI.lines(r[0] + 1, r[1])) + (state.dirty ? UI.edited : '');
     editTarget.textContent = header ? 'slide' : 'document';
     editEl.classList.toggle('is-header', header);
     editorChips(); editorLint();
@@ -284,7 +372,7 @@
   function editorLint() {
     var mine = slideFindings(), c = counts(mine);
     editStatus.textContent = statusText(c); statusClass(editStatus, c);
-    editLint.innerHTML = mine.length ? mine.map(findingLine).join('') : '<div class="ok">✓ ' + (state.editTarget === 'doc' ? 'the header' : 'slide ' + pad2(state.i + 1)) + ' is clean</div>';
+    editLint.innerHTML = mine.length ? mine.map(findingLine).join('') : '<div class="ok">' + (state.editTarget === 'doc' ? UI.headerClean : UI.slideClean(pad2(state.i + 1))) + '</div>';
     if (!mine.length) editLint.classList.remove('is-open');
     editorHint();
   }
@@ -353,7 +441,7 @@
     else f = mine.filter(function (x) { return !x.block && RULES_OF[c.kind].indexOf(x.rule) >= 0; })[0];
     editCtx.classList.toggle('is-err', !!f && f.level === 'error'); editCtx.classList.toggle('is-warn', !!f && f.level !== 'error');
     if (f) { editCtx.innerHTML = hintHtml(c.kind === 'block' ? c.name : c.kind === 'frontmatter' ? 'slide' : c.kind, f.message); return; }
-    if (c.kind === 'block') { var sh = shape(c.name); editCtx.innerHTML = sh ? hintHtml(sh.name, sh.hint) : hintHtml(c.name, 'unknown block — ' + SHAPES.map(function (x) { return x.name; }).slice(0, 8).join(' ')); }
+    if (c.kind === 'block') { var sh = shape(c.name); editCtx.innerHTML = sh ? hintHtml(sh.name, sh.hint) : hintHtml(c.name, UI.unknownBlock + SHAPES.map(function (x) { return x.name; }).slice(0, 8).join(' ')); }
     else editCtx.innerHTML = hintHtml(c.kind === 'frontmatter' ? 'slide' : c.kind === 'header' ? 'document' : c.kind, CTX[c.kind]);
   }
   function insertSnippet(text) {
@@ -396,9 +484,9 @@
   }
   function editorChips() {
     editChips.innerHTML = state.editTarget === 'doc'
-      ? '<button type="button" class="layout" title="cycle the layout: ' + JMD.LAYOUTS.join(' → ') + '">layout: ' + esc(currentLayout()) + ' ▸</button>'
+      ? '<button type="button" class="layout" title="' + UI.cycleLayout + JMD.LAYOUTS.join(' → ') + '">layout: ' + esc(currentLayout()) + ' ▸</button>'
       : SHAPES.map(function (sh) { return '<button type="button" data-shape="' + sh.name + '" title="' + esc(sh.hint) + '">' + sh.name + '</button>'; }).join('') +
-        '<button type="button" class="bg" title="cycle the slide background">bg: ' + esc(currentBg()) + ' ▸</button>';
+        '<button type="button" class="bg" title="' + UI.cycleBg + '">bg: ' + esc(currentBg()) + ' ▸</button>';
   }
   editChips.addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
@@ -559,9 +647,9 @@
   // Save the .jmd: File System Access API when available (the handle is kept for the session), download otherwise.
   function saveSource() {
     var name = state.name.replace(/\.jmd$/, '') + '.jmd';
-    var done = function () { state.dirty = false; editEl.classList.remove('is-dirty'); editTitle.textContent = editTitle.textContent.replace(' · edited', ''); editLint.innerHTML = '<div class="saved">✓ saved ' + esc(name) + '</div>' + editLint.innerHTML; };
+    var done = function () { state.dirty = false; editEl.classList.remove('is-dirty'); editTitle.textContent = editTitle.textContent.replace(UI.edited, ''); editLint.innerHTML = '<div class="saved">' + UI.saved(esc(name)) + '</div>' + editLint.innerHTML; };
     if (window.showSaveFilePicker) {
-      var p = state.fileHandle ? Promise.resolve(state.fileHandle) : window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'jmd presentation', accept: { 'text/markdown': ['.jmd'] } }] });
+      var p = state.fileHandle ? Promise.resolve(state.fileHandle) : window.showSaveFilePicker({ suggestedName: name, types: [{ description: UI.jmdFile, accept: { 'text/markdown': ['.jmd'] } }] });
       p.then(function (h) { state.fileHandle = h; return h.createWritable(); }).then(function (w) { return w.write(state.src).then(function () { return w.close(); }); }).then(done).catch(function (e) { if (e && e.name !== 'AbortError') download(name, state.src, 'text/markdown'), done(); });
     } else { download(name, state.src, 'text/markdown'); done(); }
   }
@@ -582,7 +670,7 @@
   }
   function printPDF() {
     if (state.lint.some(function (x) { return x.level === 'error'; })) {
-      infoNote = 'The PDF waits for the errors below — they would print as they look.';
+      infoNote = UI.pdfWaits;
       showInfo(); infoEl.classList.add('is-open'); infoEl.classList.add('is-report');
       return;
     }
@@ -613,13 +701,13 @@
          only for the deck's owner, signed in, where Jamespot answers — so a file, a stranger or a 24-hour link never sees it.
          The page may not post (its CSP), so it is a link, to a new tab: the round trip to Jamespot leaves the deck open. */
       var jp = document.getElementById('dl-jamespot'), jpHref = jp && /^\/home\/share\?id=[A-Za-z0-9_-]{16}$/.test(jp.getAttribute('href')) ? jp.getAttribute('href') : '';
-      document.getElementById('dl-lbl').textContent = jpHref ? 'Share or download' : 'Download';
-      dlList.innerHTML = (jpHref ? item('a', 'href="' + jpHref + '" target="_blank" rel="noopener" data-share-jamespot', 'Share in Jamespot', 'publish it in a group of your platform, as a link to this deck — never its edit link', 'J') : '')
-        + item('button', 'type="button" data-dl="html"', 'Page · .html', 'the deck in one file — opens in any browser, offline, and keeps its source · runtime ' + RUNTIME_VERSION, 'S')
-        + (at ? item('a', 'href="' + at + '/deck.pdf" download', 'PDF · .pdf', 'to send or print — every page, drawn by the server', 'P')
-              : item('button', 'type="button" data-dl="pdf"', 'PDF · .pdf', 'through the print dialog: choose Save as PDF — waits for the errors the check reports', 'P'))
-        + (at && state.layout !== 'webpage' ? item('a', 'href="' + at + '/deck.pptx" download', 'PowerPoint · .pptx', 'for PowerPoint, Keynote, OnlyOffice — the text stays editable, the motion stays here', 'X') : '')
-        + (at ? item('a', 'href="' + at + '/images.zip" download', 'Images · .zip', 'one PNG per screen, in a zip', 'I') : '');
+      document.getElementById('dl-lbl').textContent = jpHref ? UI.shareOrDl : UI.dl;
+      dlList.innerHTML = (jpHref ? item('a', 'href="' + jpHref + '" target="_blank" rel="noopener" data-share-jamespot', UI.jp, UI.jpAbout, 'J') : '')
+        + item('button', 'type="button" data-dl="html"', UI.page, UI.pageAbout(RUNTIME_VERSION), 'S')
+        + (at ? item('a', 'href="' + at + '/deck.pdf" download', 'PDF · .pdf', UI.pdfServer, 'P')
+              : item('button', 'type="button" data-dl="pdf"', 'PDF · .pdf', UI.pdfPrint, 'P'))
+        + (at && state.layout !== 'webpage' ? item('a', 'href="' + at + '/deck.pptx" download', 'PowerPoint · .pptx', UI.pptxAbout, 'X') : '')
+        + (at ? item('a', 'href="' + at + '/images.zip" download', UI.images, UI.imagesAbout, 'I') : '');
       var first = dlList.querySelector('a, button'); if (first) first.focus();
     }
   }
@@ -633,20 +721,20 @@
     var token = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).replace(/[^a-z0-9]/g, '').slice(0, 16);
     var base = a.getAttribute('href').split('?')[0], kind = /\.pptx$/.test(base) ? 'pptx' : /\.pdf$/.test(base) ? 'pdf' : 'png', pptx = kind === 'pptx';
     a.setAttribute('href', base + '?t=' + token);
-    var what = { pptx: 'the PowerPoint', pdf: 'the PDF', png: 'the images' }[kind], n = state.slides.length || 1, est = pptx ? 1.5 + 0.45 * n : 1 + 0.3 * n;
+    var n = state.slides.length || 1, est = pptx ? 1.5 + 0.45 * n : 1 + 0.3 * n;
     var t0 = Date.now(), name = 'jmd-dl-' + token + '=', txt = toastEl.querySelector('.t'), bar = toastEl.querySelector('i');
     var end = function (cls, words, ms) { clearInterval(toastT); txt.textContent = words; bar.style.width = '100%'; toastEl.className = 'is-open ' + cls; toastT = setTimeout(function () { toastEl.className = ''; }, ms); };
-    clearInterval(toastT); clearTimeout(toastT); bar.style.width = '0'; toastEl.className = 'is-open'; txt.textContent = 'Drawing ' + what + ' · 0 s';
+    clearInterval(toastT); clearTimeout(toastT); bar.style.width = '0'; toastEl.className = 'is-open'; txt.textContent = UI.drawing(kind, 0);
     toastT = setInterval(function () {
       var s = (Date.now() - t0) / 1000, c = document.cookie.split('; ').filter(function (x) { return x.indexOf(name) === 0; })[0];
       if (c) {
         var v = c.slice(name.length); document.cookie = name + '; Path=/; Max-Age=0';
-        if (v === 'ok') end('is-done', 'Ready — ' + what + (kind === 'png' ? ' are' : ' is') + ' in your downloads', 3000);
-        else end('is-err', v === 'busy' ? 'The server is drawing other files — try again in a few seconds' : v === 'none' ? 'This deck cannot leave as ' + { pptx: 'PowerPoint', pdf: 'a PDF', png: 'images' }[kind] : 'This deck is no longer on the server', 7000);
+        if (v === 'ok') end('is-done', UI.ready(kind), 3000);
+        else end('is-err', v === 'busy' ? UI.busy : v === 'none' ? UI.cannot[kind] : UI.gone, 7000);
         return;
       }
-      if (s > 120) { end('is-err', 'Nothing came back in two minutes — try again', 7000); return; }
-      txt.textContent = 'Drawing ' + what + ' · ' + Math.floor(s) + ' s';
+      if (s > 120) { end('is-err', UI.silent, 7000); return; }
+      txt.textContent = UI.drawing(kind, Math.floor(s));
       bar.style.width = (s < est ? 90 * s / est : 90 + 5 * (1 - Math.exp(-(s - est) / est))) + '%';
     }, 200);
   }
@@ -726,7 +814,7 @@
     var url = location.origin + location.pathname, title = (state.doc && state.doc.meta.title) || document.title;
     if (navigator.share) { navigator.share({ title: title, url: url }).catch(function () { }); return; }
     var said = function (t) { counter.textContent = t; wake(); clearTimeout(share.t); share.t = setTimeout(function () { counter.textContent = pad2(state.i + 1) + ' / ' + state.slides.length; }, 1600); };
-    if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { said('link copied'); }, function () { said(url); }); else said(url);
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { said(UI.copied); }, function () { said(url); }); else said(url);
   }
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('[data-qr], [data-share], #qr');
@@ -791,5 +879,5 @@
   else openEl.classList.add('is-open');
   fit();
 
-  window.jamesJmd = { version: RUNTIME_VERSION, fit: fit, editTarget: setEditTarget, setTitle: setTitle, parse: parse, lint: lint, render: render, load: load, show: show, next: next, prev: prev, motion: setMotion, edit: toggleEdit, applyEdit: editorApply, beginInline: beginInline, endInline: endInline, editorFill: editorFill, editSrc: editSrc, editTitle: editTitle, state: state };
+  window.jamesJmd = { version: RUNTIME_VERSION, lang: UI_LANG, fit: fit, editTarget: setEditTarget, setTitle: setTitle, parse: parse, lint: lint, render: render, load: load, show: show, next: next, prev: prev, motion: setMotion, edit: toggleEdit, applyEdit: editorApply, beginInline: beginInline, endInline: endInline, editorFill: editorFill, editSrc: editSrc, editTitle: editTitle, state: state };
 })();

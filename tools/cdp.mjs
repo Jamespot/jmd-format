@@ -59,11 +59,14 @@ export function sweep() {
 }
 
 export class Browser {
-  static async launch({ port = 0 } = {}) {
+  /* `lang` (1.34.0): the language the browser says it reads — what a deck page now follows for its own words (navigator)
+     and what our pages read from Accept-Language. English by default, whatever the machine's own, so a check of a page's
+     words and a drawn export come out the same on a French laptop and on the CI; a test that wants French asks for it. */
+  static async launch({ port = 0, lang = 'en-US' } = {}) {
     hook(); sweep();
     const b = new Browser();
     b.profile = mkdtempSync(join(tmpdir(), 'jmd-chrome-'));
-    b.proc = spawn(CHROME, ['--headless=new', '--disable-gpu', ...(noSandbox() ? ['--no-sandbox'] : []), ...HARDENING, `--remote-debugging-port=${port}`, `--user-data-dir=${b.profile}`, '--no-first-run', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    b.proc = spawn(CHROME, ['--headless=new', '--disable-gpu', ...(noSandbox() ? ['--no-sandbox'] : []), ...HARDENING, `--remote-debugging-port=${port}`, `--user-data-dir=${b.profile}`, '--no-first-run', `--lang=${lang}`, `--accept-lang=${lang}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
     live.add(b);
     try {
       b.port = await new Promise((res, rej) => {

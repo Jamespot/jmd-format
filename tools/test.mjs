@@ -165,6 +165,31 @@ try {
   ok(await p.eval('document.getElementById("open").classList.contains("is-open")'), 'over file:// it falls back to the Open screen instead of a blank page');
   await p.close();
 
+  console.log('\n4a. The page\'s own words follow the reader (1.34.0): French for a French browser, ?lang= first, English otherwise');
+  {
+    /* The deck's `lang:` says what the slides are written in; the page's words — the bar, the help, D, the notes, Info — say
+       themselves in the reader's language, as every page of the site does. The suite's browser is English (tools/cdp.mjs);
+       this one is French. The template a download starts from is taken before anything is translated. */
+    const fr = await Browser.launch({ lang: 'fr-FR' });
+    const q = await fr.page('file://' + exp, { network: false }); await q.settle(300);
+    const hudFr = await q.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()');
+    await q.key('D'); await q.settle(80);
+    const dlFr = await q.eval('document.getElementById("dl-lbl").textContent + " | " + document.getElementById("dl-list").textContent');
+    await q.key('Escape'); await q.key('?'); await q.settle(50);
+    const helpFr = await q.eval('document.getElementById("help").textContent');
+    await q.key('i'); await q.settle(50);
+    const infoFr = await q.eval('document.getElementById("info").textContent');
+    const notesFr = await q.eval('document.querySelector("#notes .lbl").textContent'), tplEn = await q.eval('jamesJmd.lang');
+    await q.close();
+    const q2 = await fr.page('file://' + exp + '?lang=en', { network: false }); await q2.settle(300);
+    const hudForced = await q2.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()');
+    await q2.close(); fr.close();
+    ok(hudFr === '← → naviguer F présenter E modifier D télécharger O ouvrir ? toutes les touches' && /^Télécharger \| Page · \.html.*le deck en un fichier/.test(dlFr) && dlFr.includes('par la fenêtre d’impression')
+      && helpFr.includes('Espace') && helpFr.includes('notes de l’orateur') && !helpFr.includes('speaker notes') && /fichier.*moteur.*langue/s.test(infoFr) && !/\bfile\b/.test(infoFr)
+      && notesFr === 'Notes de l’orateur' && tplEn === 'fr' && hudForced === '← → navigate F present E edit D download O open ? all keys',
+      'a French browser gets the bar, D, the help, Info and the notes in French; ?lang=en puts them back in English', [hudFr, dlFr.slice(0, 80), hudForced].join(' / '));
+  }
+
   console.log('\n4b. Download (D): one menu for every way the deck leaves (spec/export.md)');
   {
     /* What a browser makes alone (the page, the PDF) is always offered; PowerPoint and images need the server, so only the

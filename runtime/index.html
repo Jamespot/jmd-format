@@ -26,19 +26,19 @@
 <div id="stage"><div id="track"></div></div>
 
 <div id="hud">
-  <span><kbd>←</kbd> <kbd>→</kbd><span class="w"> navigate</span></span>
-  <span><kbd>F</kbd><span class="w"> present</span></span>
-  <span><kbd>E</kbd><span class="w"> edit</span></span>
-  <button type="button" id="hud-dl"><kbd>D</kbd><span class="w"> download</span></button>
-  <span id="hud-open"><kbd>O</kbd><span class="w"> open</span></span>
-  <span><kbd>?</kbd><span class="w"> all keys</span></span>
+  <span><kbd>←</kbd> <kbd>→</kbd><span class="w" data-ui="hud.nav"> navigate</span></span>
+  <span><kbd>F</kbd><span class="w" data-ui="hud.present"> present</span></span>
+  <span><kbd>E</kbd><span class="w" data-ui="hud.edit"> edit</span></span>
+  <button type="button" id="hud-dl"><kbd>D</kbd><span class="w" data-ui="hud.dl"> download</span></button>
+  <span id="hud-open"><kbd>O</kbd><span class="w" data-ui="hud.open"> open</span></span>
+  <span><kbd>?</kbd><span class="w" data-ui="hud.keys"> all keys</span></span>
 </div>
 <div id="counter"></div>
-<div id="notes"><div class="lbl">Speaker notes</div><div class="txt" id="notes-txt"></div></div>
+<div id="notes"><div class="lbl" data-ui="notes">Speaker notes</div><div class="txt" id="notes-txt"></div></div>
 <div id="info"></div>
 <div id="help"><div class="box">
-  <div class="lbl">james-jmd — keys</div>
-  <dl>
+  <div class="lbl" data-ui="help.lbl">james-jmd — keys</div>
+  <dl data-ui="help.dl">
     <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Space</kbd></dt><dd>previous / next slide · in <em>step</em> motion, the next item first</dd>
     <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>first / last slide</dd>
     <dt><kbd>F</kbd></dt><dd>present: the deck full screen (F again, or Esc, to leave)</dd>
@@ -52,24 +52,24 @@
     <dt><kbd>O</kbd></dt><dd>open another <code>.jmd</code> — or drop one on the window</dd>
     <dt><kbd>?</kbd> <kbd>Esc</kbd></dt><dd>this help / close</dd>
   </dl>
-  <p class="foot">A <code>.jmd</code> is Markdown with blocks. The theme decides the look, the brand its colors and shapes, the linter what fits. Format, contract and samples: <code>jmd spec</code>, or the <code>jmd_spec</code> tool of the connector.</p>
+  <p class="foot" data-ui="help.foot">A <code>.jmd</code> is Markdown with blocks. The theme decides the look, the brand its colors and shapes, the linter what fits. Format, contract and samples: <code>jmd spec</code>, or the <code>jmd_spec</code> tool of the connector.</p>
 </div></div>
 <div id="dl"><div class="box" role="dialog" aria-labelledby="dl-lbl">
-  <div class="lbl" id="dl-lbl">Download</div>
+  <div class="lbl" id="dl-lbl" data-ui="dl.lbl">Download</div>
   <div id="dl-list"></div>
-  <p class="foot">The <code>.jmd</code> stays the source: a file edited elsewhere does not come back into it.</p>
+  <p class="foot" data-ui="dl.foot">The <code>.jmd</code> stays the source: a file edited elsewhere does not come back into it.</p>
 </div></div>
 <div id="dl-toast" role="status" aria-live="polite"><span class="t"></span><span class="bar"><i></i></span></div>
 <div id="edit">
-  <div class="lbl"><span id="edit-title">Slide</span><button id="edit-target" type="button" title="edit the document header: layout, title, brand, language, date, author">document</button><button id="edit-status" type="button" title="show the details"></button><span class="hint">click a text to edit it · Esc close · ⌘S save</span></div>
+  <div class="lbl"><span id="edit-title">Slide</span><button id="edit-target" type="button" title="edit the document header: layout, title, brand, language, date, author">document</button><button id="edit-status" type="button" title="show the details"></button><span class="hint" data-ui="edit.hint">click a text to edit it · Esc close · ⌘S save</span></div>
   <textarea id="edit-src" spellcheck="false" wrap="off"></textarea>
   <div id="edit-help"><div id="edit-ctx"></div><div id="edit-chips"></div></div>
   <div id="edit-lint"></div>
 </div>
 <div id="open"><div class="box">
   <h1>james-jmd</h1>
-  <p>Drop a <code>.jmd</code> file here, or open one. It renders on-brand, prints to PDF, and leaves as a self-contained <code>.james-jmd.html</code>.</p>
-  <label for="open-file">Open a .jmd</label><input type="file" id="open-file" accept=".jmd,.md,text/markdown,text/plain">
+  <p data-ui="open.p">Drop a <code>.jmd</code> file here, or open one. It renders on-brand, prints to PDF, and leaves as a self-contained <code>.james-jmd.html</code>.</p>
+  <label for="open-file" data-ui="open.label">Open a .jmd</label><input type="file" id="open-file" accept=".jmd,.md,text/markdown,text/plain">
 </div></div>
 
 <script type="application/json" id="brand">@@BRAND_JSON@@</script>
