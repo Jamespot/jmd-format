@@ -38,6 +38,7 @@ const ANCHOR = '- The executive committee is set. You know today who decides, an
    It is the only way to know that the public repo's `npm test` passes before that repo exists. */
 const HOUSE = process.env.JMD_NO_HOUSE || !existsSync(join(root, 'themes/brands/jamespot.yaml')) ? null : 'jamespot';
 const ANY_BRAND = HOUSE || 'mono'; // tests that just need *a* brand, not the house one
+const houseMarker = HOUSE ? (/^card-marker:\s*(\w+)/m.exec(readFileSync(join(root, 'themes/brands/' + HOUSE + '.yaml'), 'utf8')) || [])[1] : null; // the house brand's card marker: icon since R3 (1.35.0)
 const BUILD = { cwd: root, stdio: 'ignore', env: HOUSE ? { ...process.env, JMD_DEFAULT_BRAND: HOUSE } : process.env };
 
 const fixed = readFileSync(join(root, 'decks/samples/four-blocks.jmd'), 'utf8');
@@ -647,14 +648,16 @@ try {
     await p.eval('jamesJmd.load(' + JSON.stringify(src) + ', "over.jmd"); jamesJmd.show(3); true'); await p.settle(300);
     const over = await p.eval('(() => { const s = document.querySelector(".slide.is-active"); const cs = getComputedStyle(s, "::after"); return { cls: s.classList.contains("is-over"), line: cs.borderTopStyle, top: cs.top, lint: jamesJmd.state.lint.filter(x => x.rule === "overflow").length }; })()');
     ok(over.lint > 0 && over.cls && over.line === 'dashed' && over.top === '660px', 'an overflowing slide draws a dashed line at 660px in edit mode (' + JSON.stringify(over) + ')');
-    // decoration the theme applies on its own: the brand's watermark and card markers
-    await p.eval('jamesJmd.load(' + JSON.stringify(readFileSync(join(root, 'decks/samples/product-tour.jmd'), 'utf8')) + ', "product-tour.jmd"); true'); await p.settle(100);
-    const deco = await p.eval('(() => { const wms = Array.from(document.querySelectorAll(".slide .wm")).map(w => w.className + " " + (w.querySelector("use") || {}).getAttribute("href")); const split = document.querySelector(".slide--split .wm"); const glyphs = Array.from(document.querySelectorAll(".card .num--glyph use")).map(u => u.getAttribute("href")); const vivid = document.querySelectorAll(".card--vivid").length; const offset = document.querySelectorAll(".cards--offset").length; const wmOpacity = getComputedStyle(document.querySelector(".slide:not(.slide--intent):not(.slide--indigo):not(.slide--accent):not(.slide--sky) .wm--mark .wm-g")).opacity; return { wms, split: !!split, glyphs, vivid, offset, wmOpacity, marks: document.querySelectorAll("symbol[id^=brand-glyph-]").length }; })()');
+    // decoration the theme applies on its own: the brand's watermark and card markers — the watermark asked for in the header
+    // (`watermark: mark`), so the mechanism is tested whatever the brand chose (the house one has none since R3, 1.35.0)
+    const withMark = f => JSON.stringify(readFileSync(join(root, f), 'utf8').replace(/^format: jmd\/1$/m, 'format: jmd/1\nwatermark: mark'));
+    await p.eval('jamesJmd.load(' + withMark('decks/samples/product-tour.jmd') + ', "product-tour.jmd"); true'); await p.settle(100);
+    const deco = await p.eval('(() => { const wms = Array.from(document.querySelectorAll(".slide .wm")).map(w => w.className + " " + (w.querySelector("use") || {}).getAttribute("href")); const split = document.querySelector(".slide--split .wm"); const glyphs = Array.from(document.querySelectorAll(".card .num--glyph use")).map(u => u.getAttribute("href")); const vivid = document.querySelectorAll(".card--vivid").length; const offset = document.querySelectorAll(".cards--offset").length; const wmOpacity = getComputedStyle(document.querySelector(".slide:not(.slide--intent):not(.slide--indigo):not(.slide--accent):not(.slide--sky) .wm--mark .wm-g")).opacity; return { wms, split: !!split, glyphs, icons: document.querySelectorAll(".card .num--icon").length, vivid, offset, wmOpacity, marks: document.querySelectorAll("symbol[id^=brand-glyph-]").length }; })()');
     ok(deco.wms.length > 3 && deco.wms.every(c => c.includes('brand-glyph-1')) && deco.wms.some(c => c.includes('wm--a')) && deco.wms.some(c => c.includes('wm--b')), 'content slides carry the watermark: one glyph for the whole deck, side alternating (' + deco.wms.length + ')');
     ok(+deco.wmOpacity <= 0.04, 'the watermark is faint on a neutral slide (opacity ' + deco.wmOpacity + ')');
     // the glyph that travels: the intent poses it (engine.css), a measure places it where the pose hangs on the page (act),
     // the presenter flies it from one pose to the next, and on explain walks it under each step — motion only
-    await p.eval('jamesJmd.load(' + JSON.stringify(readFileSync(join(root, 'decks/samples/team-update.jmd'), 'utf8')) + ', "team-update.jmd"); true'); await p.settle(400);
+    await p.eval('jamesJmd.load(' + withMark('decks/samples/team-update.jmd') + ', "team-update.jmd"); true'); await p.settle(400);
     const pose = await p.eval('(() => { const s = jamesJmd.state.slides, at = i => { const g = s[i].querySelector(".wm-g"), c = g && getComputedStyle(g); return c && { x: parseFloat(c.left), y: parseFloat(c.top), w: parseFloat(c.width), o: +c.opacity }; }; const idx = n => s.findIndex(x => x.dataset.intent === n); const act = s[idx("act")], cta = act.querySelector("a.cta").getBoundingClientRect(), r0 = act.getBoundingClientRect(), k = r0.width / 1280; return { hook: at(idx("hook")), prove: at(idx("prove")), act: at(idx("act")), ctaRight: (cta.right - r0.left) / k, ctaMid: (cta.top + cta.height / 2 - r0.top) / k }; })()');
     ok(Math.abs(pose.hook.x - 640) < 2 && pose.hook.w > 800, 'hook: the glyph is huge, centred behind the words (' + JSON.stringify(pose.hook) + ')');
     ok(pose.prove.w <= 40 && pose.prove.o === 1, 'prove: the glyph is a small full stamp (' + JSON.stringify(pose.prove) + ')');
@@ -709,7 +712,8 @@ try {
     ok(sideways.layout === 'slide' && sideways.i === 1, 'turned sideways, the slides again, on the same screen (' + JSON.stringify(sideways) + ')');
     ok(walk.x0 === '' && walk.x1 && walk.x2 && walk.x2 !== walk.x1 && walk.back === '', 'explain: the glyph walks to each step as it arrives, and back to its corner (' + JSON.stringify(walk) + ')');
     ok(!deco.split, 'a split slide (already decorated) has no watermark');
-    ok(deco.marks === 4 && [...new Set(deco.glyphs)].length >= 3 && deco.glyphs[0] === '#brand-glyph-1' && deco.glyphs[1] === '#brand-glyph-2', 'cards take one shape of the family each, rotating (' + [...new Set(deco.glyphs)].join(' ') + ')');
+    if (houseMarker && houseMarker !== 'glyphs') ok(deco.glyphs.length === 0 && deco.icons > 3, 'the house brand marks its cards with line icons, never the logo reshaped (' + deco.icons + ' icons)');
+    else ok(deco.marks === 4 && [...new Set(deco.glyphs)].length >= 3 && deco.glyphs[0] === '#brand-glyph-1' && deco.glyphs[1] === '#brand-glyph-2', 'cards take one shape of the family each, rotating (' + [...new Set(deco.glyphs)].join(' ') + ')');
     const look2026 = JMD.render(JMD.parse(readFileSync(join(root, 'decks/samples/product-tour.jmd'), 'utf8')), { brand: { glyphs: 4, 'card-fill': 'alternate', 'card-shadow': 'offset' } });
     ok((look2026.match(/card--vivid/g) || []).length >= 3 && look2026.includes('cards--offset') && !/card--vivid[^>]*>(?:(?!<\/div>)[\s\S])*?<ul>/.test(look2026), 'the 2026 look: one-line cards alternate the vivid fill (never a bullet card), blocks carry the offset shadow');
     const tourSrc = readFileSync(join(root, 'decks/samples/product-tour.jmd'), 'utf8');
@@ -740,7 +744,7 @@ try {
     await p.key('?'); ok(await p.eval('document.getElementById("help").classList.contains("is-open")') && (await p.eval('document.getElementById("help").textContent')).includes('motion'), '? opens the keys help');
     await p.key('Escape'); ok(!(await p.eval('document.getElementById("help").classList.contains("is-open")')), 'Esc closes it');
     const firsts = await p.eval('Array.from(document.querySelectorAll(".cards")).map(c => c.querySelector(".num--glyph use") && c.querySelector(".num--glyph use").getAttribute("href")).filter(Boolean)');
-    ok(new Set(firsts).size >= 3, 'the first card of successive blocks takes a different shape each time (' + firsts.join(' ') + ')');
+    if (!houseMarker || houseMarker === 'glyphs') ok(new Set(firsts).size >= 3, 'the first card of successive blocks takes a different shape each time (' + firsts.join(' ') + ')');
     ok(Object.keys(JMD.CONTEXT_HINTS).length === 5 && JMD.SHAPES.every(sh => sh.name && sh.hint && sh.snippet), 'the shapes table lives in the core: name, hint, snippet for each');
     await p.eval('document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); true'); await p.settle(50);
     await p.close();
@@ -942,6 +946,13 @@ try {
   ok(acme.id === 'acme' && acme.accent === '#123456' && acme.logo === 'tri' && acme['card-marker'] === 'glyphs' && acme.fonts === 'fonts/system.css', 'a .yaml path is a brand; blanks take the neutral defaults');
   const { deckBrand } = await import('../tools/build.mjs');
   ok(deckBrand('---\ntheme: ocean\n---\n') === 'ocean' && deckBrand('---\ntheme: jamespot\ntemplate: plum\n---\n') === 'plum' && deckBrand('---\ntheme: mono\n---\n') === 'mono', 'frontmatter: brand:, template: and theme: are one key, and brand: wins');
+  { // `watermark:` in the header overrules the brand's for the whole deck; a value it does not know is an error (R3, 1.35.0)
+    const wmDeck = w => '---\nformat: jmd/1\nlayout: slide\ntitle: t\n' + (w ? 'watermark: ' + w + '\n' : '') + '---\n---\n## A\n---\n---\nbg: accent\n---\n## B\n';
+    const ob = loadBrand('ocean'), wm = w => (JMD.render(JMD.parse(wmDeck(w)), { brand: ob }).match(/class="wm /g) || []).length;
+    ok(ob.watermark === 'mark' && wm('') === 2 && wm('None') === 0 && wm('mark') === 2 && JMD.render(JMD.parse(wmDeck('circles')), { brand: ob }).includes('wm--circles'), 'watermark: none takes the shape off every slide, mark and circles choose it, left out the brand decides');
+    ok(JMD.render(JMD.parse(wmDeck('mark')), { brand: { ...ob, 'logo-kind': 'raster' } }).includes('wm--circles'), 'watermark: mark on a PNG logo is circles, as the brand\'s own would be');
+    ok(JMD.lint(JMD.parse(wmDeck('flower'))).some(f => f.level === 'error' && f.rule === 'watermark'), 'an unknown watermark is an error naming the three');
+  }
   const inline = loadBrand('primary: "#0B2545"\naccent: "#F18F01"');
   ok(inline.id === 'custom' && inline.accent === '#F18F01' && inline.name === '', 'YAML text is a brand too (custom)');
   let err = ''; try { loadBrand('primary: blue'); } catch (e) { err = e.message; } ok(err.includes('#rrggbb'), 'a brand without a #hex primary is refused');

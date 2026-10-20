@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.34.0';
+  var VERSION = '1.35.0';
   var FORMAT_MAX = 1;
   // layouts (spec/jmd.md): the page the deck is made of — one table, the runtime and the CSS read it.
   //   w, h   the page in design units (the slide's px: every block's CSS is written in them); h 0 = as tall as its content
@@ -90,7 +90,7 @@ globalThis.JMD = (function () {
   // Case: what the format names — keys, the values it enumerates, a brand id, a block, a modifier — is read in lowercase
   // (`Layout: Doc`, `Intent: Hook`, `::: Cards`, `{.Hero}` all work). What the author writes — a title, notes, a section
   // label, a URL — keeps its case; a brand URL is not an id, it is left alone.
-  var ENUM_KEYS = ['format', 'layout', 'intent', 'bg', 'brand', 'theme', 'template'];
+  var ENUM_KEYS = ['format', 'layout', 'intent', 'bg', 'brand', 'theme', 'template', 'watermark'];
   function parseKV(lines) {
     var o = {};
     lines.forEach(function (l) {
@@ -1434,9 +1434,18 @@ globalThis.JMD = (function () {
     return '<section class="' + classes.join(' ') + '"' + notes + (intent ? ' data-intent="' + intent + '"' : '') + ' data-start="' + slide.map[0] + '">' + watermark + chrome + inner + tag + '</section>';
   }
 
+  // `watermark:` in the header overrules the brand's, for this deck only (R3, 2026-10-20: the agent could not take the shape off a
+  // deck shared outside). `mark` on a PNG logo is `circles`, as the brand's own would be (1.31.0): a picture is not a shape
+  var WATERMARKS = ['mark', 'circles', 'none'];
+  function withWatermark(brand, wm) {
+    if (WATERMARKS.indexOf(wm) < 0) return brand;
+    var b = {}; for (var k in brand) b[k] = brand[k];
+    b.watermark = wm === 'mark' && b['logo-kind'] === 'raster' ? 'circles' : wm;
+    return b;
+  }
   function render(doc, ctx) {
     ctx_lines_cache = doc.lines || null;
-    var c = { brand: (ctx && ctx.brand) || {}, assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', lang: doc.meta.lang || '' };
+    var c = { brand: withWatermark((ctx && ctx.brand) || {}, doc.meta.watermark), assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', lang: doc.meta.lang || '' };
     return doc.slides.map(function (s, i) { return renderSlide(s, i, c); }).join('\n');
   }
 
@@ -1498,6 +1507,7 @@ globalThis.JMD = (function () {
     else if (+fv[1] > FORMAT_MAX) err(0, null, 'format', 'format jmd/' + fv[1] + ': this runtime reads up to jmd/' + FORMAT_MAX);
     if (doc.meta.layout && !PAGES[doc.meta.layout]) err(0, null, 'layout', 'unknown layout `' + doc.meta.layout + '`: ' + LAYOUTS.join(', ') + ' (no layout = slide)');
     else if (!doc.meta.layout && fv) info(0, null, 'layout', 'no `layout:` in the header — write `layout: slide`: one word the user changes to make it a doc, a story or a webpage');
+    if (doc.meta.watermark && WATERMARKS.indexOf(doc.meta.watermark) < 0) err(0, null, 'watermark', 'unknown watermark `' + doc.meta.watermark + '`: ' + WATERMARKS.join(', ') + ' (no watermark: = the brand\'s)');
 
     var run = 0, prevBg = null;
     doc.slides.forEach(function (s, i) {

@@ -17,6 +17,7 @@ brand: mono                ← brand: an id (themes/brands/<brand>.yaml) or the 
 lang: en
 date: 2026-08-25
 author: Jane Doe            ← optional; `source:` too, set by the importer
+watermark: none            ← optional: none | mark | circles — the brand's large background shape, for the whole deck; left out, the brand decides (1.35.0)
 ---
 
 ---                        ← new slide

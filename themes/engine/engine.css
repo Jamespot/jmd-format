@@ -542,8 +542,9 @@ body:not(.motion-none):not(.is-editing) .slide.is-active .table tbody tr{animati
 .timeline--chevrons .tl-step h4,.timeline--chevrons .tl-step p{color:inherit}
 .timeline--chevrons .tl-step p{opacity:.85}
 
-/* compare */
-.compare{display:grid;grid-template-columns:1fr 1fr;gap:24px;flex:1}
+/* compare — the two columns as tall as the fuller one, never stretched to the foot of the slide (R3, 2026-10-20: two bullets a column
+   drew two empty boards) */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:24px}
 .col{border-radius:28px;padding:calc(34px * var(--type-scale,1)) 32px;display:flex;flex-direction:column;gap:calc(18px * var(--type-scale,1))}
 .col--light{background:var(--jp-purple-050)}
 .col--dark{background:var(--jp-indigo-800);color:#fff}
@@ -1039,7 +1040,6 @@ body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{anim
 .layout-doc .figure{max-width:none;width:auto}
 .layout-doc .figure img{max-height:640px}
 .layout-doc .slide--split .prose:has(> p > a.cta:only-child),.layout-doc .prose a.cta{margin-top:0}
-.layout-doc .compare{flex:none}
 .layout-doc .table{font-size:max(16px, calc(20px * var(--type-scale,1)))}
 /* the cover: the title high, the art fills the lower half */
 .layout-doc .slide--cover .body-pad{padding-top:calc(150px * var(--type-scale,1));justify-content:center}
@@ -1156,7 +1156,6 @@ body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{anim
 .layout-webpage .slide:first-child .body-pad{padding-top:calc(72px * var(--type-scale,1))}
 .layout-webpage .slide-h2{max-width:1060px}
 .layout-webpage .prose{max-width:1000px}
-.layout-webpage .compare{flex:none}
 .layout-webpage .prose a.cta,.layout-webpage .slide--split .prose:has(> p > a.cta:only-child){margin-top:0}
 /* full-width blocks take a band of their own height */
 .layout-webpage .statement{align-self:auto;margin:0;padding:calc(120px * var(--type-scale,1)) 120px}
