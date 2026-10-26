@@ -158,6 +158,7 @@ We are a product company that took twenty years to build.
 — Jane Doe, CEO, September 4
 :::
 ```
+A statement fills the page alone, or under its title (`## A title` then the block). Beside a text or another block it is drawn small inside the page, in its flow — nothing written on the page is dropped — and the linter warns (`full-alone`). The same holds for `section`. *(1.37.1; until then the rest of the page was silently not drawn.)*
 One paragraph, an optional attribution introduced by `— `. No title on this slide.
 
 ### `section` — a divider slide

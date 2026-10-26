@@ -759,6 +759,16 @@ try {
     ok(JSON.stringify(story) === JSON.stringify(['story-close', 'story-open', 'story-tension']), 'the story linter warns: no hook to open, no act/recap to close, two problems without a reveal (' + story.join(' ') + ')');
     const team = readFileSync(join(root, 'decks/samples/team-update.jmd'), 'utf8');
     ok(JMD.lint(JMD.parse(team)).filter(f => f.level !== 'info').length === 0, 'team-update (ten intents, one each) has no warning at all');
+    // a statement never takes what else was written on its page (1.37.1: Circuit's cover lost its title, lead and cards)
+    const fullOf = src => { const d = JMD.parse('---\nformat: jmd/1\ntitle: t\nlayout: doc\n---\n' + src); return { html: JMD.render(d, {}), lint: JMD.lint(d).filter(f => f.rule === 'full-alone') }; };
+    const crowd = fullOf('---\nintent: hook\n---\n# The real title\nIts lead.\n\n::: cards\n- One | a\n- Two | b\n:::\n\n::: statement\nThe quote.\n— Someone\n:::\n');
+    ok(/The real title/.test(crowd.html) && /Its lead/.test(crowd.html) && /One/.test(crowd.html) && /statement statement--in-page/.test(crowd.html) && !/mark-blob--statement/.test(crowd.html) && crowd.lint.length === 1 && crowd.lint[0].level === 'warning',
+      'a statement beside a lead and cards: everything is drawn, the statement small inside the page, and the linter warns (full-alone)');
+    const titled = fullOf('---\n## A title\n\n::: statement\nThe quote.\n:::\n'), alone = fullOf('---\n::: statement\nThe quote.\n:::\n');
+    ok(/A title/.test(titled.html) && /class="statement"/.test(titled.html) && !titled.lint.length && /class="statement"/.test(alone.html) && !/body-pad/.test(alone.html.split('<section')[1] || '') && !alone.lint.length,
+      'a statement under its title keeps its full form, the title heading it; alone it fills the page — no warning either way');
+    const divided = fullOf('---\n## Part\n\n- a point\n\n::: section\nPart two\n:::\n');
+    ok(/a point/.test(divided.html) && /divider divider--in-page/.test(divided.html) && divided.lint.length === 1, 'a section block beside other content is drawn inside the page too, and warned');
     const html = JMD.render(JMD.parse(team), {});
     const secs = html.match(/<section class="[^"]*"[^>]*>/g);
     const arc = ['hook', 'problem', 'reveal', 'prove', 'explain', 'decide', 'celebrate', 'fun', 'recap', 'act'];

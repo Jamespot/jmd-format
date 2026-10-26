@@ -606,6 +606,16 @@
   }
   // The first press on a text opens it, with the caret where the pointer is; further presses on it are native (double-click selects a word).
   var inlinePressed = false;
+  /* How far down the textarea the text before `at` reaches. The lines wrap (1.37.1), so a row is not one line high: the
+     text is laid out once in a hidden copy of the box, at its width and in its font, and measured. */
+  function heightBefore(at) {
+    var cs = getComputedStyle(editSrc), m = document.createElement('div'), pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    ['font', 'letterSpacing', 'tabSize'].forEach(function (k) { m.style[k] = cs[k]; });
+    m.style.cssText += ';position:absolute;visibility:hidden;left:-9999px;top:0;box-sizing:content-box;padding:0;white-space:pre-wrap;overflow-wrap:anywhere;width:' + (editSrc.clientWidth - pad) + 'px';
+    m.textContent = editSrc.value.slice(0, at);
+    document.body.appendChild(m); var h = m.scrollHeight; document.body.removeChild(m);
+    return h;
+  }
   // A diagram's box is drawn, not typed: a press on it opens the slide's source with the box's line selected
   function focusSourceLine(line) {
     if (inline_) endInline(true);
@@ -614,7 +624,7 @@
     if (row < 0 || row >= rows.length) return;
     var start = rows.slice(0, row).join('\n').length + (row ? 1 : 0), text = rows[row], lead = text.length - text.replace(/^\s+/, '').length;
     editSrc.focus(); editSrc.setSelectionRange(start + lead, start + text.length);
-    editSrc.scrollTop = Math.max(0, row * (parseFloat(getComputedStyle(editSrc).lineHeight) || 18) - editSrc.clientHeight / 3);
+    editSrc.scrollTop = Math.max(0, heightBefore(start) - editSrc.clientHeight / 3);
     editorHint();
   }
   track.addEventListener('mousedown', function (e) {

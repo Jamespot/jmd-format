@@ -587,6 +587,7 @@ body:not(.motion-none):not(.is-editing) .slide.is-active .table tbody tr{animati
 .slide--indigo .statement .q{color:#fff}
 .statement .attr{margin-top:28px;font-family:var(--font-mono);font-size:14px;letter-spacing:.06em;
   text-transform:uppercase;color:var(--jp-ink-soft);font-weight:600}
+.slide--accent .statement .attr,.slide--sky .statement .attr,.slide--indigo .statement .attr{color:#fff}
 
 /* ── Deck UI ──────────────────────────────────────────── */
 /* the HUD, the counter and the linter's light sit on their own dark pill: readable over the slide when it fills the window */
@@ -689,7 +690,8 @@ body.is-hosted #hud-open{display:none}
   display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 #edit .lbl .hint{color:rgba(255,255,255,.4);text-transform:none;letter-spacing:.02em;font-size:11px;text-align:right}
 #edit textarea{flex:1;min-height:0;margin:0 14px;padding:14px;border:1.5px solid rgba(255,255,255,.14);border-radius:12px;
-  background:rgba(255,255,255,.05);color:#fff;font:13px/1.55 var(--font-mono);resize:none;outline:none;tab-size:2}
+  background:rgba(255,255,255,.05);color:#fff;font:13px/1.55 var(--font-mono);resize:none;outline:none;tab-size:2;
+  white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden} /* a long line wraps: a sentence is read whole, never cut at the edge (1.37.1) */
 #edit textarea:focus{border-color:var(--jp-purple-400)}
 #edit.is-dirty textarea{border-color:var(--jp-yellow-500)}
 #edit-help{padding:8px 14px 0;font-family:var(--font-mono)}
@@ -1200,3 +1202,13 @@ body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{anim
 
 /* The mark's dots take the brand's deep color */
 svg{--mark-dot:var(--brand-primary)}
+
+/* A statement or a section beside other content (1.37.1): drawn inside the page, in its flow, at the size of a strong
+   lead — the full-page forms above stay for the block alone (jmd-core.js, `full-alone`). Last in the file and doubled
+   classes, so it wins over every layout's own statement and divider rules. */
+.slide .statement.statement--in-page{align-self:stretch;max-width:none;padding:0;margin:0}
+.slide .statement.statement--in-page .mark{font-size:calc(64px * var(--type-scale,1));margin-bottom:-2px}
+.slide .statement.statement--in-page .q{font-size:calc(30px * var(--type-scale,1));line-height:1.2}
+.slide .statement.statement--in-page .attr{margin-top:12px;font-size:12px}
+.slide .divider.divider--in-page{align-self:stretch;padding:0;margin:0;text-align:left;align-items:flex-start;gap:8px}
+.slide .divider.divider--in-page .slide-h1{font-size:calc(36px * var(--type-scale,1))}

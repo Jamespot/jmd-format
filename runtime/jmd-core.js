@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.37.0';
+  var VERSION = '1.37.1';
   var FORMAT_MAX = 1;
   // layouts (spec/jmd.md): the page the deck is made of — one table, the runtime and the CSS read it.
   //   w, h   the page in design units (the slide's px: every block's CSS is written in them); h 0 = as tall as its content
@@ -1315,7 +1315,7 @@ globalThis.JMD = (function () {
     },
     statement: {
       full: true,
-      render: function (b, ctx) {
+      render: function (b, ctx, inPage) {
         var paras = [], attr = null, paraLine = null, attrLine = null;
         b.lines.forEach(function (l, k) {
           if (!l.trim()) return;
@@ -1323,8 +1323,8 @@ globalThis.JMD = (function () {
           paras.push(l.trim()); if (paraLine == null) paraLine = b.map[0] + 1 + k;
         });
         // a PNG logo is a picture, not a shape: no blob drawn from it (1.31.0)
-        return (ctx && ctx.brand && ctx.brand['logo-kind'] === 'raster' ? '' : '<svg class="mark-blob mark-blob--statement" aria-hidden="true"><use href="#brand-mark"/></svg>') +
-          '<div class="statement"><div class="mark">&ldquo;</div>' +
+        return (inPage || (ctx && ctx.brand && ctx.brand['logo-kind'] === 'raster') ? '' : '<svg class="mark-blob mark-blob--statement" aria-hidden="true"><use href="#brand-mark"/></svg>') +
+          '<div class="statement' + (inPage ? ' statement--in-page' : '') + '"><div class="mark">&ldquo;</div>' +
           '<p class="q"' + src(paras.length === 1 ? paraLine : null) + '>' + inline(paras.join(' ')) + '</p>' +
           (attr ? '<div class="attr"' + src(attrLine) + '>' + inline(attr) + '</div>' : '') + '</div>';
       }
@@ -1332,11 +1332,11 @@ globalThis.JMD = (function () {
     // a divider slide: the part title, centered; `{.numbered}` adds the part number
     section: {
       full: true,
-      render: function (b, ctx) {
+      render: function (b, ctx, inPage) {
         var text = [], textLines = [];
         b.lines.forEach(function (l, k) { if (l.trim()) { text.push(l.trim()); textLines.push(b.map[0] + 1 + k); } });
         ctx.sectionCount = (ctx.sectionCount || 0) + 1;
-        return '<div class="divider">' +
+        return '<div class="divider' + (inPage ? ' divider--in-page' : '') + '">' +
           (has(b.attrs, 'numbered') ? '<div class="slide-eyebrow">' + pad2(ctx.sectionCount) + '</div>' : '') +
           '<h1 class="slide-h1"' + src(textLines[0]) + '>' + inline(text[0] || '') + '</h1>' +
           (text[1] ? '<p class="slide-lead">' + inline(text.slice(1).join(' ')) + '</p>' : '') + '</div>';
@@ -1392,7 +1392,12 @@ globalThis.JMD = (function () {
     if (rightBlock) classes.push('slide--split-block');
     if (title && title.level === 1) classes.push('slide--cover');
 
-    var full = slide.nodes.find(function (n) { return n.type === 'block' && BLOCKS[n.name] && BLOCKS[n.name].full; });
+    /* A statement or a section fills the page alone. Under a title, it keeps its size and the title heads the page; beside
+       a text or another block (1.37.1: Circuit's cover — a title, its lead, its cards and a closing quote), it is drawn
+       small inside the page — the page never loses what was written on it to make room for one block (until 1.37.1 it
+       did, silently), and the linter says so (`full-alone`). */
+    var full = slide.nodes.length === 1 && slide.nodes.find(function (n) { return n.type === 'block' && BLOCKS[n.name] && BLOCKS[n.name].full; });
+    var crowded = slide.nodes.filter(function (n) { return n.type !== 'title'; }).length > 1;
     var inner;
     if (full) {
       inner = BLOCKS[full.name].render(full, ctx);
@@ -1415,7 +1420,7 @@ globalThis.JMD = (function () {
         }
         if (n.type === 'block') {
           if (n === rightBlock) return '';
-          if (BLOCKS[n.name]) return BLOCKS[n.name].render(n, ctx);
+          if (BLOCKS[n.name]) return BLOCKS[n.name].render(n, ctx, !!BLOCKS[n.name].full && crowded);
           return '<div class="prose"><p><em>unknown block: ' + esc(n.name) + '</em></p></div>';
         }
         return '';
@@ -1524,6 +1529,8 @@ globalThis.JMD = (function () {
       var blocks = s.nodes.filter(function (x) { return x.type === 'block'; });
       var exempt = blocks.some(function (b) { return b.name === 'statement' || b.name === 'quote' || b.name === 'section'; });
       if (!title && !exempt) err(n, null, 'no-title', 'slide without a title (except statement, quote, section)');
+      var fullHere = blocks.find(function (b) { return BLOCKS[b.name] && BLOCKS[b.name].full; });
+      if (fullHere && s.nodes.filter(function (x) { return x.type !== 'title'; }).length > 1) warn(n, fullHere.name, 'full-alone', '`::: ' + fullHere.name + '` fills a page alone, or under its title; beside a text or another block it is drawn small inside the page — to give it the whole page, put it on a page of its own after a `---`');
       if (title && title.text.length > 60) warn(n, null, 'title-length', 'title is ' + title.text.length + ' characters, 60 recommended');
       var lead = s.nodes.find(function (x) { return x.type === 'lead'; });
       if (lead && lead.text.length > 200) warn(n, null, 'lead-length', 'lead is ' + lead.text.length + ' characters, 200 recommended');
