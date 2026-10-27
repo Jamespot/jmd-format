@@ -1193,7 +1193,7 @@ try {
     ok(/Pages:\s+3/.test(docInfo) && /\(A4\)/.test(docInfo), 'jmd pdf: 3 pages, A4', docInfo);
     cli('render decks/samples/one-pager.jmd -o build/one-pager-pages');
     const png = readFileSync(join(root, 'build/one-pager-pages/slide-02.png'));
-    ok(png.readUInt32BE(16) === 793 && png.readUInt32BE(20) === 1122, 'jmd render: each page is a 793×1122 PNG (A4 at 96 dpi)', png.readUInt32BE(16) + '×' + png.readUInt32BE(20));
+    ok(png.readUInt32BE(16) === 794 && png.readUInt32BE(20) === 1122, 'jmd render: each page is a 794×1122 PNG (A4 at 96 dpi, whole pixels whatever Chrome rounds)', png.readUInt32BE(16) + '×' + png.readUInt32BE(20));
     ok(JSON.parse(cli('lint decks/samples/one-pager.jmd --dom --json')).ok === true, 'jmd lint --dom: the sample passes the DOM overflow check');
 
     // Story: 9:16, one screen per `---`, presented like slides, posted as 1080×1920 images or a carousel PDF
