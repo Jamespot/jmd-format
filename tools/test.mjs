@@ -359,6 +359,27 @@ try {
     ok(/<div class="tl-date"[^>]*>Janvier à juin<\/div>/.test(tp) && /<h4>Cadrage<\/h4>/.test(tp) && (tp.match(/<li>/g) || []).length === 3 && /<p data-line[^>]*>Cible restreinte\.<\/p>/.test(tp) && errs('::: timeline\n' + Array.from({ length: 7 }, (_, k) => '### P' + k).join('\n') + '\n:::\n', 'max-items').length === 1, 'timeline: `date — title`, bullets and text in a phase; seven phases is `max-items`');
     const plain = JMD.render(one('::: cards {.plain}\n- A | a\n- B | b\n:::\n'), { brand: { 'card-marker': 'glyphs', glyphs: 4 } });
     ok(!/class="num/.test(plain) && /class="num/.test(JMD.render(one('::: cards\n- A | a\n- B | b\n:::\n'), { brand: { 'card-marker': 'glyphs', glyphs: 4 } })), 'cards: `{.plain}` takes the theme\'s marker off, the deck\'s say without touching the theme');
+    // a card keeps the author's order (1.38.3, Matthieu's cockpit: the closing message, written after the bullets, was drawn above them)
+    const order = JMD.render(one('::: cards\n### Pipe\n**179 k€** en octobre\n- ColComIA 87 k€\n- Mail 92 k€\n*Leads stables.*\n- Last\n:::\n'), {});
+    ok(order.indexOf('179 k€') < order.indexOf('ColComIA') && order.indexOf('Mail 92') < order.indexOf('Leads stables') && order.indexOf('Leads stables') < order.indexOf('Last') && (order.match(/<ul>/g) || []).length === 2 && (order.match(/<\/ul>/g) || []).length === 2, 'cards: text and bullets in the order written, bullets in a row share one list');
+    // kpi (1.39.0, issue #33): the cockpit card — Matthieu's « Cockpit Intégration », written in the block it asked for
+    const all = (body, rule) => JMD.lint(one(body)).filter(f => !rule || f.rule === rule);
+    const cockpit = '::: kpi\n### 😁 Engagement\n4,3 / 5 | satisfaction\n- 28 réponses sur 68\nstack: Note 5 = 12 | Note 4 = 12 | Note 3 = 4\n> Attentes : rituels communs.\n\n' +
+      '### 🙂 Rôles clés\n83 % | 10 rôles sur 12 | ↗ +8 pts vs septembre\ndots: Sécurisés = 10 | En cours = 1 {.partial} | Dev SB = 1 {.empty}\n> Désigner un backup.\n\n' +
+      '### 😞 Pipe\n179 k€ | en octobre\nbars: J = 122 + 780 | F = 151 + 210 | O = 87 + 92 {.partial}\nseries: ColComIA | Mail\nunit: k€\ntarget: 400–550\n> Affaires plus petites.\n\n' +
+      '### 😐 Churn\n4,5 % | du MRR\nhbars: ColCom = 6,1 | Sfb = 4,1 | Mail = 0,6\nunit: %\ntarget: 5\n- Projection : 6,3 %\n> Dans la cible à date.\n:::\n';
+    const kh = JMD.render(one(cockpit, 'fr'), {});
+    ok(!all(cockpit).filter(f => f.level !== 'info').length && (kh.match(/<div class="card kpi/g) || []).length === 4 && !/class="num/.test(kh) && (kh.match(/<span class="kpi-v"/g) || []).length === 4 && kh.includes('<span class="kpi-d"') && kh.includes('>↗ +8 pts vs septembre<'), 'kpi: four cards, the figure as value | label | delta, no theme marker (the title carries the mood), lint clean');
+    const churn = kh.slice(kh.lastIndexOf('<div class="card kpi'));
+    ok(churn.indexOf('kpi-vis--hbars') < churn.indexOf('Projection') && churn.indexOf('Projection') < churn.indexOf('kpi-msg') && (churn.match(/<ul>/g) || []).length === 1, 'kpi: the parts in the order written — the visual, the bullet under it, the message last');
+    ok((kh.match(/class="kpi-seg chart-s/g) || []).length === 3 && (kh.match(/class="kpi-unit[ "]/g) || []).length === 12 && /kpi-units--dots" style="--cols:4"/.test(kh) && (kh.match(/kpi-unit is-empty/g) || []).length === 1 && (kh.match(/kpi-unit chart-s2 is-partial/g) || []).length === 1, 'kpi: a stack of three, twelve dots in a 4 × 3 grid, `{.empty}` drawn hollow, `{.partial}` half filled');
+    ok(/kpi-band" style="bottom:/.test(kh) && (kh.match(/class="kpi-col[ "]/g) || []).length === 3 && /kpi-col is-partial/.test(kh) && kh.includes('>ColComIA<') && kh.includes('400–550 k€'), 'kpi: bars stacked by series, the target band, `{.partial}` hatched, the series and the band in the keys');
+    ok((kh.match(/<i class="is-over"/g) || []).length === 1 && (kh.match(/class="kpi-mark"/g) || []).length === 3 && kh.includes('>6,1 %<'), 'kpi: hbars — only the bar past the target gets the part beyond it, the target marked on every row, the decimal mark of `lang:`');
+    ok(all('::: kpi\n### A\n- only details\n:::\n', 'kpi-figure').length === 1 && all('::: kpi\n### A\n1\nstack: a = 1\ncells: b = 2\n:::\n', 'kpi-visual').length === 1 && all('::: kpi\n### A\n1\nstack: a = lots\n:::\n', 'kpi-visual').length === 1 &&
+      all('::: kpi\n### A\n1\nstack: a = 1 + 2\n:::\n', 'kpi-visual').length === 1 && all('::: kpi\n### A\n1\ncells: a = 41\n:::\n', 'max-items').length === 1 && all('::: kpi\n### A\n1\n- a\n- b\n- c\n- d\n:::\n', 'kpi-details').length === 1 &&
+      all('::: kpi\n### A\n1\nstack: a = 1\ntarget: soon\n:::\n', 'kpi-visual').length === 2 && all('::: kpi\n' + '### A\n1\n'.repeat(5) + ':::\n', 'max-items').length === 1, 'kpi lint: no figure, two visuals, a value or a target not a number, ` + ` outside bars, past 40 units, 4 details, 5 cards');
+    // the field case: the same cockpit drawn in characters by a host model, before kpi existed
+    ok(all('::: cards\n### Pipe\n**179 k€**\n🟩🟥🟩🟥🟥🟥🟥🟥🟩🟥\n:::\n', 'text-chart').length === 1 && all('::: cards\n### A\n█ ▃ ▄ ▂ ▁ ▃\n:::\n', 'text-chart').length === 1 && !all('::: cards\n### 😁 A\nUn texte, ● une puce.\n:::\n', 'text-chart').length, 'text-chart: a chart drawn in emoji squares or block characters is a warning naming kpi; a mood and a dot are not');
     const icon = '::: cards\n### ![](img:jamespot/logo-jamespot-icone) Cadrage\n- Kick Off\n:::\n';
     ok(errs(icon, 'inline-image').length === 1 && !/!\[|img:jamespot/.test(JMD.render(one(icon), {})) && /<h3[^>]*>Cadrage<\/h3>/.test(JMD.render(one(icon), {})) && !errs('::: logos\n- ![A](a.svg)\n:::\n', 'inline-image').length, 'an image inside a text is `inline-image` and never printed as `![…]`; a logo wall is not one');
     // the chart: the types, the values read as numbers, the series, the hero, the decimal mark of the deck's language
@@ -1097,7 +1118,12 @@ try {
       '- <script>alert(5)</script> | 12 | 3', '- "><img src=x onerror=alert(6)> | 7 | 4 {.hero" onclick="alert(7)}', '- </svg><foreignObject><b>x</b></foreignObject> | 9 onmouseover=alert(8) | 2', ':::',
       '', '---', 'notes: n', '---', '## Pie', '::: chart {.pie}', '- <script>alert(9)</script> | 3 {.hero}', '- [js](javascript:alert(10)) | 4', ':::',
       '', '---', 'notes: n', '---', '## Table', '::: table', '| <script>alert(11)</script> | </td></tr></table><script>alert(12)</script> |', '|---|---|',
-      '| <svg onload=alert(13)> | [x](javascript:alert(14)) | {.hero" onclick="alert(15)}', ':::', ''].join('\n');
+      '| <svg onload=alert(13)> | [x](javascript:alert(14)) | {.hero" onclick="alert(15)}', ':::',
+      // kpi (1.39.0): every channel of the card — title, figure, detail, visual parts, series, unit, target, message
+      '', '---', 'notes: n', '---', '## Kpi', '::: kpi', '### <img src=x onerror=alert(18)> {.z" onclick="alert(19)}', '1"><script>alert(20)</script> | <svg onload=alert(21)> | </span><script>alert(22)</script>',
+      '- <iframe src=javascript:alert(23)>', 'bars: <b onmouseover=alert(24)>J</b> = 1 + 2 {.partial" onclick="alert(25)} | x" style="background:url(javascript:alert(26)) = 3', 'series: <script>alert(27)</script> | B',
+      'unit: </i><script>alert(28)</script>', 'target: 1–2</span><script>alert(29)</script>', '> </p><script>alert(30)</script>',
+      '', '### B', '2', 'hbars: <svg onload=alert(31)> = 4', 'target: 3', '', '### C', '3', 'dots: </i><script>alert(32)</script> = 2 {.empty}', ':::', ''].join('\n');
     const dataPath = join(tmp, 'adversarial-data.james-jmd.html'); writeFileSync(dataPath, buildHtml({ jmd: advData, name: 'adversarial-data.jmd', brand: ANY_BRAND }));
     violations.length = 0;
     p = await open('about:blank'); await p.send('Log.enable'); p.on('Log.entryAdded', e => { if (/Content Security Policy/.test(e.entry.text)) violations.push(e.entry.text.slice(0, 120)); });
@@ -1108,11 +1134,14 @@ try {
       handlers: [...document.querySelectorAll('*')].reduce((n, el) => n + [...el.attributes].filter(a => /^on/i.test(a.name)).length, 0),
       foreign: [...document.querySelectorAll('.chart-svg *')].map(el => el.tagName).filter(t => !['defs', 'linearGradient', 'stop', 'path', 'rect', 'text', 'line', 'polyline', 'polygon', 'circle'].includes(t)),
       svgs: document.querySelectorAll('.chart-svg').length, imgs: document.querySelectorAll('.slide img').length,
+      kpiStyles: [...document.querySelectorAll('.kpis [style]')].map(el => el.getAttribute('style')).filter(s => !/^(?:(?:flex|width|height|bottom|left|--cols):[\\d.]+%?;?)+$/.test(s)),
+      kpiTags: [...document.querySelectorAll('.kpis *')].map(el => el.tagName.toLowerCase()).filter(t => !['div', 'span', 'i', 'b', 'h3', 'p', 'ul', 'li', 'code', 'strong', 'em', 'svg', 'polyline', 'circle'].includes(t)),
       links: [...document.querySelectorAll('.slide a')].map(a => a.getAttribute('href')),
       text: [...document.querySelectorAll('.slide')].map(s => s.textContent).join(' ')
     })`));
-    ok(dd.slides === 3 && dd.svgs === 2 && dd.scripts === 1 && dd.handlers === 0 && dd.foreign.length === 0 && dd.imgs === 0, 'data blocks: one script (ours), zero on* attributes, nothing in a chart but the drawing\'s own elements, no image smuggled in', JSON.stringify({ ...dd, text: '' }));
+    ok(dd.slides === 4 && dd.svgs === 2 && dd.scripts === 1 && dd.handlers === 0 && dd.foreign.length === 0 && dd.imgs === 0, 'data blocks: one script (ours), zero on* attributes, nothing in a chart but the drawing\'s own elements, no image smuggled in', JSON.stringify({ ...dd, text: '' }));
     ok(dd.text.includes('<script>alert(5)</script>') && dd.text.includes('<script>alert(11)</script>') && dd.links.every(h => h === '#'), 'labels and cells show as literal text, a javascript: link in a cell or a key becomes #');
+    ok(!dd.kpiStyles.length && !dd.kpiTags.length && dd.text.includes('<script>alert(20)</script>') && dd.text.includes('<script>alert(27)</script>') && dd.text.includes('<script>alert(30)</script>'), 'kpi: a style carries computed numbers only, no element but the card\'s own, every channel shows as literal text', JSON.stringify({ s: dd.kpiStyles, t: dd.kpiTags }));
     ok(violations.length === 0, 'no CSP violation while rendering the hostile data blocks', violations.join(' | '));
     await p.close();
     // the diagram: labels, ids, classes, directives and links all try; a node's text is the only thing the author reaches

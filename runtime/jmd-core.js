@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.38.2';
+  var VERSION = '1.39.0';
   var FORMAT_MAX = 2;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -293,14 +293,14 @@ globalThis.JMD = (function () {
       var mH = /^#{2,3}\s+(.*)$/.exec(l);
       if (mH) {
         var t = splitItem(mH[1]);
-        cur = { title: t.cols.join(' | '), attrs: t.attrs, items: [], text: [], line: block.map[0] + 1 + k, itemLines: [], textLines: [] }; cols.push(cur); return;
+        cur = { title: t.cols.join(' | '), attrs: t.attrs, items: [], text: [], line: block.map[0] + 1 + k, itemLines: [], textLines: [], order: [] }; cols.push(cur); return;
       }
       var mI = /^\s*[-*]\s+(.*)$/.exec(l);
-      if (mI) { if (!cur) { cur = { title: '', attrs: mods(''), items: [], text: [], line: null, itemLines: [], textLines: [] }; cols.push(cur); } cur.items.push(mI[1]); cur.itemLines.push(block.map[0] + 1 + k); return; }
+      if (mI) { if (!cur) { cur = { title: '', attrs: mods(''), items: [], text: [], line: null, itemLines: [], textLines: [], order: [] }; cols.push(cur); } cur.order.push('i' + cur.items.length); cur.items.push(mI[1]); cur.itemLines.push(block.map[0] + 1 + k); return; }
       if (l.trim() && cur) {
         var t2 = splitItem(l);
         if (t2.attrs.classes.length) cur.attrs.classes = cur.attrs.classes.concat(t2.attrs.classes);
-        cur.text.push(t2.cols.join(' | ')); cur.textLines.push(block.map[0] + 1 + k);
+        cur.order.push('t' + cur.text.length); cur.text.push(t2.cols.join(' | ')); cur.textLines.push(block.map[0] + 1 + k);
       }
     });
     return cols;
@@ -578,6 +578,124 @@ globalThis.JMD = (function () {
   function chartText(c) {
     return '<table class="chart-data">' + (c.series.length ? '<tr><th></th>' + c.series.map(function (s) { return '<th>' + inline(s) + '</th>'; }).join('') + '</tr>' : '') +
       c.items.map(function (it) { return '<tr><th>' + inline(it.label) + '</th>' + it.raw.map(function (v) { return '<td>' + inline(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
+  }
+
+  /* ───────────────────────── kpi: the cockpit card (1.39.0, issue #33) ─────────────────────────
+     One card per indicator: its figure very big, a few details, one small visual drawn here and a closing message. Asked for
+     by a monthly cockpit (2026-10-28) that a host model could only draw with block characters and emoji squares, out of the
+     brand, out of line, and as text in the PowerPoint. The visuals are boxes of HTML, not SVG: the PPTX export reads every
+     plain box back as a native shape, so a stacked bar or a grid of dots lands in PowerPoint as shapes (lib/pptx.mjs).
+     Colors come from the chart's series classes, never from the source; `{.empty}` draws a unit hollow, `{.partial}` hatches
+     a period not yet closed, a `target:` past which an `hbars` bar takes the highlight. */
+  var KPI_VISUALS = ['stack', 'cells', 'dots', 'bars', 'hbars', 'funnel', 'trend'];
+  var KPI_KEY = /^\s*(stack|cells|dots|bars|hbars|funnel|trend|unit|target|series)\s*:\s*(.*)$/i;
+  var KPI_MAX = { stack: 6, cells: 40, dots: 40, bars: 12, hbars: 5, funnel: 4, trend: 24 }; // segments, units for cells and dots
+  var KPI_DETAILS = 3;
+  // what a chart drawn in characters is made of (the linter's `text-chart`)
+  var TEXT_CHART = /[▀-▟■-▩○●◐-◓◧-◪⬛⬜⚪⚫]|\uD83D[\uDD34\uDD35]|\uD83D[\uDFE0-\uDFEB]/g;
+  // `label = value {.mod}`, values of several series joined by ` + `
+  function kpiSeg(s) {
+    var mM = /\s*\{([^}]*)\}\s*$/.exec(s), attrs = mods(mM ? mM[1] : '');
+    if (mM) s = s.slice(0, mM.index);
+    var eq = s.lastIndexOf('='), label = eq >= 0 ? s.slice(0, eq).trim() : '', raw = (eq >= 0 ? s.slice(eq + 1) : s).trim();
+    var parts = raw.split(/\s+\+\s+/);
+    return { label: label, raw: raw, parts: parts, values: parts.map(num), attrs: attrs };
+  }
+  // a target: one value (`5`) or a band (`400–550`, `400-550`, `400 to 550`)
+  function kpiTarget(s) {
+    if (!s) return null;
+    var m = /^(.+?)\s*(?:–|—|\.\.|\bto\b|\bà\b|(?<=\d)\s*-\s*(?=\d))\s*(.+)$/.exec(s.trim());
+    var lo = num(m ? m[1] : s), hi = m ? num(m[2]) : lo;
+    return lo == null || hi == null ? { bad: s } : { lo: Math.min(lo, hi), hi: Math.max(lo, hi), raw: s.trim() };
+  }
+  function kpis(b) {
+    var cards = [], cur = null;
+    b.lines.forEach(function (l, k) {
+      var line = b.map[0] + 1 + k, t = l.trim(), m;
+      if ((m = /^#{2,3}\s+(.*)$/.exec(l))) {
+        var h = splitItem(m[1]);
+        cur = { title: h.cols.join(' | '), attrs: h.attrs, line: line, figure: null, parts: [], visuals: [], opts: {}, details: 0 }; cards.push(cur); return;
+      }
+      if (!t) return;
+      if (!cur) { cur = { title: '', attrs: mods(''), line: null, figure: null, parts: [], visuals: [], opts: {}, details: 0 }; cards.push(cur); }
+      if ((m = /^\s*[-*]\s+(.*)$/.exec(l))) { cur.parts.push({ t: 'li', text: m[1], line: line }); cur.details++; return; }
+      if ((m = /^>\s?(.*)$/.exec(t))) { cur.parts.push({ t: 'msg', text: m[1], line: line }); return; }
+      if ((m = KPI_KEY.exec(l))) {
+        var key = m[1].toLowerCase();
+        if (KPI_VISUALS.indexOf(key) < 0) { cur.opts[key] = m[2].trim(); return; }
+        var v = { kind: key, line: line, segs: m[2].split(COLS).map(function (s) { return s.trim(); }).filter(Boolean).map(kpiSeg) };
+        cur.visuals.push(v); cur.parts.push({ t: 'vis', vis: v, line: line }); return;
+      }
+      if (!cur.figure) { var f = splitItem(t); cur.figure = { cols: f.cols, line: line }; cur.parts.push({ t: 'fig', line: line }); return; }
+      cur.parts.push({ t: 'p', text: t, line: line });
+    });
+    return cards;
+  }
+  function kpiVisual(v, opts, dec) {
+    var unit = opts.unit ? ' ' + opts.unit : '', segs = v.segs, out;
+    function val(x) { return esc(fmt(x, dec)) + esc(unit); }
+    // `{.empty}` hollow (nothing there yet), `{.partial}` half filled (on its way)
+    function tone(s, k) { return has(s.attrs, 'empty') ? ' is-empty' : ' chart-s' + (k % SERIES_MAX + 1) + (has(s.attrs, 'partial') ? ' is-partial' : ''); }
+    function keys(list) {
+      return '<div class="kpi-keys">' + list.map(function (s, k) {
+        return '<span class="chart-key' + tone(s, k) + '"><i></i>' + inline(s.label) + (s.values[0] != null ? ' <b>' + val(s.values[0]) + '</b>' : '') + '</span>';
+      }).join('') + '</div>';
+    }
+    var series = opts.series ? opts.series.split(COLS).map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    var tg = kpiTarget(opts.target);
+    if (tg && tg.bad) tg = null;
+    if (v.kind === 'stack') {
+      out = '<div class="kpi-stack">' + segs.map(function (s, k) { return '<i class="kpi-seg' + tone(s, k) + '" style="flex:' + Math.max(0, s.values[0] || 0) + '"></i>'; }).join('') + '</div>' + keys(segs);
+    } else if (v.kind === 'cells' || v.kind === 'dots') {
+      var units = [];
+      segs.forEach(function (s, k) { for (var q = 0; q < Math.min(Math.max(0, Math.round(s.values[0] || 0)), KPI_MAX.cells); q++) units.push(tone(s, k)); });
+      units = units.slice(0, KPI_MAX.cells);
+      // cells in one row up to 12; dots, and more cells, in a grid a little wider than tall, full rows when the count allows (12 → 4 × 3)
+      var n = units.length, cols = n;
+      if (v.kind === 'dots' || n > 12) {
+        var aim = Math.sqrt(n) * 1.2, best = null;
+        for (var d = Math.ceil(Math.sqrt(n)); d <= Math.min(n, 12); d++) if (n % d === 0 && (best == null || Math.abs(d - aim) < Math.abs(best - aim))) best = d;
+        cols = best != null && best <= 2 * aim ? best : Math.min(12, Math.ceil(aim));
+      }
+      out = '<div class="kpi-units kpi-units--' + v.kind + '" style="--cols:' + cols + '">' + units.map(function (c) { return '<i class="kpi-unit' + c + '"></i>'; }).join('') + '</div>' + keys(segs);
+    } else if (v.kind === 'bars') {
+      var tops = segs.map(function (s) { return s.values.reduce(function (a, x) { return a + Math.max(0, x || 0); }, 0); });
+      var max = Math.max.apply(null, tops.concat(tg ? [tg.hi] : [0])) || 1, S = segs.reduce(function (m, s) { return Math.max(m, s.values.length); }, 1);
+      var anyHero = segs.some(function (s) { return has(s.attrs, 'hero'); });
+      out = '<div class="kpi-cols">' +
+        (tg ? '<div class="kpi-band' + (tg.lo === tg.hi ? ' is-line' : '') + '" style="bottom:' + f1(tg.lo / max * 100) + '%;height:' + f1((tg.hi - tg.lo) / max * 100) + '%"></div>' : '') +
+        segs.map(function (s, k) {
+          var hero = has(s.attrs, 'hero');
+          return '<div class="kpi-col' + (has(s.attrs, 'partial') ? ' is-partial' : '') + (hero ? ' is-hero' : anyHero ? ' is-quiet' : '') + '">' +
+            (hero ? '<span class="kpi-cv">' + val(tops[k]) + '</span>' : '') +
+            '<div class="kpi-colbar" style="height:' + f1(tops[k] / max * 100) + '%">' + s.values.map(function (x, q) { return '<i class="chart-s' + (q % SERIES_MAX + 1) + '" style="flex:' + Math.max(0, x || 0) + '"></i>'; }).join('') + '</div>' +
+            '<span class="kpi-cl">' + inline(s.label) + '</span></div>';
+        }).join('') + '</div>' +
+        ((S > 1 || tg) ? '<div class="kpi-keys">' + (S > 1 ? Array.apply(null, Array(Math.min(S, SERIES_MAX))).map(function (_, q) { return '<span class="chart-key chart-s' + (q + 1) + '"><i></i>' + inline(series[q] || ('Series ' + (q + 1))) + '</span>'; }).join('') : '') +
+          (tg ? '<span class="chart-key kpi-key-band"><i></i>' + esc(tg.raw) + esc(unit) + '</span>' : '') + '</div>' : '');
+    } else if (v.kind === 'hbars') {
+      var hmax = Math.max.apply(null, segs.map(function (s) { return s.values[0] || 0; }).concat(tg ? [tg.hi] : [])) * 1.15 || 1;
+      out = '<div class="kpi-rows">' + segs.map(function (s, k) {
+        // past the target, the part beyond it takes the highlight: the bar says how far over, not only that it is
+        var x = Math.max(0, s.values[0] || 0), within = tg ? Math.min(x, tg.hi) : x;
+        return '<div class="kpi-row"><span class="kpi-rl">' + inline(s.label) + '</span><span class="kpi-track"><i style="width:' + f1(within / hmax * 100) + '%"></i>' +
+          (x > within ? '<i class="is-over" style="width:' + f1((x - within) / hmax * 100) + '%"></i>' : '') +
+          (tg ? '<b class="kpi-mark" style="left:' + f1(tg.hi / hmax * 100) + '%"></b>' : '') + '</span><span class="kpi-rv">' + val(x) + '</span></div>';
+      }).join('') + '</div>' + (tg ? '<div class="kpi-keys"><span class="chart-key kpi-key-mark"><i></i>' + esc(tg.raw) + esc(unit) + '</span></div>' : '');
+    } else if (v.kind === 'funnel') {
+      var top = Math.max.apply(null, segs.map(function (s) { return s.values[0] || 0; })) || 1;
+      out = '<div class="kpi-funnel">' + segs.map(function (s, k) {
+        return '<div class="kpi-stage"><i class="chart-s' + (k % SERIES_MAX + 1) + '" style="width:' + f1(Math.max(8, (s.values[0] || 0) / top * 100)) + '%"></i><span>' + inline(s.label) + ' <b>' + val(s.values[0] || 0) + '</b></span></div>';
+      }).join('') + '</div>';
+    } else { // trend: a sparkline, the last point said
+      var pts = segs.map(function (s) { return s.values[0]; }).filter(function (x) { return x != null; });
+      var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts), W = 300, H = 64, span = hi - lo || 1;
+      var xy = pts.map(function (p, k) { return [pts.length > 1 ? k / (pts.length - 1) * (W - 8) + 4 : W / 2, H - 6 - (p - lo) / span * (H - 12)]; });
+      out = '<svg class="kpi-trend chart-s1" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + xy.map(function (q) { return f1(q[0]) + ',' + f1(q[1]); }).join(' ') + '"/>' +
+        (xy.length ? '<circle cx="' + f1(xy[xy.length - 1][0]) + '" cy="' + f1(xy[xy.length - 1][1]) + '" r="5"/>' : '') + '</svg>' +
+        '<div class="kpi-keys kpi-keys--ends">' + (segs.length ? '<span>' + inline(segs[0].label) + '</span><span>' + inline(segs[segs.length - 1].label) + ' <b>' + (pts.length ? val(pts[pts.length - 1]) : '') + '</b></span>' : '') + '</div>';
+    }
+    return '<div class="kpi-vis kpi-vis--' + v.kind + '"' + src(v.line) + '>' + out + '</div>';
   }
 
   /* ───────────────────────── diagram: Mermaid read, drawn by us (spec/charts.md) ─────────────────────────
@@ -1274,8 +1392,8 @@ globalThis.JMD = (function () {
         var brand = (ctx && ctx.brand) || {}, marker = brand['card-marker'] || 'glyphs', glyphs = +brand.glyphs || 0, alt = brand['card-fill'] === 'alternate';
         var start = ctx ? (ctx.cardBlocks = (ctx.cardBlocks || 0) + 1) - 1 : 0; // each cards block starts one shape further: no two slides look alike
         var cards = hasHeadings(b)
-          ? sections(b).map(function (c) { return { title: c.title, text: c.text, items: c.items, attrs: c.attrs, line: c.line, textLines: c.textLines, itemLines: c.itemLines, col: null }; })
-          : items(b).map(function (it) { return { title: it.cols[0] || '', text: it.cols[1] ? [it.cols[1]] : [], items: [], attrs: it.attrs, line: it.line, textLines: [it.line], itemLines: [], col: 0 }; });
+          ? sections(b).map(function (c) { return { title: c.title, text: c.text, items: c.items, attrs: c.attrs, line: c.line, textLines: c.textLines, itemLines: c.itemLines, order: c.order, col: null }; })
+          : items(b).map(function (it) { return { title: it.cols[0] || '', text: it.cols[1] ? [it.cols[1]] : [], items: [], attrs: it.attrs, line: it.line, textLines: [it.line], itemLines: [], order: it.cols[1] ? ['t0'] : [], col: 0 }; });
         var n = cards.filter(function (c) { return !has(c.attrs, 'wide'); }).length || 1;
         var numbered = has(b.attrs, 'numbered');
         if (has(b.attrs, 'plain')) marker = 'none'; // the deck's own say over the theme's marker: no shape on these cards
@@ -1288,8 +1406,13 @@ globalThis.JMD = (function () {
               : marker === 'none' ? ''
               : '<div class="num num--icon" data-icon="' + iconFor(c.title, k) + '">' + iconSvg(iconFor(c.title, k)) + '</div>') +
             (c.title ? '<h3' + src(c.line, c.col) + '>' + inline(c.title) + '</h3>' : '') +
-            c.text.map(function (t, j) { return '<p' + src(c.textLines[j], c.col == null ? null : 1) + '>' + inline(t) + '</p>'; }).join('') +
-            (c.items.length ? '<ul>' + c.items.map(function (t, j) { return '<li><span' + src(c.itemLines[j]) + '>' + inline(t) + '</span></li>'; }).join('') + '</ul>' : '') +
+            // text and bullets in the author's order (1.38.3): a closing line written after the bullets stays last; bullets in a row share one list
+            c.order.map(function (o, q) {
+              var j = +o.slice(1);
+              if (o[0] === 't') return '<p' + src(c.textLines[j], c.col == null ? null : 1) + '>' + inline(c.text[j]) + '</p>';
+              var prev = q && c.order[q - 1][0] === 'i', next = q + 1 < c.order.length && c.order[q + 1][0] === 'i';
+              return (prev ? '' : '<ul>') + '<li><span' + src(c.itemLines[j]) + '>' + inline(c.items[j]) + '</span></li>' + (next ? '' : '</ul>');
+            }).join('') +
             '</div>';
         }).join('') + '</div>';
       }
@@ -1354,6 +1477,31 @@ globalThis.JMD = (function () {
         })() : '';
         return '<figure class="chart chart--' + c.type + '" style="--chart-h:' + box.h + 'px">' + chartLegend(c) +
           '<div class="chart-plot">' + chartSvg(c, box, 'jc-' + (ctx ? (ctx.charts = (ctx.charts || 0) + 1) : 1) + '-') + keys + '</div>' + chartText(c) + '</figure>';
+      }
+    },
+    // the cockpit card: `### title`, the figure line `value | label | delta`, `-` details, one visual line, a `>` message — in the order written
+    kpi: {
+      max: 4,
+      count: function (b) { return kpis(b).length; },
+      render: function (b, ctx) {
+        var cards = kpis(b), dec = /^(fr|de|es|it|pt|nl|pl|ru|sv|da|fi|nb|nn|no|cs|tr)\b/i.test((ctx && ctx.lang) || '') ? ',' : '.';
+        return '<div class="cards kpis' + ((ctx && ctx.brand && ctx.brand['card-shadow']) === 'offset' ? ' cards--offset' : '') + '" style="--n:' + cards.length + '">' + cards.map(function (c) {
+          var ul = false, html = c.parts.map(function (p, q) {
+            var next = c.parts[q + 1], open = '', close = '';
+            if (p.t === 'li') { if (!ul) { open = '<ul>'; ul = true; } if (!next || next.t !== 'li') { close = '</ul>'; ul = false; } }
+            if (p.t === 'li') return open + '<li><span' + src(p.line) + '>' + inline(p.text) + '</span></li>' + close;
+            if (p.t === 'fig') {
+              var f = c.figure.cols;
+              return '<div class="kpi-fig"><span class="kpi-v"' + src(p.line, 0) + '>' + inline(f[0] || '') + '</span>' +
+                (f[1] ? '<span class="kpi-l"' + src(p.line, 1) + '>' + inline(f[1]) + '</span>' : '') +
+                (f[2] ? '<span class="kpi-d"' + src(p.line, 2) + '>' + inline(f[2]) + '</span>' : '') + '</div>';
+            }
+            if (p.t === 'vis') return kpiVisual(p.vis, c.opts, dec);
+            if (p.t === 'msg') return '<p class="kpi-msg"' + src(p.line) + '>' + inline(p.text) + '</p>';
+            return '<p' + src(p.line) + '>' + inline(p.text) + '</p>';
+          }).join('');
+          return '<div class="card kpi' + (has(c.attrs, 'hero') ? ' is-hero' : '') + '">' + (c.title ? '<h3' + src(c.line) + '>' + inline(c.title) + '</h3>' : '') + html + '</div>';
+        }).join('') + '</div>';
       }
     },
     // boxes and arrows: a Mermaid flowchart, read and drawn here (no Mermaid runs); `{.right}` beside an image's column
@@ -1677,6 +1825,7 @@ globalThis.JMD = (function () {
     { name: 'logos', hint: '- ![Name](file) · 40 max', snippet: '::: logos\n- ![Acme](assets/logo-acme.svg)\n- ![Globex](assets/logo-globex.svg)\n:::' },
     { name: 'table', hint: '| a | b | rows · the row above |---|---| is the header · |--:| aligns right · 12 rows, 6 columns · 13–24 rows of ≤ 3 columns fold in two · {.split} · {.hero} on a row', snippet: '::: table\n| Offer | Users | Price |\n|---|---|---|\n| Starter | 10 | 5 € |\n| Pro | 100 | 9 € | {.hero}\n:::' },
     { name: 'chart', hint: '- label | value · {.bar} {.hbar} {.line} {.pie} on the block · unit: € · series: A | B for two columns of values · {.hero} on an item', snippet: '::: chart {.bar}\nunit: k€\n- Q1 | 120\n- Q2 | 180\n- Q3 | 240 {.hero}\n:::' },
+    { name: 'kpi', hint: '### title, then the figure: value | label | delta · ≤ 3 - details · one visual line: stack: cells: dots: bars: hbars: funnel: trend: with label = value | … · unit: target: series: · > message · 4 max', snippet: '::: kpi\n### Engagement\n4,3 / 5 | satisfaction\n- 28 answers out of 68\nstack: Rated 5 = 12 | Rated 4 = 12 | Rated 3 = 4\n> Expectations: shared rituals.\n\n### Pipeline\n179 k€ | in October\nbars: J = 902 | F = 361 | M = 437 | A = 179 {.partial}\nunit: k€\ntarget: 400–550\n> Steady leads, smaller deals.\n:::' },
     { name: 'diagram', hint: 'Mermaid: flowchart LR or TD, then A[Step] --> B{Choice} lines · -->|label| · -.-> dotted · A[Text]{.hero} · or a list with a form: {.tree} (indent) {.cycle} {.radial} {.pyramid} {.funnel} {.steps} {.venn} {.target} {.matrix} · center: x: y:', snippet: '::: diagram\nflowchart LR\n  A[Request] --> B{Approved?}\n  B -->|Yes| C[Publish]{.hero}\n  B -->|No| D[Revise]\n  D -.-> A\n:::' },
     { name: 'image', hint: '![alt](file){.right} beside the text · {.cover} decoration · {.wide} below', snippet: '![](assets/image.png){.right}' },
     { name: 'link', hint: '[Label →](url){.cta} a button · [text](url) inline', snippet: '[Learn more →](https://example.com){.cta}' }
@@ -1751,6 +1900,13 @@ globalThis.JMD = (function () {
       var inImg = null;
       [title && title.text, lead && lead.text].concat(s.nodes.filter(function (x) { return x.type === 'prose' || (x.type === 'block' && x.name !== 'logos'); }).flatMap(function (x) { return x.lines; }))
         .some(function (t) { if (t && t.search(INLINE_IMG) >= 0 && !IMG.test(t)) inImg = t.trim(); INLINE_IMG.lastIndex = 0; return !!inImg; });
+      // A chart drawn in characters — block elements, shaded squares, colored emoji squares and dots, four or more on a line.
+      // Seen in the field (2026-10-28, issue #33): a KPI cockpit whose every small visual was a line of 🟩🟥 or ▁▃▆, in the
+      // system's emoji colors, out of line, and text in the PowerPoint. The format draws them: `kpi` in a card, `chart` alone.
+      var drawn = null;
+      [lead && lead.text].concat(s.nodes.filter(function (x) { return x.type === 'prose' || x.type === 'block'; }).flatMap(function (x) { return x.lines; }))
+        .some(function (t) { if (t && (t.match(TEXT_CHART) || []).length >= 4) drawn = t.trim(); return !!drawn; });
+      if (drawn) warn(n, null, 'text-chart', '`' + cut(drawn, 40) + '`: a chart drawn in characters is not on the brand, does not line up and is text in the PowerPoint — in a card, `::: kpi` and its visual line (`stack:` `cells:` `dots:` `bars:` `hbars:` `funnel:` `trend:`); on its own, `::: chart`');
       if (inImg) err(n, null, 'inline-image', '`' + cut(inImg, 60) + '`: an image inside a text is not drawn — an image stands alone on its line, `![caption](src){.right}`; to take the theme\'s marker off cards, `::: cards {.plain}`');
 
       blocks.forEach(function (b) {
@@ -1815,6 +1971,27 @@ globalThis.JMD = (function () {
           });
           b.attrs.classes.forEach(function (m) { if (['right', 'donut'].indexOf(m) < 0 && CHART_TYPES.indexOf(m) < 0) warn(n, b.name, 'chart-type', '`{.' + m + '}` is not a chart type: ' + CHART_TYPES.join(', ') + ' (bar when none)'); });
         }
+        if (b.name === 'kpi') kpis(b).forEach(function (c) {
+          var who = '`' + (c.title || 'a card') + '`';
+          if (!c.figure) err(n, b.name, 'kpi-figure', who + ' has no figure: write it on the first line under the title, `4,3 / 5 | satisfaction` (value | label | delta)');
+          if (c.details > KPI_DETAILS) warn(n, b.name, 'kpi-details', who + ': ' + c.details + ' details, ' + KPI_DETAILS + ' at most — the figure and the visual carry the card');
+          if (c.visuals.length > 1) err(n, b.name, 'kpi-visual', who + ' has ' + c.visuals.length + ' visuals: one per card');
+          var msgs = c.parts.filter(function (p) { return p.t === 'msg'; });
+          if (msgs.length > 1) warn(n, b.name, 'kpi-message', who + ' has ' + msgs.length + ' `>` messages: one sentence closes a card');
+          var tg = kpiTarget(c.opts.target);
+          if (tg && tg.bad) err(n, b.name, 'kpi-visual', who + ': `target: ' + tg.bad + '` is not a number: one value (`5`) or a band (`400–550`)');
+          c.visuals.forEach(function (v) {
+            if (!v.segs.length) { err(n, b.name, 'kpi-visual', who + ': `' + v.kind + ':` without values — write `' + v.kind + ': label = 12 | label = 4`'); return; }
+            v.segs.forEach(function (s) {
+              s.values.forEach(function (x, q) { if (x == null) err(n, b.name, 'kpi-visual', who + ': `' + s.parts[q] + '`' + (s.label ? ' (' + s.label + ')' : '') + ' is not a number — write `label = 12`, the unit once in `unit:`'); });
+              if (s.values.length > 1 && v.kind !== 'bars') err(n, b.name, 'kpi-visual', who + ': `' + s.raw + '` — values joined by ` + ` are series, and only `bars:` stacks them');
+            });
+            var units = v.segs.reduce(function (a, s) { return a + Math.max(0, Math.round(s.values[0] || 0)); }, 0);
+            var count = v.kind === 'cells' || v.kind === 'dots' ? units : v.segs.length;
+            if (count > KPI_MAX[v.kind]) err(n, b.name, 'max-items', who + ': ' + count + (v.kind === 'cells' || v.kind === 'dots' ? ' units' : ' values') + ', maximum ' + KPI_MAX[v.kind] + ' in `' + v.kind + ':`' + (v.kind === 'cells' || v.kind === 'dots' ? ' — one unit each: for a bigger count, `stack:`' : ''));
+          });
+          if (c.opts.target && !c.visuals.some(function (v) { return v.kind === 'bars' || v.kind === 'hbars'; })) warn(n, b.name, 'kpi-visual', who + ': `target:` is drawn on `bars:` and `hbars:` only');
+        });
       });
 
       // Content that fell out of its block. A fence written with anything but three ASCII colons (`:: cards`, `:[ip 1] cards`

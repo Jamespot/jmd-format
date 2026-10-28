@@ -393,6 +393,68 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
 .body-pad:has(> .table-split){--body-gap:32px}
 .layout-story .table-split{grid-template-columns:1fr;gap:14px}
 
+/* kpi — the cockpit card (1.39.0): the figure very big, the details, one small visual in boxes (native shapes in the PPTX),
+   the message closing the card at its foot. The colors are the chart's series, on light and on dark slides. */
+.kpis{--c1:var(--brand-accent);--c2:var(--jp-indigo-800);--c3:var(--brand-secondary,var(--jp-purple-300));--c4:var(--jp-yellow-500);--c-quiet:var(--jp-purple-200);--c-text:var(--jp-ink);--c-soft:var(--jp-ink-soft);--c-grid:var(--jp-line);--c-band:var(--jp-purple-100);--c-over:var(--jp-yellow-600)}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--hook,.slide--problem,.slide--celebrate,.slide--act) .kpis{--c1:var(--jp-yellow-500);--c2:#fff;--c3:var(--jp-purple-300);--c4:var(--brand-secondary,var(--jp-purple-200));--c-quiet:rgba(255,255,255,.28);--c-text:#fff;--c-soft:rgba(255,255,255,.72);--c-grid:rgba(255,255,255,.18);--c-band:rgba(255,255,255,.12);--c-over:var(--jp-yellow-500)}
+.card.kpi{gap:8px;padding:calc(22px * var(--type-scale,1))}
+.card.kpi h3{font-size:calc(21px * var(--type-scale,1))}
+.card.kpi li{font-size:max(13px, calc(14px * var(--type-scale,1)));line-height:1.3}
+.card.kpi ul{gap:calc(5px * var(--type-scale,1))}
+.card.kpi li:before{margin-top:6px}
+.kpi-fig{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.kpi-v{font-family:var(--font-display);font-weight:900;font-size:calc(46px * var(--type-scale,1));line-height:1;letter-spacing:-.03em;color:var(--c-text);white-space:nowrap}
+.kpis[style*="--n:4"] .kpi-v{font-size:calc(42px * var(--type-scale,1))}
+.kpi-l{font-size:max(14px, calc(15px * var(--type-scale,1)));line-height:1.3;color:var(--c-soft);font-weight:600}
+.kpi-d{flex-basis:100%;font-family:var(--font-display);font-weight:800;font-size:max(14px, calc(15px * var(--type-scale,1)));color:var(--c-text)}
+.card .kpi-msg{margin-top:auto;padding-top:8px;border-top:1.5px solid var(--c-grid);font-style:italic;color:var(--c-text)}
+.kpi-vis{display:flex;flex-direction:column;gap:6px;margin:2px 0;min-width:0}
+.kpi-vis i:is(.chart-s1,.chart-s2,.chart-s3,.chart-s4){background:var(--c)}
+.kpi-vis .chart-s1{--c:var(--c1)}.kpi-vis .chart-s2{--c:var(--c2)}.kpi-vis .chart-s3{--c:var(--c3)}.kpi-vis .chart-s4{--c:var(--c4)}
+.kpi-vis i.is-empty{background:transparent;border:2px solid var(--c-quiet);box-sizing:border-box} /* a border, not a shadow: the PPTX reads it back as a shape */
+.kpi-keys{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;line-height:1.3;color:var(--c-soft);font-weight:600}
+.kpi-keys .chart-key{gap:6px}.kpi-keys .chart-key i{width:11px;height:11px;border-radius:3px;background:var(--c)}
+.kpi-keys .is-empty i{background:transparent;box-shadow:inset 0 0 0 2px var(--c-quiet)}
+.kpi-keys b{color:var(--c-text);font-weight:800}
+.kpi-keys--ends{justify-content:space-between}
+.kpi-stack{display:flex;height:20px;border-radius:7px;overflow:hidden;gap:2px}
+.kpi-stack .kpi-seg{display:block;min-width:2px}
+.kpi-units{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:6px;max-width:100%}
+.kpi-units--dots{max-width:calc(var(--cols) * 27px);gap:6px}
+.kpi-unit{display:block;aspect-ratio:1;border-radius:5px;max-height:24px}
+.kpi-vis i.is-partial{-webkit-mask-image:linear-gradient(90deg,#000 50%,rgba(0,0,0,.3) 50%);mask-image:linear-gradient(90deg,#000 50%,rgba(0,0,0,.3) 50%)} /* half there: a unit in progress */
+.kpi-units--dots .kpi-unit{border-radius:50%}
+.kpi-cols{position:relative;display:flex;align-items:flex-end;gap:5px;height:84px;padding-bottom:18px;border-bottom:1.5px solid var(--c-grid)}
+.kpi-band{position:absolute;left:0;right:0;margin-bottom:18px;background:var(--c-band);border-radius:3px;min-height:2px}
+.kpi-band.is-line{background:none;border-top:2px dashed var(--c-soft)}
+.kpi-col{position:relative;flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;min-width:0}
+.kpi-colbar{display:flex;flex-direction:column-reverse;width:100%;max-width:26px;border-radius:4px 4px 0 0;overflow:hidden;min-height:2px}
+.kpi-colbar i{display:block}
+.kpi-col.is-quiet .kpi-colbar{opacity:.55}
+.kpi-col.is-partial .kpi-colbar{-webkit-mask-image:repeating-linear-gradient(135deg,#000 0 4px,rgba(0,0,0,.45) 4px 7px);mask-image:repeating-linear-gradient(135deg,#000 0 4px,rgba(0,0,0,.45) 4px 7px)}
+.kpi-cl{position:absolute;bottom:-19px;left:0;right:0;text-align:center;overflow:hidden;font-size:12px;line-height:1;color:var(--c-soft);font-weight:600;white-space:nowrap}
+.kpi-cv{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--c-text);white-space:nowrap;margin-bottom:3px}
+.kpi-key-band i{background:var(--c-band)!important}
+.kpi-rows{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px 10px;font-size:13px;font-weight:600;color:var(--c-soft)}
+.kpi-row{display:contents}
+.kpi-track{position:relative;height:16px;display:flex}
+.kpi-track i{display:block;height:100%;background:var(--c1)}
+.kpi-track i:last-of-type{border-radius:0 5px 5px 0}
+.kpi-track i.is-over{background:var(--c-over)}
+.kpi-mark{position:absolute;top:-4px;bottom:-4px;width:0;border-left:2.5px dashed var(--c-text)}
+.kpi-rv{font-family:var(--font-display);font-weight:800;color:var(--c-text)}
+.kpi-key-mark i{background:none!important;border-left:2.5px dashed var(--c-text);border-radius:0!important;width:0!important;margin:0 4px}
+.kpi-funnel{display:flex;flex-direction:column;gap:8px}
+.kpi-stage{display:flex;flex-direction:column-reverse;align-items:center;gap:3px}
+.kpi-stage i{display:block;height:22px;border-radius:6px}
+.kpi-stage span{font-size:13px;font-weight:600;color:var(--c-soft);white-space:nowrap}
+.kpi-stage span b{font-family:var(--font-display);font-weight:800;color:var(--c-text)}
+.kpi-trend{width:100%;height:56px;overflow:visible}
+.kpi-trend polyline{fill:none;stroke:var(--c1);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.kpi-trend circle{fill:var(--c1)}
+.layout-story .kpi-v{font-size:calc(56px * var(--type-scale,1))}
+:is(.layout-memo,.layout-doc) .kpis[style*="--n:4"]{grid-template-columns:1fr 1fr}
+
 /* diagram — a Mermaid flowchart drawn by jmd-core.js (diagramLayout) in the brand's colors: boxes in the card color edged with
    the accent, a decision in the warm tint, a terminal (stadium, circle) in the deep color, `:::hero` in the accent. Dark slides
    turn it like a chart. The SVG is laid out in design units and only ever shrunk to its box, never stretched. */

@@ -227,6 +227,40 @@ One item per bar, point or slice: **label | value**, and one more value per extr
 
 The runtime draws it as SVG in the brand's colors (series: accent, deep, secondary, highlight), at the size of the layout (a Story screen, a Doc page, the right column of `{.right}`), with the decimal mark of `lang:`. It **arrives with motion** — bars grow from the axis, the line draws itself, the donut opens, the values land last — following the deck's motion mode; never in a Doc, a webpage, print, the editor, or for reduced motion. The numbers are also in the page as text (a hidden table), for a screen reader or a copy. Errors: no item (`chart-items`), a value that is not a number (`chart-value`), too many items for the type (`max-items`), more than 4 series or more than one on a pie (`chart-series`), a negative slice; an unknown `{.type}` is a warning.
 
+### `kpi` — the cockpit card: a figure, its details, one small visual, a message — up to 4 (1.39.0)
+```markdown
+::: kpi
+### 🙂 Key roles covered
+83 % | 10 roles out of 12 | ↗ +8 pts vs September
+- Critical: no backup for the lead dev
+dots: Covered = 10 | In progress = 1 | No backup = 1 {.empty}
+> Last priority: name a backup.
+
+### 😞 Pipeline
+179 k€ | in October · 56 leads
+bars: J = 122 + 780 | F = 151 + 210 | M = 215 + 222 | O = 87 + 92 {.partial}
+series: Product A | Product B
+unit: k€
+target: 400–550
+> Steady leads, smaller deals.
+:::
+```
+`### title` opens a card (an emoji in it is the card's mood: the cards carry no theme marker). The first plain line under it is **the figure**, `value | label | delta`, drawn very big; `-` lines are details (3 at most); a **visual line** draws one small chart; `> ` is the closing message, in italics at the foot of the card. Everything else comes **in the order written** — a bullet under the visual stays under it.
+
+| Visual | Draws | Values |
+|---|---|---|
+| `stack:` | one bar split into its parts: ratings, a split of a whole | `Rated 5 = 12 \| Rated 4 = 12 \| Rated 3 = 4`, 6 parts |
+| `cells:` | one square per unit, in a row: 1 of 8 delivered | `Done = 1 \| In progress = 2 \| Planned = 5`, 40 units |
+| `dots:` | one dot per unit, in a grid (12 → 4 × 3): roles covered, seats taken | as `cells:` |
+| `bars:` | small columns over periods; `a + b` stacks the series named by `series:` | `J = 122 + 780 \| F = 151 + 210`, 12 columns |
+| `hbars:` | a few horizontal bars with their value: a ranking against a threshold | `ColCom = 6,1 \| Sfb = 4,1`, 5 bars |
+| `funnel:` | stages that narrow | `Pipeline = 90 \| Orders = 26`, 4 stages |
+| `trend:` | a sparkline, the last value said | `J = 12 \| F = 14 \| M = 17`, 24 points |
+
+A part is `label = value`, parts separated by `|`; a value is a number alone, the unit said once by `unit:`. `{.empty}` draws a part hollow (nothing there yet), `{.partial}` half fills a part of `stack:` `cells:` `dots:` (on its way) and hatches a column of `bars:` (a period not closed), `{.hero}` puts one column forward with its value. `target:` is one value (`5`, a dashed line) or a band (`400–550`): on `bars:` it is a band behind the columns, on `hbars:` a line, and the part of a bar past it takes the brand's highlight. Colors are the brand's chart series, on light and dark slides; the visuals are boxes, so the PowerPoint export has them as native shapes. On a Story screen, one or two cards. Errors: a card without a figure (`kpi-figure`), two visuals in a card, a value or a target that is not a number, ` + ` outside `bars:` (`kpi-visual`), more units or parts than the visual holds, more than 4 cards (`max-items`); warnings: more than 3 details (`kpi-details`), two messages (`kpi-message`).
+
+A chart drawn in characters — `█ ▃ ▆`, `●●◐○`, `🟩🟥🟦`, four or more on a line, anywhere on a slide — is the warning **`text-chart`**: it is not on the brand, does not line up, and is text in the PowerPoint. In a card, `kpi`; on its own, `chart`.
+
 ## Blocks — diagrams (1.25.0)
 
 ### `diagram` — boxes and arrows (a Mermaid flowchart), or a list given a form

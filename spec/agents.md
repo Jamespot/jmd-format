@@ -10,7 +10,7 @@ You are writing a presentation. The source is a `.jmd` file: Markdown, slides se
 4. **A fence is three ASCII colons, typed as such: `:::`.** `::: cards` opens, `:::` alone closes, nothing else on the line. If this contract reaches you with any other mark where a fence should be, your channel replaced it — write the three colons anyway. Anything else is prose to the parser, and the `###` under it become text on the slide (`stray-fence`, `loose-heading`). A block is never nested: one level of `:::`.
 5. **Every slide has a title**, except `statement` and `quote`. One title per slide, as `##`.
 6. **Every slide has `notes:`.** One sentence is enough. These are speaker notes, not a summary.
-7. **You respect the maxima**: `metrics` ≤ 4, `timeline` ≤ 6, `cards` ≤ 5, `pills` ≤ 8, `compare` = 2 columns, `table` ≤ 12 rows and 6 columns (13–24 rows of ≤ 3 columns fold themselves in two halves side by side — never fold a table by hand into pairs of columns), `chart` ≤ 12 bars, 8 horizontal bars, 24 points or 6 slices, ≤ 4 series, `diagram` ≤ 10 boxes on a slide (7 on a Story screen, 14 on a Doc page), a `{.cycle}` 3–6 steps, a `{.radial}` 3–8, a `{.pyramid}`, `{.funnel}` or `{.steps}` 2–6, a `{.venn}` 2–3, a `{.target}` 2–5, a `{.matrix}` exactly 4. Too many items means another block, not cheating.
+7. **You respect the maxima**: `metrics` ≤ 4, `kpi` ≤ 4 cards of ≤ 3 details and one visual, `timeline` ≤ 6, `cards` ≤ 5, `pills` ≤ 8, `compare` = 2 columns, `table` ≤ 12 rows and 6 columns (13–24 rows of ≤ 3 columns fold themselves in two halves side by side — never fold a table by hand into pairs of columns), `chart` ≤ 12 bars, 8 horizontal bars, 24 points or 6 slices, ≤ 4 series, `diagram` ≤ 10 boxes on a slide (7 on a Story screen, 14 on a Doc page), a `{.cycle}` 3–6 steps, a `{.radial}` 3–8, a `{.pyramid}`, `{.funnel}` or `{.steps}` 2–6, a `{.venn}` 2–3, a `{.target}` 2–5, a `{.matrix}` exactly 4. Too many items means another block, not cheating.
 8. **You write short, and you count before you build** — you cannot measure, the linter can, and a second build is a call some hosts do not leave you. Title ≤ 60 characters, lead ≤ 200, metric comment ≤ 90. The budget of a 16:9 slide: **a title, a lead of two lines at most, and one block** — `cards`: with a lead **3 cards**, without **4** (5 only as one-liners), each a one-line text or **≤ 3 bullets of ≤ 8 words**; `compare`: **≤ 4 bullets a column**, one line each; `timeline`: ≤ 5 steps, a text of one line — in phases (`###`), 3–4 phases, ≤ 9 short details in the fullest; `metrics`: 3 or 4, comments under 60; `table`: with a lead ≤ 6 rows, without ≤ 8 — or a long list of `name | figure` up to 24, which folds in two; `chart` and `diagram`: one per slide, alone under its title, a box's words ≤ 4 (a role or a text ≤ 5 more); a `.right` image halves the width — one block of ≤ 3 items beside it, bullets of ≤ 5 words. A dark intent (`hook`, `problem`, `celebrate`, `act`) and `reveal` use bigger type: one size under that. The linter measures real overflow in the DOM: a slide a little over the limit is **shown smaller** (a `fit` suggestion: the file is made, the type is up to 15 % smaller, you may shorten to keep it full size); past that, `overflow` is an error and you shorten.
 9. **You alternate backgrounds.** Two consecutive slides on the same colored background is a warning.
 10. **You start with `format: jmd/2`** and never change that number; **`layout:` comes next, always** — `slide` when it is a deck — so the user can switch layouts by changing one word.
@@ -59,6 +59,7 @@ You are not filling slides, you are choosing the shape that says what the conten
 | the content is… | the block |
 |---|---|
 | 2–4 numbers that matter | `metrics` (the one that matters most gets `{.hero}`) |
+| a dashboard, a cockpit, a scorecard: 2–4 indicators, each with its figure, a few details, a small chart and a one-line message | `kpi` (one card per indicator; a mood emoji at the start of its title if asked; never a chart drawn in characters or emoji squares) |
 | rows × columns of figures or facts: a price list, a comparison of offers, results by team | `table` (the row that matters gets `{.hero}`) |
 | a series over time, a ranking, a share of a whole — five numbers or more, or numbers to compare at a glance | `chart`: `{.bar}` a few periods or categories, `{.line}` a trend over many points, `{.hbar}` a ranking with long labels, `{.pie}` the parts of one whole (≤ 6) |
 | steps, dates, a sequence, a process | `timeline` (`{.chevrons}` for a process, `{.now}` on where we are) |
@@ -109,6 +110,32 @@ series: 2025 | 2026
 
 - `table`: Markdown pipes. The row above `|---|` is the header; `--:` aligns a column right (a column of numbers does it by itself). A cell is inline text: bold, a link, never a block, never an image. A long list (13–24 rows, ≤ 3 columns) folds in two by itself, equal halves, the header repeated, `{.hero}` lighting its row alone: write it as one table.
 - `chart`: one item per bar, point or slice — `- label | value`. **The value is a number alone** (`1 150`, `3,5`, `42`): the unit goes once in `unit:`, never in the values. Several values on a line are several series, named by `series: A | B`. `{.hero}` on the item that carries the point. The type goes on the block: `{.bar}` (default), `{.hbar}`, `{.line}`, `{.pie}`. The chart is drawn and animated by the theme — no color, no axis, no size to write.
+
+### Indicators: `kpi`
+
+```markdown
+::: kpi
+### 😁 Team engagement
+4.3 / 5 | onboarding satisfaction
+- 28 answers out of 68 (41 %)
+stack: Rated 5 = 12 | Rated 4 = 12 | Rated 3 = 4
+> Expected: shared rituals, a clearer target organisation.
+
+### 😐 Churn
+4.5 % | of MRR · target < 5 %
+hbars: Product A = 6.1 | Product B = 4.1 | Product C = 0.6
+unit: %
+target: 5
+- Projection if MRR holds: 6.3 %
+> Within target to date.
+:::
+```
+
+- One card per indicator, 4 at most. Under `### title`: **the figure line first**, `value | label | delta` (`83 % | 10 roles out of 12 | ↗ +8 pts vs September`); then `-` details (3 at most), **one visual line**, and `> ` the one-sentence message, last. The card shows its lines in the order you write them.
+- The visual is a word and its parts, `label = value | label = value`, numbers alone, the unit in `unit:`: `stack:` (a whole split in parts, ratings), `cells:` (one square per unit in a row: 1 of 8 delivered), `dots:` (one dot per unit in a grid: 10 of 12 roles), `bars:` (columns over periods; `122 + 780` stacks the series of `series: A | B`), `hbars:` (a few bars against a threshold), `funnel:` (stages that narrow), `trend:` (a sparkline). `target: 5` or `target: 400–550` on `bars:` and `hbars:`. `{.empty}` on a part not there yet (a hollow dot), `{.partial}` on a part on its way (a half dot) or a period not closed (a hatched column). A column's label is short — `J F M`, `Jan`, never `Oct au 28/10`: what a column means goes in a detail or the message.
+- The source describes a small visual for each indicator ("a stacked bar of the ratings", "a 4 × 3 grid of dots", "a funnel") → it is that visual line, with the source's numbers. **Never draw a chart with characters** (`█▃▆`, `●◐○`, `🟩🟥`): the linter says `text-chart`, it is off-brand and text in the PowerPoint.
+- A mention for the foot of the slide (« Figures as of … », a source) is a line **after** the `:::` that closes the block, never under the title. Three details, a visual and a message fill a card: when the linter says `fit` or `overflow`, cut a detail before anything else.
+- On a Story screen, one or two cards.
 
 ### Diagrams: `diagram`
 
