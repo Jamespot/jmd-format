@@ -25,7 +25,7 @@ In the page: `←` `→` to move, `F` fullscreen, `N` speaker notes, `L` the lin
 
 ```markdown
 ---
-format: jmd/1
+format: jmd/2
 layout: slide
 title: Why we moved
 brand: mono
@@ -47,16 +47,19 @@ Everything a slide needs is on the page: a title as `##`, an optional lead, one 
 
 ## One word changes the paper
 
-`layout:` turns the same source into four things, with the same blocks and the same checks:
+`layout:` turns the same source into five things, with the same blocks and the same checks:
 
 | `layout:` | What it is | Page |
 |---|---|---|
 | `slide` | the talk, presented | 1280 × 720 |
-| `doc` | the one-pager, the memo, the PDF you send | A4 portrait |
+| `memo` | the one-pager, the memo, the PDF you send | A4 portrait, one page per `---` |
+| `doc` | the white paper, the report, the long document | A4 portrait, as many pages as the text takes |
 | `story` | the carousel, the LinkedIn or Instagram post | 1080 × 1920 |
 | `webpage` | the landing page, the article | one continuous page |
 
 The linter measures every page against its own height, so a deck that fits as a talk tells you what to split when it becomes a carousel.
+
+The format has a version, `format: jmd/2`. When a word changes meaning the version moves up, and the runtime still reads every older file the way it was written: in `jmd/1`, `layout: doc` was the A4 page per `---` that `jmd/2` calls `memo`.
 
 ## Form follows meaning
 

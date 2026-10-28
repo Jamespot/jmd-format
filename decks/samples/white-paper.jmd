@@ -1,0 +1,88 @@
+---
+format: jmd/2
+layout: doc
+title: Northwind Ops — the operations white paper
+subtitle: What a day a week lost to context costs an operations team, and how to win it back
+author: Northwind Research
+lang: en
+date: 2026-10-27
+---
+
+---
+notes: A chapter opens with its `#` title and a lead; `##` and `###` divide it. The engine lays the text out on as many A4 pages as it takes.
+---
+# Why operations teams lose a day a week
+A white paper is read, not presented: whole paragraphs, sections and sub-sections, the figures where they prove a point.
+
+Operations teams rarely lack tools. They lack a single place where a request, the procedure that answers it and the person who carries it out meet. Each of these lives in its own tool, and every handover between two tools is a moment where context is lost and has to be rebuilt by hand.
+
+This paper describes the cost of that fragmentation in the teams Northwind works with, the way the work flows once it is gathered in one workspace, and the steps a team follows to get there without stopping the service it runs.
+
+## Where the time goes
+
+The hours are not lost in the work itself. They are lost around it: finding the latest version of a procedure, asking who is on call this week, copying a request from a mail into a ticket, writing on Monday the report of what happened on Friday.[^survey]
+
+[^survey]: Northwind customer survey, spring of the year of this paper: the figures below are its own.
+
+::: metrics
+- 6.5 h | a week per person | Spent looking for context rather than acting on it.
+- 4 | tools on average | Between a request and its resolution.
+- 38% | of requests | Reopened at least once for a missing detail. {.hero}
+:::
+
+### Three moments where context is lost
+
+1. When a request arrives by mail and is copied into a ticket, its history stays behind in the mailbox.
+2. When the person on call changes, what the previous one knew leaves with them.
+3. When the manager writes the weekly report, the facts are gathered again from every tool.
+
+> The work was never the problem. Finding where the work was described was.
+
+## What a gathered workspace changes
+
+When the request, the runbook and the rota sit in the same place, each handover keeps its context. The person who takes over reads what was done, the procedure that applies and who to call, without leaving the page.
+
+The effect shows first on the requests that come back. A request answered with the right runbook at hand is answered once.[^reopen]
+
+[^reopen]: Share of requests reopened at least once, month by month, across the teams of the survey.
+
+::: chart {.bar}
+unit: %
+- January | 41
+- February | 39
+- March | 30
+- April | 24
+- May | 19
+- June | 17
+:::
+
+---
+notes: A second chapter starts on a new page. Its running head is its own title.
+---
+# Rolling it out without stopping the service
+A team moves its operations while it runs them: the rollout is planned in steps, each one reversible.
+
+## Start with one queue
+
+The first step is a single queue — the one that hurts most, usually the requests that arrive by mail. Its runbooks are written into the workspace as they are used, not before: a procedure that nobody follows is not worth migrating.
+
+## Bring the rota in
+
+Once the queue runs, the on-call rota joins it. The person on call sees the queue they answer for, and the handover note becomes part of the queue rather than a message in a chat.
+
+## Let the report write itself
+
+When requests, runbooks and rota live together, the weekly report is a view of what already happened, not a document written from memory on Monday morning.
+
+::: timeline
+- Week 1 | One queue | The requests that arrive by mail.
+- Week 3 | Runbooks | Written as they are used.
+- Week 5 | Rota | The handover in the queue.
+- Week 8 | Report | A view, not a document.
+:::
+
+### What to measure
+
+- The share of requests reopened for a missing detail.
+- The time between a request and the first action on it.
+- The hours spent on the weekly report.

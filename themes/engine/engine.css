@@ -606,7 +606,7 @@ body.is-hosted #hud-open{display:none}
 @media (pointer:coarse){#hud kbd,#dl kbd{display:none}#hud #hud-dl .w{display:inline;padding:4px 2px}} /* and a button says its word, not its key: a lone D means nothing to a thumb */
 /* the story bar (james-jmd.js): a touch screen only, a deck one turns screen by screen only — a Doc scrolls, print has none */
 #progress{display:none}
-@media (pointer:coarse){body:not(.layout-doc):not(.layout-webpage):not(.is-editing) #progress{display:flex;position:fixed;z-index:45;top:env(safe-area-inset-top,0px);left:10px;right:10px;gap:4px}}
+@media (pointer:coarse){body:not(:is(.layout-memo,.layout-doc)):not(.layout-webpage):not(.is-editing) #progress{display:flex;position:fixed;z-index:45;top:env(safe-area-inset-top,0px);left:10px;right:10px;gap:4px}}
 #progress button{flex:1;height:22px;padding:9px 0;border:0;background:transparent;cursor:pointer}
 #progress i{display:block;height:3px;border-radius:2px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.25)}
 #progress .is-done i{background:rgba(255,255,255,.95)}
@@ -967,31 +967,31 @@ body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{anim
    A4 portrait, one page per `---`, the same blocks. The page is drawn in the slide's units (1280 wide, 1810 high — the A4 ratio)
    and zoomed to paper size: 1280 × .62 = 793.6 px = 210 mm at 96 dpi. Every size below is therefore a slide size; the paper
    shrinks it. On screen the pages stack and scroll; in print each one is an A4 sheet (the runtime sets @page to A4). */
-.layout-doc{--page-w:1280px;--page-h:1810px}
-.layout-doc #stage{display:block;overflow:auto;padding:24px 0 48px;scrollbar-gutter:stable}
-.layout-doc #track{width:auto;height:auto;margin:0 auto;transform:none;display:flex;flex-direction:column;align-items:center;gap:24px}
-.layout-doc .slide{--page-limit:1730px;width:var(--page-w);height:var(--page-h);zoom:.62;position:relative;inset:auto;flex:none;
+:is(.layout-memo,.layout-doc){--page-w:1280px;--page-h:1810px}
+:is(.layout-memo,.layout-doc) #stage{display:block;overflow:auto;padding:24px 0 48px;scrollbar-gutter:stable}
+:is(.layout-memo,.layout-doc) #track{width:auto;height:auto;margin:0 auto;transform:none;display:flex;flex-direction:column;align-items:center;gap:24px}
+:is(.layout-memo,.layout-doc) .slide{--page-limit:1730px;width:var(--page-w);height:var(--page-h);zoom:.62;position:relative;inset:auto;flex:none;
   opacity:1;pointer-events:auto;transition:none;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35)}
-.layout-doc .slide,.layout-doc .slide *{animation:none!important}
-.layout-doc .slide.is-active{outline:0}
+:is(.layout-memo,.layout-doc) .slide,:is(.layout-memo,.layout-doc) .slide *{animation:none!important}
+:is(.layout-memo,.layout-doc) .slide.is-active{outline:0}
 /* page chrome: a wider margin, the running title at the foot, `n / N` in the corner */
-.layout-doc .slide-chrome{top:56px;left:96px;right:96px}
-.layout-doc .slide-tag{bottom:56px;right:96px}
+:is(.layout-memo,.layout-doc) .slide-chrome{top:56px;left:96px;right:96px}
+:is(.layout-memo,.layout-doc) .slide-tag{bottom:56px;right:96px}
 .slide-foot{display:none}
-.layout-doc .slide-foot{display:block;position:absolute;bottom:56px;left:96px;right:200px;font-family:var(--font-mono);font-size:12px;
+:is(.layout-memo,.layout-doc) .slide-foot{display:block;position:absolute;bottom:56px;left:96px;right:200px;font-family:var(--font-mono);font-size:12px;
   color:var(--jp-ink-soft);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:5}
-.layout-doc .slide--indigo .slide-foot{color:rgba(255,255,255,.55)}
-.layout-doc .slide--accent .slide-foot,.layout-doc .slide--sky .slide-foot{color:rgba(255,255,255,.6)}
-.layout-doc .slide--highlight .slide-foot{color:color-mix(in srgb,var(--jp-indigo-800) 55%,transparent)}
+:is(.layout-memo,.layout-doc) .slide--indigo .slide-foot{color:rgba(255,255,255,.55)}
+:is(.layout-memo,.layout-doc) .slide--accent .slide-foot,:is(.layout-memo,.layout-doc) .slide--sky .slide-foot{color:rgba(255,255,255,.6)}
+:is(.layout-memo,.layout-doc) .slide--highlight .slide-foot{color:color-mix(in srgb,var(--jp-indigo-800) 55%,transparent)}
 /* the body: a document margin; blocks stack down the page */
-.layout-doc .body-pad{padding:calc(150px * var(--type-scale,1)) 110px calc(120px * var(--type-scale,1));flex:1}
-.layout-doc .slide-h2{max-width:none}
-.layout-doc .prose{max-width:none}
-.layout-doc .prose ul.long{columns:2}
+:is(.layout-memo,.layout-doc) .body-pad{padding:calc(150px * var(--type-scale,1)) 110px calc(120px * var(--type-scale,1));flex:1}
+:is(.layout-memo,.layout-doc) .slide-h2{max-width:none}
+:is(.layout-memo,.layout-doc) .prose{max-width:none}
+:is(.layout-memo,.layout-doc) .prose ul.long{columns:2}
 /* a full-page block sits in the middle of the page */
-.layout-doc .statement,.layout-doc .divider{align-self:auto;margin:auto 0}
-.layout-doc .statement{max-width:none;padding:0 110px}
-.layout-doc .statement .q{font-size:52px}
+:is(.layout-memo,.layout-doc) .statement,:is(.layout-memo,.layout-doc) .divider{align-self:auto;margin:auto 0}
+:is(.layout-memo,.layout-doc) .statement{max-width:none;padding:0 110px}
+:is(.layout-memo,.layout-doc) .statement .q{font-size:52px}
 /* timeline in phases (heading form): the dots and their line on top, a date under each dot, the phase's detail in a card.
    Written after the intents: the card keeps its light surface and dark words on every background, only the date turns. */
 .timeline--phases{align-items:stretch}
@@ -1013,52 +1013,124 @@ body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{anim
 .timeline--phases .tl-step.is-hero .tl-card{border-color:var(--brand-accent);box-shadow:inset 0 5px 0 var(--brand-accent)}
 .layout-story .timeline--phases .tl-step .tl-date{flex:1;min-width:200px;margin-top:12px}
 .layout-story .timeline--phases .tl-step .tl-card{flex-basis:100%;margin-left:62px}
-.layout-doc .timeline--phases:has(.tl-step:nth-child(5)) .tl-step .tl-date{flex:1;min-width:260px;margin-top:16px}
-.layout-doc .timeline--phases:has(.tl-step:nth-child(5)) .tl-step .tl-card{flex-basis:100%;margin-left:74px}
+:is(.layout-memo,.layout-doc) .timeline--phases:has(.tl-step:nth-child(5)) .tl-step .tl-date{flex:1;min-width:260px;margin-top:16px}
+:is(.layout-memo,.layout-doc) .timeline--phases:has(.tl-step:nth-child(5)) .tl-step .tl-card{flex-basis:100%;margin-left:74px}
 
 /* portrait density: four numbers go 2×2, four or five cards go two abreast, a timeline of five or six runs down the page */
-.layout-doc .metrics[style*="--n:4"]{grid-template-columns:1fr 1fr}
-.layout-doc .cards[style*="--n:4"],.layout-doc .cards[style*="--n:5"]{grid-template-columns:1fr 1fr}
-.layout-doc .cards[style*="--n:5"] .card{padding:calc(26px * var(--type-scale,1));border-radius:24px}
-.layout-doc .cards[style*="--n:5"] .card h3{font-size:calc(23px * var(--type-scale,1))}
-.layout-doc .cards[style*="--n:5"] .card p{font-size:max(14px, calc(16px * var(--type-scale,1)))}
-.layout-doc .timeline:has(.tl-step:nth-child(5)){flex-direction:column;gap:0}
-.layout-doc .timeline:has(.tl-step:nth-child(5)) .tl-step{flex-direction:row;align-items:flex-start;gap:22px;padding:0 0 22px;flex-wrap:wrap}
-.layout-doc .timeline:has(.tl-step:nth-child(5)) .tl-step h4{flex:1;min-width:260px;margin-top:12px}
-.layout-doc .timeline:has(.tl-step:nth-child(5)) .tl-step p{flex-basis:100%;padding-left:74px;margin-top:-8px}
-.layout-doc .timeline:has(.tl-step:nth-child(5)) .tl-step:not(:last-child):after{left:25px;right:auto;top:52px;bottom:0;width:2px;height:auto}
-.layout-doc .timeline--chevrons:has(.tl-step:nth-child(5)){flex-direction:row;gap:0}
-.layout-doc .timeline--chevrons:has(.tl-step:nth-child(5)) .tl-step{flex-direction:column;padding:18px 26px 18px 40px;gap:8px}
-.layout-doc .timeline--chevrons:has(.tl-step:nth-child(5)) .tl-step p{padding-left:0;margin-top:0}
-.layout-doc .timeline--chevrons:has(.tl-step:nth-child(5)) .tl-step:not(:last-child):after{display:none}
+:is(.layout-memo,.layout-doc) .metrics[style*="--n:4"]{grid-template-columns:1fr 1fr}
+:is(.layout-memo,.layout-doc) .cards[style*="--n:4"],:is(.layout-memo,.layout-doc) .cards[style*="--n:5"]{grid-template-columns:1fr 1fr}
+:is(.layout-memo,.layout-doc) .cards[style*="--n:5"] .card{padding:calc(26px * var(--type-scale,1));border-radius:24px}
+:is(.layout-memo,.layout-doc) .cards[style*="--n:5"] .card h3{font-size:calc(23px * var(--type-scale,1))}
+:is(.layout-memo,.layout-doc) .cards[style*="--n:5"] .card p{font-size:max(14px, calc(16px * var(--type-scale,1)))}
+:is(.layout-memo,.layout-doc) .timeline:has(.tl-step:nth-child(5)){flex-direction:column;gap:0}
+:is(.layout-memo,.layout-doc) .timeline:has(.tl-step:nth-child(5)) .tl-step{flex-direction:row;align-items:flex-start;gap:22px;padding:0 0 22px;flex-wrap:wrap}
+:is(.layout-memo,.layout-doc) .timeline:has(.tl-step:nth-child(5)) .tl-step h4{flex:1;min-width:260px;margin-top:12px}
+:is(.layout-memo,.layout-doc) .timeline:has(.tl-step:nth-child(5)) .tl-step p{flex-basis:100%;padding-left:74px;margin-top:-8px}
+:is(.layout-memo,.layout-doc) .timeline:has(.tl-step:nth-child(5)) .tl-step:not(:last-child):after{left:25px;right:auto;top:52px;bottom:0;width:2px;height:auto}
+:is(.layout-memo,.layout-doc) .timeline--chevrons:has(.tl-step:nth-child(5)){flex-direction:row;gap:0}
+:is(.layout-memo,.layout-doc) .timeline--chevrons:has(.tl-step:nth-child(5)) .tl-step{flex-direction:column;padding:18px 26px 18px 40px;gap:8px}
+:is(.layout-memo,.layout-doc) .timeline--chevrons:has(.tl-step:nth-child(5)) .tl-step p{padding-left:0;margin-top:0}
+:is(.layout-memo,.layout-doc) .timeline--chevrons:has(.tl-step:nth-child(5)) .tl-step:not(:last-child):after{display:none}
 /* the `.right` image: below the text, full width, in its frame; a `.right` block: below the text too */
-.layout-doc .slide--split .body-pad,.layout-doc .slide--split-block .body-pad{width:100%;padding-right:110px;flex:none}
-.layout-doc .slide--split .slide-h2{font-size:calc(60px * var(--type-scale,1))}
-.layout-doc .split-media{position:relative;inset:auto;left:auto;margin:0 110px 120px;height:640px;border-radius:24px;flex:none}
-.layout-doc .split-media img{left:0;top:0;width:100%;height:100%;max-height:none;object-fit:cover;object-position:left top;border-radius:24px;box-shadow:none}
-.layout-doc .split-media .img-missing{left:0;top:0;width:100%;height:100%}
-.layout-doc .split-media:before,.layout-doc .split-media:after{display:none}
-.layout-doc .split-block{position:relative;inset:auto;left:auto;right:auto;padding:0 110px calc(120px * var(--type-scale,1));justify-content:flex-start;flex:none}
-.layout-doc .figure{max-width:none;width:auto}
-.layout-doc .figure img{max-height:640px}
-.layout-doc .slide--split .prose:has(> p > a.cta:only-child),.layout-doc .prose a.cta{margin-top:0}
-.layout-doc .table{font-size:max(16px, calc(20px * var(--type-scale,1)))}
+:is(.layout-memo,.layout-doc) .slide--split .body-pad,:is(.layout-memo,.layout-doc) .slide--split-block .body-pad{width:100%;padding-right:110px;flex:none}
+:is(.layout-memo,.layout-doc) .slide--split .slide-h2{font-size:calc(60px * var(--type-scale,1))}
+:is(.layout-memo,.layout-doc) .split-media{position:relative;inset:auto;left:auto;margin:0 110px 120px;height:640px;border-radius:24px;flex:none}
+:is(.layout-memo,.layout-doc) .split-media img{left:0;top:0;width:100%;height:100%;max-height:none;object-fit:cover;object-position:left top;border-radius:24px;box-shadow:none}
+:is(.layout-memo,.layout-doc) .split-media .img-missing{left:0;top:0;width:100%;height:100%}
+:is(.layout-memo,.layout-doc) .split-media:before,:is(.layout-memo,.layout-doc) .split-media:after{display:none}
+:is(.layout-memo,.layout-doc) .split-block{position:relative;inset:auto;left:auto;right:auto;padding:0 110px calc(120px * var(--type-scale,1));justify-content:flex-start;flex:none}
+:is(.layout-memo,.layout-doc) .figure{max-width:none;width:auto}
+:is(.layout-memo,.layout-doc) .figure img{max-height:640px}
+:is(.layout-memo,.layout-doc) .slide--split .prose:has(> p > a.cta:only-child),:is(.layout-memo,.layout-doc) .prose a.cta{margin-top:0}
+:is(.layout-memo,.layout-doc) .table{font-size:max(16px, calc(20px * var(--type-scale,1)))}
 /* the cover: the title high, the art fills the lower half */
-.layout-doc .slide--cover .body-pad{padding-top:calc(150px * var(--type-scale,1));justify-content:center}
-.layout-doc .slide--cover:has(.cover-art) .body-pad{justify-content:flex-start}
-.layout-doc .slide--cover .slide-lead{max-width:960px}
-.layout-doc .cover-art{left:110px;right:110px;top:820px;bottom:-60px}
-.layout-doc .slide--cover:has(.cover-art) .body-pad{padding-top:calc(180px * var(--type-scale,1))}
+:is(.layout-memo,.layout-doc) .slide--cover .body-pad{padding-top:calc(150px * var(--type-scale,1));justify-content:center}
+:is(.layout-memo,.layout-doc) .slide--cover:has(.cover-art) .body-pad{justify-content:flex-start}
+:is(.layout-memo,.layout-doc) .slide--cover .slide-lead{max-width:960px}
+:is(.layout-memo,.layout-doc) .cover-art{left:110px;right:110px;top:820px;bottom:-60px}
+:is(.layout-memo,.layout-doc) .slide--cover:has(.cover-art) .body-pad{padding-top:calc(180px * var(--type-scale,1))}
 /* intents on a page: the centred ones gather in the middle of the page, the hook picture fills the page */
-.layout-doc .slide--hook .body-pad,.layout-doc .slide--reveal .body-pad,.layout-doc .slide--celebrate .body-pad,.layout-doc .slide--fun .body-pad,.layout-doc .slide--act .body-pad{padding-top:calc(150px * var(--type-scale,1))}
-.layout-doc .slide--hook.slide--split .body-pad{padding-right:110px}
-.layout-doc .slide--hook.slide--split .split-media{position:absolute;inset:0;margin:0;height:auto;border-radius:0}
-.layout-doc .slide--hook.slide--split .split-media img{border-radius:0}
-.layout-doc .slide--explain .cards .card:not(:last-child):after{display:none}
-.layout-doc .wm--mark{--wm-k:1.23}
-.layout-doc :is(.slide--prove,.slide--explain,.slide--recap) .wm--mark .wm-g{--gx:10.6%;--gy:93.2%} /* the stamp sits on the footer's left edge */
-.layout-doc .slide:not(.slide--intent) .wm--mark.wm--a .wm-g{--gx:85.2%;--gy:92.3%}
-.layout-doc .slide:not(.slide--intent) .wm--mark.wm--b .wm-g{--gx:13.3%;--gy:94.5%}
+:is(.layout-memo,.layout-doc) .slide--hook .body-pad,:is(.layout-memo,.layout-doc) .slide--reveal .body-pad,:is(.layout-memo,.layout-doc) .slide--celebrate .body-pad,:is(.layout-memo,.layout-doc) .slide--fun .body-pad,:is(.layout-memo,.layout-doc) .slide--act .body-pad{padding-top:calc(150px * var(--type-scale,1))}
+:is(.layout-memo,.layout-doc) .slide--hook.slide--split .body-pad{padding-right:110px}
+:is(.layout-memo,.layout-doc) .slide--hook.slide--split .split-media{position:absolute;inset:0;margin:0;height:auto;border-radius:0}
+:is(.layout-memo,.layout-doc) .slide--hook.slide--split .split-media img{border-radius:0}
+:is(.layout-memo,.layout-doc) .slide--explain .cards .card:not(:last-child):after{display:none}
+:is(.layout-memo,.layout-doc) .wm--mark{--wm-k:1.23}
+:is(.layout-memo,.layout-doc) :is(.slide--prove,.slide--explain,.slide--recap) .wm--mark .wm-g{--gx:10.6%;--gy:93.2%} /* the stamp sits on the footer's left edge */
+:is(.layout-memo,.layout-doc) .slide:not(.slide--intent) .wm--mark.wm--a .wm-g{--gx:85.2%;--gy:92.3%}
+:is(.layout-memo,.layout-doc) .slide:not(.slide--intent) .wm--mark.wm--b .wm-g{--gx:13.3%;--gy:94.5%}
+
+/* ── Layout: Doc, the long document (spec/doc.md) ─────────────────────────────
+   A `---` is a chapter; the chapter is a column of A4 sheets the runtime fills (jmd-core.js paginate): each sheet is a Memo
+   page — the same chrome, the chapter as its running head, `n / N` counted over the whole document. The blocks keep the
+   Memo's density; the text is set for reading: left-aligned, from the top, a reading size and measure, no centring. */
+.layout-doc .slide{height:auto;overflow:visible;box-shadow:none;background:none;display:flex;flex-direction:column;gap:39px}
+.layout-doc .sheet{position:relative;width:var(--page-w);height:var(--page-h);flex:none;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.layout-doc .sheet:not([class*="slide--"]):not(.sheet--cover){background:#fff} /* a page with an intent or a bg wears its own */
+/* a page of its own with a `.cover` picture: the picture comes right under its title and text and runs to the foot, where the
+   memo pins it half-way down — a short page left a blank between the two (Alain, 2026-10-28: « remonte la photo ») */
+.layout-doc .sheet--page.slide--cover:has(> .cover-art) .body-pad{flex:none;padding-bottom:56px}
+.layout-doc .sheet--page > .cover-art{position:relative;inset:auto;flex:1;min-height:0;margin:0 110px -60px}
+/* the reading pages; a page of its own (`page: yes`) and a chapter's opening page are laid out as the memo lays out a page */
+.layout-doc .sheet:not(.sheet--page):not(.sheet--opener) .body-pad{padding:150px 140px 130px;justify-content:flex-start;align-items:stretch;text-align:left;gap:30px;flex:1}
+.layout-doc .sheet:not(.sheet--page):not(.sheet--opener) .slide-head{align-items:flex-start;text-align:left}
+.layout-doc .doc-title{font-size:64px;line-height:1.08;max-width:none;text-align:left}
+.layout-doc .sheet:not(.sheet--page):not(.sheet--opener) .slide-lead{font-size:28px;line-height:1.5;text-align:left;max-width:none}
+.layout-doc .sheet--opener .body-pad{padding:150px 140px 160px;gap:40px}
+.layout-doc .sheet--opener .doc-title{font-size:96px;line-height:1.04;text-align:inherit;max-width:none;text-wrap:balance}
+.layout-doc .sheet--opener .slide-lead{font-size:34px;line-height:1.45;max-width:960px}
+.layout-doc .sheet--opener .figure--wide img{max-height:620px}
+.layout-doc .prose--long{max-width:none;display:block} /* a block box, not a flex one: a `.right` figure floats in it and the text runs around */
+.layout-doc .prose--long>*{margin-top:20px}
+.layout-doc .prose--long>:first-child{margin-top:0}
+.layout-doc .prose--long p,.layout-doc .prose--long li,.layout-doc .prose--long blockquote{font-size:23px;line-height:1.62;color:var(--jp-ink);text-align:left;hyphens:auto;text-wrap:pretty}
+.layout-doc .prose--long :is(h3,h4){font-family:var(--font-display);font-weight:800;color:var(--jp-ink);margin:38px 0 -4px;clear:both;line-height:1.2;text-wrap:balance}
+.layout-doc .prose--long h3{font-size:36px}
+.layout-doc .prose--long h4{font-size:28px}
+.layout-doc .prose--long :is(ul,ol){gap:10px;font-size:23px}
+.layout-doc .prose--long ul.long{columns:auto}
+.layout-doc .prose--long ol{list-style:none;counter-reset:jmd-ol calc(var(--ol-start,1) - 1);margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.layout-doc .prose--long ol>li{counter-increment:jmd-ol;position:relative;padding-left:44px}
+.layout-doc .prose--long ol>li:before{content:counter(jmd-ol) ".";position:absolute;left:0;top:0;width:auto;height:auto;margin:0;border-radius:0;background:none;font-weight:800;color:var(--brand-accent)}
+.layout-doc .prose--long blockquote{margin:6px 0;padding:6px 0 6px 32px;border-left:5px solid var(--brand-accent);font-style:italic;color:var(--jp-ink-muted)}
+/* the front of a long document: the cover in the brand's deep color, the contents with their page numbers, the notes of a chapter */
+.layout-doc .sheet--cover{background:var(--jp-indigo-800);color:#fff}
+.layout-doc .sheet--cover .lockup{color:#fff}
+.layout-doc .sheet--cover .cover-pad{position:relative;z-index:1;margin-top:auto;padding:0 140px 220px;display:flex;flex-direction:column;gap:36px}
+.layout-doc .doc-cover-title{margin:0;font-family:var(--font-display);font-weight:800;font-size:96px;line-height:1.04;color:#fff;text-wrap:balance}
+.layout-doc .doc-cover-sub{margin:0;font-size:34px;line-height:1.4;color:rgba(255,255,255,.85);max-width:900px;text-wrap:pretty}
+.layout-doc .doc-cover-by{margin:24px 0 0;padding-top:28px;border-top:3px solid var(--brand-accent);font-family:var(--font-mono);font-size:20px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.layout-doc .slide .sheet--cover .wm--mark.wm--a .wm-g{--gx:82%;--gy:24%;--gs:760px;--gr:0deg;--gc:#fff;--go:.08}
+.layout-doc .toc{gap:0}
+.layout-doc .toc p{margin:0}
+.layout-doc .toc a{display:flex;align-items:baseline;gap:18px;color:inherit;text-decoration:none}
+.layout-doc .toc .toc-t{flex:none;max-width:calc(100% - 140px)}
+.layout-doc .toc a:after{content:"";flex:1;order:2;border-bottom:2px dotted color-mix(in srgb,var(--jp-ink) 30%,transparent);transform:translateY(-6px)}
+.layout-doc .toc .toc-n{order:3;font-variant-numeric:tabular-nums;min-width:48px;text-align:right}
+.layout-doc .toc .toc-ch{font-family:var(--font-display);font-weight:800;font-size:28px;padding:26px 0 8px}
+.layout-doc .toc .toc-ch .toc-k{color:var(--brand-accent);min-width:52px}
+.layout-doc .toc .toc-sec{font-size:22px;padding:6px 0 6px 70px;color:var(--jp-ink-muted)}
+.layout-doc sup.fn{font-size:.62em;line-height:0;vertical-align:super;margin-left:1px}
+.layout-doc sup.fn a{color:var(--brand-accent);text-decoration:none;font-weight:700}
+.layout-doc .prose--long .doc-notes-h{margin-top:30px;padding-top:24px;border-top:2px solid color-mix(in srgb,var(--jp-ink) 15%,transparent);font-size:24px}
+/* figures in the flow: `.right` floats beside the text, `.cover` spans the column */
+.layout-doc .figure{max-width:none;width:auto}
+.layout-doc .figure img{max-height:760px;margin:0 auto}
+.layout-doc .prose--long>.figure--right{float:right;width:44%;margin:8px 0 16px 40px}
+.layout-doc .figure--wide img{max-height:820px}
+.layout-doc .prose--long p.p-cut{text-wrap:wrap}
+/* two columns: a box the height of what is left of the sheet, filled column after column; the last sheet balanced */
+.layout-doc .doc-cols{column-count:2;column-gap:56px;column-fill:auto;flex:none}
+.layout-doc .doc-cols.doc-cols--end{column-fill:balance}
+.layout-doc .doc-cols>:not(.prose--long),.layout-doc .doc-cols .prose--long>:not(p):not(ul):not(ol){break-inside:avoid;margin-bottom:30px}
+.layout-doc .doc-cols li{break-inside:avoid}
+.layout-doc .doc-cols>*+*{margin-top:26px}
+.layout-doc .doc-cols .prose--long>:is(h3,h4){break-after:avoid;break-inside:avoid} /* a heading never ends a column */
+.layout-doc .doc-cols .prose--long>p{orphans:2;widows:2}
+.layout-doc .doc-cols .prose--long p,.layout-doc .doc-cols .prose--long li{font-size:21px;line-height:1.56;hyphens:auto}
+.layout-doc .doc-cols .prose--long>.figure--right{float:none;width:auto;margin:20px 0}
+.layout-doc .prose--long .doc-notes>li{font-size:19px;line-height:1.5;color:var(--jp-ink-muted);padding-left:36px}
 
 /* ── Layout: Story (spec/jmd.md) ─────────────────────────────────────────────
    Vertical 9:16, one screen per `---`, presented like slides (← →, motion) and posted as images or a carousel PDF. Drawn in
@@ -1185,9 +1257,11 @@ body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{anim
 @page{size:1280px 720px;margin:0}
 @media print{
   html,body{overflow:visible;background:#fff;height:auto}
-  #stage,.layout-doc #stage,.layout-webpage #stage{position:static;display:block;padding:0;overflow:visible}
-  #track,.layout-doc #track,.layout-webpage #track,.layout-story #track{transform:none!important;zoom:1!important;width:auto;height:auto;display:block;margin:0;gap:0}
-  .layout-doc .slide{box-shadow:none;margin:0}
+  #stage,:is(.layout-memo,.layout-doc) #stage,.layout-webpage #stage{position:static;display:block;padding:0;overflow:visible}
+  #track,:is(.layout-memo,.layout-doc) #track,.layout-webpage #track,.layout-story #track{transform:none!important;zoom:1!important;width:auto;height:auto;display:block;margin:0;gap:0}
+  :is(.layout-memo,.layout-doc) .slide{box-shadow:none;margin:0}
+  .layout-doc .slide{zoom:.62;gap:0;break-after:auto;page-break-after:auto}
+  .layout-doc .sheet{box-shadow:none;break-after:page;page-break-after:always}
   .layout-webpage .slide{zoom:.62;page-break-after:auto;break-after:auto;break-inside:avoid}
   .layout-webpage .slide:last-child{page-break-after:auto}
   .slide{position:relative;opacity:1!important;pointer-events:auto;page-break-after:always;

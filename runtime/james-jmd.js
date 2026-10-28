@@ -36,11 +36,11 @@
     en: {
       screens: 'Screens', screen: function (k) { return 'Screen ' + k; }, motion: 'motion: ', noNotes: 'No notes on this slide.',
       status: function (e, w) { return e ? s_(e, 'error', 'errors') : w ? s_(w, 'remark', 'remarks') : 'clean'; },
-      valid: '✓ valid jmd/1', noNotesN: function (n) { return s_(n, 'slide', 'slides') + ' without speaker notes (N shows them while presenting)'; },
+      valid: '✓ valid jmd/' + JMD.FORMAT_MAX, noNotesN: function (n) { return s_(n, 'slide', 'slides') + ' without speaker notes (N shows them while presenting)'; },
       kb: ' KB', mb: ' MB',
       row: { file: 'file', runtime: 'runtime', author: 'author', slides: 'slides', layout: 'layout', brand: 'brand', theme: 'theme', story: 'story', language: 'language', date: 'date', images: 'images', size: 'size', source: 'imported from', format: 'format' },
       built: ' · built ', withNotes: ' with notes', asks: function (b) { return ' (the deck asks for ' + b + ')'; }, noIntents: '— (no intents)',
-      layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'screen', 'screens'); },
+      layoutMemo: function (n) { return 'memo · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'chapter', 'chapters'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'screen', 'screens'); },
       layoutWeb: function (n) { return 'webpage · one page, ' + s_(n, 'section', 'sections'); }, embedded: function (n) { return n + ' embedded'; }, none: 'none', srcSize: ' · source ',
       info: 'Info', editHeader: 'edit the header', lintSays: 'the linter has something to say', lintHappy: 'the linter is happy',
       document: 'Document', slide: 'Slide', lines: function (a, b) { return ' · lines ' + a + '–' + b; }, noHeader: ' · no header yet', edited: ' · edited',
@@ -59,11 +59,11 @@
     fr: {
       screens: 'Écrans', screen: function (k) { return 'Écran ' + k; }, motion: 'mouvement : ', noNotes: 'Pas de notes sur cette slide.',
       status: function (e, w) { return e ? s_(e, 'erreur', 'erreurs') : w ? s_(w, 'remarque', 'remarques') : 'propre'; },
-      valid: '✓ jmd/1 valide', noNotesN: function (n) { return s_(n, 'slide', 'slides') + ' sans notes de l’orateur (N les montre pendant la présentation)'; },
+      valid: '✓ jmd/' + JMD.FORMAT_MAX + ' valide', noNotesN: function (n) { return s_(n, 'slide', 'slides') + ' sans notes de l’orateur (N les montre pendant la présentation)'; },
       kb: ' Ko', mb: ' Mo',
       row: { file: 'fichier', runtime: 'moteur', author: 'auteur', slides: 'slides', layout: 'layout', brand: 'marque', theme: 'thème', story: 'récit', language: 'langue', date: 'date', images: 'images', size: 'taille', source: 'importé de', format: 'format' },
       built: ' · construit le ', withNotes: ' avec notes', asks: function (b) { return ' (le deck demande ' + b + ')'; }, noIntents: '— (pas d’intents)',
-      layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'écran', 'écrans'); },
+      layoutMemo: function (n) { return 'memo · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'chapitre', 'chapitres'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'écran', 'écrans'); },
       layoutWeb: function (n) { return 'webpage · une page, ' + s_(n, 'section', 'sections'); }, embedded: function (n) { return n + (n === 1 ? ' intégrée' : ' intégrées'); }, none: 'aucune', srcSize: ' · source ',
       info: 'Infos', editHeader: 'modifier l’en-tête', lintSays: 'le linter a quelque chose à dire', lintHappy: 'le linter est content',
       document: 'Document', slide: 'Slide', lines: function (a, b) { return ' · lignes ' + a + '–' + b; }, noHeader: ' · pas encore d’en-tête', edited: ' · modifié',
@@ -282,7 +282,7 @@
     var fileSize = new Blob([document.documentElement.outerHTML]).size, srcSize = new Blob([state.src]).size;
     var rows = [
       ['file', state.name], ['runtime', 'james-jmd ' + RUNTIME_VERSION + (BUILT ? UI.built + BUILT : '')], m.author ? ['author', m.author] : null, ['slides', n + (withNotes ? ' · ' + withNotes + UI.withNotes : '')],
-      ['layout', state.layout === 'doc' ? UI.layoutDoc(n) : state.layout === 'story' ? UI.layoutStory(n) : state.layout === 'webpage' ? UI.layoutWeb(n) : 'slide · 16:9'], ['brand', (brand.name || '—') + (brand.id ? ' · ' + brand.id : '') + (m.brand && brand.id && m.brand !== brand.id ? UI.asks(m.brand) : '')], ['theme', m.theme || '—'],
+      ['layout', state.layout === 'memo' ? UI.layoutMemo(n) : state.layout === 'doc' ? UI.layoutDoc(n) : state.layout === 'story' ? UI.layoutStory(n) : state.layout === 'webpage' ? UI.layoutWeb(n) : 'slide · 16:9'], ['brand', (brand.name || '—') + (brand.id ? ' · ' + brand.id : '') + (m.brand && brand.id && m.brand !== brand.id ? UI.asks(m.brand) : '')], ['theme', m.theme || '—'],
       ['story', (function () { var arc = state.slides.map(function (sec) { return sec.getAttribute('data-intent') || '·'; }); return arc.some(function (a) { return a !== '·'; }) ? arc.join(' › ') : UI.noIntents; })()],
       ['language', m.lang || '—'], ['date', m.date || '—'], ['images', imgs ? UI.embedded(imgs) : UI.none],
       ['size', fmtSize(fileSize) + UI.srcSize + fmtSize(srcSize)],
@@ -319,7 +319,7 @@
     document.body.classList.toggle('is-reflowed', state.reflowed);
     JMD.LAYOUTS.forEach(function (l) { document.body.classList.toggle('layout-' + l, l === state.layout); });
     // the paper: Slide 1280×720 px (engine.css); Doc and Webpage A4 portrait; Story 1080×1920 px, the format of a story or a carousel page
-    pageStyle.textContent = state.layout === 'doc' || state.layout === 'webpage' ? '@page{size:210mm 297mm;margin:0}' : state.layout === 'story' ? '@page{size:1080px 1920px;margin:0}' : '';
+    pageStyle.textContent = state.layout === 'memo' || state.layout === 'doc' || state.layout === 'webpage' ? '@page{size:210mm 297mm;margin:0}' : state.layout === 'story' ? '@page{size:1080px 1920px;margin:0}' : '';
     if (!state.motion) { var saved = null; try { saved = localStorage.getItem('james-jmd.motion'); } catch (e) { } setMotion(saved || brand.motion || 'soft', false); } else setMotion(state.motion, false);
     track.innerHTML = render(view, { brand: brand, assets: assets });
     state.slides = Array.prototype.slice.call(track.querySelectorAll('.slide'));
@@ -335,6 +335,7 @@
     (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () {
       if (state.doc !== doc) return;
       document.body.classList.add('is-measuring'); // no animation while measuring: a rising item would read 10px low
+      JMD.paginate(track, state.layout); // a long document: its chapters laid out on as many A4 sheets as they take
       fitOverflow(track, state.lint, state.layout); // a slide a little over the limit is shown smaller (warning), then measured
       lintOverflow(track, state.lint, state.layout);
       JMD.placeGlyphs(track, state.layout); // the poses that hang on a measure (act, decide): after the fit, which moves things
@@ -356,7 +357,7 @@
   function editorFill() {
     var header = state.editTarget === 'doc', r = header ? headerRange() : slideRange(state.i); if (!r) return;
     var lines = state.src.split('\n');
-    editSrc.value = r[1] > r[0] ? lines.slice(r[0], r[1]).join('\n') : '---\nformat: jmd/1\nlayout: slide\n---';
+    editSrc.value = r[1] > r[0] ? lines.slice(r[0], r[1]).join('\n') : '---\nformat: jmd/' + JMD.FORMAT_MAX + '\nlayout: slide\n---';
     editSrc.dataset.range = r[0] + ',' + r[1];
     editTitle.textContent = (header ? UI.document + (r[1] > r[0] ? UI.lines(r[0] + 1, r[1]) : UI.noHeader) : UI.slide + ' ' + pad2(state.i + 1) + UI.lines(r[0] + 1, r[1])) + (state.dirty ? UI.edited : '');
     editTarget.textContent = header ? 'slide' : 'document';
@@ -470,13 +471,15 @@
   }
   function currentBg() { var m = /(?:^|\n)bg:\s*(\S+)/i.exec(editSrc.value.split(/\n---\s*\n/)[0] || ''); return m ? m[1].toLowerCase() : 'white'; }
   // the header's `layout:` line, cycled: the deck re-renders on the next page — the same matter, read as slides, pages, screens or one page
-  function currentLayout() { var m = /(?:^|\n)layout:\s*(\S+)/i.exec(editSrc.value); return m && JMD.PAGES[m[1].toLowerCase()] ? m[1].toLowerCase() : 'slide'; }
+  // read through the parser, so a jmd/1 header's `doc` shows as the `memo` it means (spec/jmd.md § Versioning)
+  function currentLayout() { return JMD.layout(JMD.parse(editSrc.value)); }
   function cycleLayout() {
     var lines = editSrc.value.split('\n'), at = -1, fmt = -1;
     for (var i = 0; i < lines.length; i++) { if (/^layout:/i.test(lines[i]) && at < 0) at = i; if (/^format:/i.test(lines[i]) && fmt < 0) fmt = i; }
     var next = JMD.LAYOUTS[(JMD.LAYOUTS.indexOf(currentLayout()) + 1) % JMD.LAYOUTS.length];
     if (at >= 0) lines[at] = 'layout: ' + next;
     else lines.splice(fmt >= 0 ? fmt + 1 : 1, 0, 'layout: ' + next); // under `format:`, where it reads first
+    if (fmt >= 0) lines[fmt] = 'format: jmd/' + JMD.FORMAT_MAX; // the word just written is today's: the header says so, or a jmd/1 `doc` would read as a memo
     var pos = editSrc.selectionStart;
     editSrc.value = lines.join('\n'); editSrc.selectionStart = editSrc.selectionEnd = Math.min(pos, editSrc.value.length);
     editChips.querySelector('.layout').textContent = 'layout: ' + next + ' ▸';
@@ -526,19 +529,25 @@
   }
   /* ── in-place editing: click a text in the slide (edit mode), edit its source, it is written back to its line ── */
   var COLS = /(?<!\\)\s\|\s|(?<!\\)\|/;
-  // the editable part of a source line: [prefix, text, suffix] — prefix = `## `, `- `, `— `, `key: `; suffix = ` {.mods}`
+  // the editable part of a source line: [prefix, text, suffix] — prefix = `## `, `- `, `1. `, `> `, `— `, `key: `; suffix = ` {.mods}`
   function lineParts(line) {
-    var m = /^(#{1,3}\s+|\s*[-*]\s+|—\s+|[A-Za-z][\w-]*:\s*)?([\s\S]*?)(\s*\{[^}]*\})?$/.exec(line);
+    var m = /^(#{1,3}\s+|\s*[-*]\s+|\s*\d+[.)]\s+|\s*>\s?|—\s+|[A-Za-z][\w-]*:\s*)?([\s\S]*?)(\s*\{[^}]*\})?$/.exec(line);
     return [m[1] || '', m[2], m[3] || ''];
   }
-  function pieceText(lineIdx, col) {
-    var parts = lineParts(state.src.split('\n')[lineIdx] || '');
+  /* A paragraph of a long document written over several lines (`data-span`) is edited as one text and written back on
+     its first line: the lines after it go, their `>` marks with them (a quote keeps the first). */
+  function spanText(lines, lineIdx, span) {
+    return lines.slice(lineIdx + 1, lineIdx + (span || 1)).map(function (l) { return ' ' + l.replace(/^\s*>\s?/, '').trim(); }).join('');
+  }
+  function pieceText(lineIdx, col, span) {
+    var all = state.src.split('\n'), parts = lineParts((all[lineIdx] || '') + spanText(all, lineIdx, span));
     if (col == null) return parts[1];
     var cols = parts[1].split(COLS).map(function (c) { return c.replace(/\\\|/g, '|').trim(); });
     return cols[col] || '';
   }
-  function setPiece(lineIdx, col, text) {
+  function setPiece(lineIdx, col, text, span) {
     var lines = state.src.split('\n'), parts = lineParts(lines[lineIdx] || '');
+    if (span > 1) lines.splice(lineIdx + 1, span - 1);
     text = text.replace(/[\r\n]+/g, ' ');
     if (col == null) lines[lineIdx] = parts[0] + text + parts[2];
     else {
@@ -579,11 +588,21 @@
     sel.removeAllRanges(); sel.addRange(range);
   }
   function beginInline(el, x, y) {
-    var line = +el.dataset.line, col = el.dataset.col == null ? null : +el.dataset.col;
+    var line = +el.dataset.line, col = el.dataset.col == null ? null : +el.dataset.col, span = +el.dataset.span || 1;
     if (inline_) { endInline(true); el = findPiece(line, col); if (!el) return; } // the slide was re-rendered: find the piece again
     var rendered = el.textContent, at = x == null ? null : caretOffsetAt(el, x, y);
-    var source = pieceText(line, col);
-    inline_ = { el: el, line: line, col: col, srcBefore: state.src };
+    /* A paragraph the long document cut across two sheets is one text: it opens in its first part, the others hidden for
+       the time of the edit, the caret where the pointer was counted over the parts before it. */
+    if (el.hasAttribute('data-part')) {
+      var parts = Array.prototype.slice.call(track.querySelectorAll('.slide.is-active [data-line="' + line + '"][data-part]:not([data-col])'));
+      var before = parts.slice(0, parts.indexOf(el)).map(function (p) { return p.textContent; }).join('');
+      if (at != null) at += before.length;
+      rendered = parts.map(function (p) { return p.textContent; }).join('');
+      parts.slice(1).forEach(function (p) { p.hidden = true; });
+      el = parts[0];
+    }
+    var source = pieceText(line, col, span);
+    inline_ = { el: el, line: line, col: col, span: span, srcBefore: state.src };
     el.textContent = source; // the source text, markdown marks visible
     el.setAttribute('contenteditable', 'plaintext-only');
     el.classList.add('is-inline');
@@ -593,16 +612,19 @@
   var inlineTimer = null;
   function inlineInput() {
     if (!inline_) return;
-    setPiece(inline_.line, inline_.col, inline_.el.textContent);
+    setPiece(inline_.line, inline_.col, inline_.el.textContent, inline_.span);
+    if (inline_.span > 1) inline_.span = 1; // written back on one line: from now on it is one
     editorFill(); // the panel follows
   }
   function endInline(commit) {
     if (!inline_) return;
     clearTimeout(inlineTimer);
-    var keep = state.i;
-    if (commit) { setPiece(inline_.line, inline_.col, inline_.el.textContent); } else if (!state.onSource) { state.src = inline_.srcBefore; }
+    var keep = state.i, top = stage.scrollTop;
+    if (commit) { setPiece(inline_.line, inline_.col, inline_.el.textContent, inline_.span); } else if (!state.onSource) { state.src = inline_.srcBefore; }
     inline_ = null;
-    load(state.src, state.name); show(keep);
+    load(state.src, state.name);
+    if (isDoc()) { show.fromScroll = true; show(keep); show.fromScroll = false; stage.scrollTop = top; } // a long page stays where it was read, not at its chapter's top
+    else show(keep);
   }
   // The first press on a text opens it, with the caret where the pointer is; further presses on it are native (double-click selects a word).
   var inlinePressed = false;
@@ -627,11 +649,19 @@
     editSrc.scrollTop = Math.max(0, heightBefore(start) - editSrc.clientHeight / 3);
     editorHint();
   }
+  // the pages of a doc scroll: a text on another chapter's page makes that chapter the current one, without moving the page
+  function reach(el) {
+    if (!el || !isDoc() || el.closest('.slide.is-active')) return el;
+    var to = state.slides.indexOf(el.closest('.slide')), at = stage.scrollTop, line = el.dataset.line, part = el.dataset.part, col = el.dataset.col;
+    if (inline_) endInline(true);
+    show.fromScroll = true; show(to); show.fromScroll = false; stage.scrollTop = at;
+    return track.querySelector('.slide.is-active [data-line="' + line + '"]' + (part != null ? '[data-part="' + part + '"]' : '') + (col == null ? ':not([data-col])' : '[data-col="' + col + '"]')) || el;
+  }
   track.addEventListener('mousedown', function (e) {
     if (!state.editing || e.button !== 0) return;
     var dn = e.target.closest && e.target.closest('[data-node-line]');
     if (dn && dn.closest('.slide.is-active')) { e.preventDefault(); focusSourceLine(+dn.dataset.nodeLine); return; }
-    var el = e.target.closest('[data-line]'); // only text pieces carry data-line (the slide itself carries data-start)
+    var el = reach(e.target.closest('[data-line]')); // only text pieces carry data-line (the slide itself carries data-start)
     if (!el || !el.closest('.slide.is-active')) { e.preventDefault(); if (inline_) endInline(true); return; } // off a text: no native selection or image drag, just commit
     if (inline_ && inline_.el === el) return;
     e.preventDefault(); inlinePressed = true;
@@ -640,6 +670,7 @@
   track.addEventListener('click', function (e) {
     if (!state.editing) return;
     var el = e.target.closest('[data-line]');
+    if (el && !inlinePressed && !(inline_ && inline_.el === el)) el = reach(el);
     if (!el || !el.closest('.slide.is-active')) return;
     e.stopPropagation();
     if (inlinePressed || (inline_ && inline_.el === el)) { inlinePressed = false; return; }
@@ -716,7 +747,7 @@
         + item('button', 'type="button" data-dl="html"', UI.page, UI.pageAbout(RUNTIME_VERSION), 'S')
         + (at ? item('a', 'href="' + at + '/deck.pdf" download', 'PDF · .pdf', UI.pdfServer, 'P')
               : item('button', 'type="button" data-dl="pdf"', 'PDF · .pdf', UI.pdfPrint, 'P'))
-        + (at && state.layout !== 'webpage' ? item('a', 'href="' + at + '/deck.pptx" download', 'PowerPoint · .pptx', UI.pptxAbout, 'X') : '')
+        + (at && state.layout !== 'webpage' && state.layout !== 'doc' ? item('a', 'href="' + at + '/deck.pptx" download', 'PowerPoint · .pptx', UI.pptxAbout, 'X') : '')
         + (at ? item('a', 'href="' + at + '/images.zip" download', UI.images, UI.imagesAbout, 'I') : '');
       var first = dlList.querySelector('a, button'); if (first) first.focus();
     }

@@ -4,17 +4,34 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.37.2';
-  var FORMAT_MAX = 1;
+  var VERSION = '1.38.1';
+  var FORMAT_MAX = 2;
+  /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
+     leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
+     format reads exactly as it did — on disk the source is never rewritten. Adding a word never moves the format.
+     Each step returns what it changed, in words the linter shows; tools/test.mjs keeps a frozen fixture per past version. */
+  var UPGRADES = {
+    // jmd/2 (1.38.0): `doc` became the long document; the A4 page per `---` of jmd/1 is `memo`
+    1: function (doc) { if (doc.meta.layout === 'doc') { doc.meta.layout = 'memo'; return ['`layout: doc` read as `memo` (the A4 page per `---`); in jmd/2 `doc` is the long document']; } return []; }
+  };
+  function formatOf(doc) { var m = /^jmd\/(\d+)$/.exec((doc && doc.meta && doc.meta.format) || ''); return m ? +m[1] : null; }
+  function upgrade(doc) {
+    var v = formatOf(doc), notes = [];
+    if (v == null || v > FORMAT_MAX) return notes;
+    for (; v < FORMAT_MAX; v++) if (UPGRADES[v]) notes = notes.concat(UPGRADES[v](doc));
+    return notes;
+  }
   // layouts (spec/jmd.md): the page the deck is made of — one table, the runtime and the CSS read it.
   //   w, h   the page in design units (the slide's px: every block's CSS is written in them); h 0 = as tall as its content
-  //   zoom   design units → screen/paper px (engine.css applies the same figure): Doc 1280 × .62 = 794 = A4 wide; Story 640 × 1.687 = 1080 (× 1138 = 1919.8: under the 1920 of the paper, never a blank sheet)
+  //   zoom   design units → screen/paper px (engine.css applies the same figure): Memo and Doc 1280 × .62 = 794 = A4 wide; Story 640 × 1.687 = 1080 (× 1138 = 1919.8: under the 1920 of the paper, never a blank sheet)
   //   limit  where content must stop (overflow), in design units; 0 = no limit
   //   flow   screen: one page at a time (← →, motion) · scroll: the pages stack and scroll
-  var LAYOUTS = ['slide', 'doc', 'story', 'webpage'];
+  //   sheets a `---` is a chapter, not a page: the browser lays its text out on as many A4 sheets as it takes (paginate)
+  var LAYOUTS = ['slide', 'memo', 'doc', 'story', 'webpage'];
   var PAGES = {
     slide: { w: 1280, h: 720, limit: 660, zoom: 1, flow: 'screen' },
-    doc: { w: 1280, h: 1810, limit: 1730, zoom: 0.62, flow: 'scroll' },
+    memo: { w: 1280, h: 1810, limit: 1730, zoom: 0.62, flow: 'scroll' },
+    doc: { w: 1280, h: 1810, limit: 1680, zoom: 0.62, flow: 'scroll', sheets: true },
     story: { w: 640, h: 1138, limit: 1060, zoom: 1.687, flow: 'screen' },
     webpage: { w: 1280, h: 0, limit: 0, zoom: 1, flow: 'scroll' }
   };
@@ -53,6 +70,41 @@ globalThis.JMD = (function () {
     return lines.join('\n');
   }
 
+  /* A long document is written chapter by chapter (spec/doc.md, step 3): twenty pages are 12–15k tokens, more than some hosts
+     let one tool call carry (SafeBrain cuts at 4096), and a chapter redone alone costs a chapter, not the document. The edit
+     is a line-range replacement like every other: `n` ≥ 1 replaces chapter n (as the linter counts them), 0 adds after the
+     last; the rest of the source stays byte for byte. `text` is the chapter alone — its own `---` frontmatter if it has one,
+     never the document's header (a `format:` or `layout:` in it means the whole document was sent: refused, never merged). */
+  function withChapter(src, text, n, where) {
+    var piece = String(text == null ? '' : text).replace(/\r\n?/g, '\n').replace(/^\s*\n/, '').replace(/\s+$/, '');
+    if (!piece) throw new Error('the chapter is empty');
+    var head = parse(piece).meta;
+    if (head.format || head.layout) throw new Error('this is a whole document (it has `format:` or `layout:`): send the chapter alone — from its `---` or its `#` title');
+    if (piece.split('\n')[0] !== '---') piece = '---\n' + piece;
+    var whole = String(src == null ? '' : src).replace(/\r\n?/g, '\n');
+    if (!n) return whole.replace(/\s+$/, '') + '\n\n' + piece + '\n';
+    var doc = parse(whole), at = doc.slides[n - 1];
+    if (!at) throw new Error('no chapter ' + n + ': the document has ' + doc.slides.length + ' — chapter: 0 adds one at the end');
+    var lines = whole.split('\n');
+    // `where` puts the piece before or after chapter n instead of in its place: the others keep their text, renumbered after it.
+    if (where === 'before' || where === 'after') {
+      var cut = where === 'before' ? at.start : at.map[1], tail = lines.slice(cut).join('\n').trim();
+      if (tail && !/^---(\n|$)/.test(tail)) tail = '---\n\n' + tail; // a first chapter written straight after the header has no `---` of its own
+      return lines.slice(0, cut).join('\n').replace(/\s+$/, '') + '\n\n' + piece + '\n' + (tail ? '\n' + tail + '\n' : '');
+    }
+    return lines.slice(0, at.start).concat(piece.split('\n'), [''], lines.slice(at.map[1])).join('\n').replace(/\n{3,}(?=---)/g, '\n\n');
+  }
+  /* The header of a long document, replaced and its chapters kept: what a document written chapter by chapter does when
+     its cover changes (a subtitle, an author, a date) without sending the whole text again. `text` is a header and only
+     that — `format:` and `layout:` included, no chapter. */
+  function withHeader(src, text) {
+    var head = String(text == null ? '' : text).replace(/\r\n?/g, '\n').replace(/^\s*\n/, '').replace(/\s+$/, ''), d = parse(head);
+    if (!d.meta.format || !d.meta.layout || d.slides.length) throw new Error('a header is `format:`, `layout:` and its keys between two `---`, and nothing after');
+    var whole = String(src == null ? '' : src).replace(/\r\n?/g, '\n'), doc = parse(whole), lines = whole.split('\n');
+    var rest = doc.slides.length ? lines.slice(doc.slides[0].start).join('\n') : '';
+    return head + '\n' + (rest ? '\n' + rest.replace(/\s+$/, '') + '\n' : '');
+  }
+
   /* ───────────────────────── utils ───────────────────────── */
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -73,7 +125,8 @@ globalThis.JMD = (function () {
       })
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/\[\^([\w-]+)\]/g, function (all, id) { return LONG ? noteCall(id) || all : all; });
   }
   function pad2(n) { return String(n).padStart(2, '0'); }
   // `{.hero .now}` → { classes:[...] } — `{.Hero}` reads the same: what the format names is case-insensitive
@@ -88,7 +141,7 @@ globalThis.JMD = (function () {
   /* ───────────────────────── parser ───────────────────────── */
   var KV = /^([A-Za-z][\w-]*):\s*(.*)$/;
   // Case: what the format names — keys, the values it enumerates, a brand id, a block, a modifier — is read in lowercase
-  // (`Layout: Doc`, `Intent: Hook`, `::: Cards`, `{.Hero}` all work). What the author writes — a title, notes, a section
+  // (`Layout: Memo`, `Intent: Hook`, `::: Cards`, `{.Hero}` all work). What the author writes — a title, notes, a section
   // label, a URL — keeps its case; a brand URL is not an id, it is left alone.
   var ENUM_KEYS = ['format', 'layout', 'intent', 'bg', 'brand', 'theme', 'template', 'watermark'];
   function parseKV(lines) {
@@ -157,6 +210,7 @@ globalThis.JMD = (function () {
     }
     doc.slides = doc.slides.filter(function (s) { return s.lines.join('').trim() || Object.keys(s.meta).length; });
     doc.slides.forEach(parseSlideBody);
+    doc.upgraded = upgrade(doc);
     return doc;
   }
 
@@ -415,7 +469,7 @@ globalThis.JMD = (function () {
   function chartBox(ctx, right) {
     var lay = ctx && ctx.layout;
     if (lay === 'story') return { w: 544, h: 440 };
-    if (lay === 'doc') return { w: 1060, h: right ? 460 : 520 };
+    if (lay === 'memo' || lay === 'doc') return { w: 1060, h: right ? 460 : 520 };
     if (right) return { w: 544, h: 400 };
     return { w: 1088, h: lay === 'webpage' ? 400 : 360 };
   }
@@ -534,7 +588,7 @@ globalThis.JMD = (function () {
   var DIAGRAM_KINDS = ['flowchart', 'graph'];
   // the other Mermaid families: the block of ours that already draws them
   var DIAGRAM_ROUTE = { pie: '`::: chart {.pie}`', 'xychart-beta': '`::: chart`', xychart: '`::: chart`', timeline: '`::: timeline`', journey: '`::: timeline`', gantt: '`::: timeline` or `::: table`', mindmap: '`::: cards`', quadrantchart: '`::: compare`' };
-  var DIAGRAM_MAX = { slide: 10, story: 7, doc: 14, webpage: 14 };
+  var DIAGRAM_MAX = { slide: 10, story: 7, memo: 14, doc: 14, webpage: 14 };
   var DIAGRAM_MIN_TYPE = 14;
   var DIAGRAM_GROW = 1.3;
   var DIAGRAM_LAYOUT_MAX = 60; // past it the layout is not even tried — the linter has said `max-items` long before; the text is shown // the most a diagram is grown to fill its box // the smallest type a fitted diagram may be read at, in design px
@@ -673,7 +727,8 @@ globalThis.JMD = (function () {
   function diagramBox(ctx, right) {
     var lay = ctx && ctx.layout;
     if (lay === 'story') return { w: 560, h: 860, fs: 24 };
-    if (lay === 'doc') return { w: 1060, h: right ? 520 : 760, fs: 18 };
+    if (lay === 'memo') return { w: 1060, h: right ? 520 : 760, fs: 18 };
+    if (lay === 'doc') return { w: 1060, h: 520, fs: 18 }; // a figure in running text: a third of the page, not half of it
     if (right) return { w: 544, h: 460, fs: 18 };
     return { w: 1100, h: lay === 'webpage' ? 560 : 430, fs: 20 };
   }
@@ -1345,6 +1400,64 @@ globalThis.JMD = (function () {
   };
 
   /* ───────────────────────── render ───────────────────────── */
+  /* The prose of a long document (layout doc, spec/doc.md): what a text of twenty pages needs and a slide must not have —
+     `##` and `###` inside the chapter, numbered lists, `>` quotes, a paragraph written over several lines read as one.
+     Each paragraph, heading, list and quote is one piece the pagination moves — a paragraph may be cut between two of its
+     lines. A piece carries its first source line, and `data-span` when it was written over several: a click edits it in
+     place, and the editor writes it back on one line. */
+  /* Notes (spec/doc.md, step 2): `[^id]` calls a note, `[^id]: its text` on a line of its own gives it, anywhere in the
+     chapter. The notes are numbered in the order they are called and gathered at the end of their chapter — never at the foot
+     of a page, so a note never moves the pagination. LONG is the chapter being drawn (null outside a doc): its anchor, its
+     `##` for the contents, its notes. */
+  var NOTE_DEF = /^\s*\[\^([\w-]+)\]:\s+(.*)$/, LONG = null;
+  var DOC_INTENTS = ['reveal', 'prove', 'explain', 'decide', 'recap'];
+  function chapterNotes(slide) {
+    var defs = {};
+    slide.nodes.forEach(function (n) {
+      if (n.type === 'prose') n.lines.forEach(function (l, k) { var m = NOTE_DEF.exec(l); if (m) defs[m[1].toLowerCase()] = { text: m[2], line: n.map[0] + k }; });
+    });
+    return defs;
+  }
+  function noteCall(id) {
+    id = id.toLowerCase(); if (!LONG.defs[id]) return null;
+    var k = LONG.order.indexOf(id); if (k < 0) { LONG.order.push(id); k = LONG.order.length - 1; }
+    return '<sup class="fn"><a href="#' + LONG.anchor + '-n' + (k + 1) + '">' + (k + 1) + '</a></sup>';
+  }
+  function chapterNotesHtml(lang) {
+    if (!LONG.order.length) return '';
+    var at = LONG; LONG = null; // a note does not call another: inside one, `[^id]` is text
+    var list = at.order.map(function (id, k) { return '<li id="' + at.anchor + '-n' + (k + 1) + '"' + src(at.defs[id].line) + '>' + inline(at.defs[id].text) + '</li>'; });
+    LONG = at;
+    return '<div class="prose prose--long"><h4 class="doc-h4 doc-notes-h">Notes</h4><ol class="doc-notes">' + list.join('') + '</ol></div>';
+  }
+
+  function renderLongProse(node) {
+    var html = '', i = 0, L = node.lines, at = node.map[0];
+    var isList = function (l) { return /^\s*[-*]\s+/.test(l); }, isNum = function (l) { return /^\s*\d+[.)]\s+/.test(l); };
+    var isHead = function (l) { return /^#{2,3}\s+/.test(l); }, isQuote = function (l) { return /^\s*>\s?/.test(l); };
+    while (i < L.length) {
+      var l = L[i];
+      if (!l.trim() || NOTE_DEF.test(l)) { i++; continue; } // a note's text is drawn at the end of its chapter
+      var mh = /^(#{2,3})\s+(.*)$/.exec(l);
+      if (mh) {
+        var hid = ''; // a `##` is a line of the contents: it needs an anchor
+        if (LONG && mh[1].length === 2) { hid = LONG.anchor + '-' + (LONG.heads.length + 1); LONG.heads.push({ id: hid, text: mh[2].trim() }); hid = ' id="' + hid + '"'; }
+        html += '<h' + (mh[1].length + 1) + ' class="doc-h' + (mh[1].length + 1) + '"' + hid + src(at + i) + '>' + inline(mh[2].trim()) + '</h' + (mh[1].length + 1) + '>'; i++; continue;
+      }
+      if (isList(l) || isNum(l)) {
+        var num = isNum(l), test = num ? isNum : isList, items = [];
+        while (i < L.length && test(L[i])) { items.push('<li' + src(at + i) + '>' + inline(L[i].replace(num ? /^\s*\d+[.)]\s+/ : /^\s*[-*]\s+/, '')) + '</li>'); i++; }
+        html += num ? '<ol>' + items.join('') + '</ol>' : '<ul>' + items.join('') + '</ul>';
+        continue;
+      }
+      var quote = isQuote(l), s0 = i, parts = [];
+      while (i < L.length && L[i].trim() && !NOTE_DEF.test(L[i]) && !isHead(L[i]) && !isList(L[i]) && !isNum(L[i]) && isQuote(L[i]) === quote) { parts.push(quote ? L[i].replace(/^\s*>\s?/, '') : L[i].trim()); i++; }
+      var text = inline(parts.join(' ').trim()), one = src(at + s0) + (i - s0 > 1 ? ' data-span="' + (i - s0) + '"' : '');
+      html += quote ? '<blockquote' + one + '>' + text + '</blockquote>' : '<p' + one + '>' + text + '</p>';
+    }
+    return '<div class="prose prose--long">' + html + '</div>';
+  }
+
   function renderProse(node) {
     var html = '', list = null;
     function flush() { if (list) { html += '<ul' + (list.length > 7 ? ' class="long"' : list.length <= 4 ? ' class="few"' : '') + '>' + list.map(function (t) { return '<li' + src(t.line) + '>' + inline(t.text) + '</li>'; }).join('') + '</ul>'; list = null; } }
@@ -1368,14 +1481,25 @@ globalThis.JMD = (function () {
   var ctx_lines_cache = null;
   function renderSlide(slide, idx, ctx) {
     var m = slide.meta, intent = INTENTS.indexOf(m.intent) >= 0 ? m.intent : null;
-    var bg = intent ? INTENT_BG[intent] : (m.bg || 'white'); // an intent sets the background itself
+    if (ctx.layout === 'doc' && isPage(m)) return renderDocPage(slide, idx, ctx);
+    /* In a long document an intent is a page's, as everywhere: the engine makes the pages, so a page has to be written to carry
+       one — a page of its own (`page: yes`, renderDocPage), or the opening page of a chapter. A chapter's dark intent (hook,
+       problem, celebrate, act, fun) gives it an opening page in that form — its title, its lead, a `.cover` picture — and
+       the reading goes on on white pages; a light one (reveal, prove, explain, decide, recap) shapes the chapter's blocks.
+       A chapter's own pages are white: `bg:` belongs to a page. */
+    var opener = ctx.layout === 'doc' && intent && DOC_INTENTS.indexOf(intent) < 0 ? intent : null;
+    if (opener) intent = null;
+    var bg = ctx.layout === 'doc' ? 'white' : intent ? INTENT_BG[intent] : (m.bg || 'white'); // an intent sets the background itself
     if (m.section) ctx.section = m.section;
     var dark = bg === 'indigo' || bg === 'accent' || bg === 'sky';
+    // a long document's running head is its chapter: the `section:` written on it, else its title
+    var chapter = ctx.layout === 'doc' ? (m.section || (slide.nodes.find(function (n) { return n.type === 'title'; }) || {}).text || ctx.section || '') : '';
+    LONG = ctx.layout === 'doc' ? { anchor: 'ch-' + (idx + 1), heads: [], defs: chapterNotes(slide), order: [] } : null;
     var chrome = '<div class="slide-chrome"><div class="lockup"><svg><use href="#brand-mark"/></svg>' + esc(ctx.brand.name || '') + '</div>' +
-      '<div class="chrome-meta">' + esc(ctx.section || '') + '</div></div>';
-    // Slide: the number in the corner. Doc and Story: page n / N — a page reads alone once printed or posted; Doc adds the
+      '<div class="chrome-meta">' + (ctx.layout === 'doc' ? inline(chapter).replace(/<[^>]*>/g, '') : esc(ctx.section || '')) + '</div></div>';
+    // Slide: the number in the corner. Memo, Doc and Story: page n / N — a page reads alone once printed or posted; Memo and Doc add the
     // document's title in the footer. Webpage: no tag, the sections are one page.
-    var tag = ctx.layout === 'doc' ? '<div class="slide-tag">' + pad2(idx + 1) + ' / ' + pad2(ctx.total) + '</div><div class="slide-foot">' + esc(ctx.title || '') + '</div>'
+    var tag = ctx.layout === 'memo' || ctx.layout === 'doc' ? '<div class="slide-tag">' + pad2(idx + 1) + ' / ' + pad2(ctx.total) + '</div><div class="slide-foot">' + esc(ctx.title || '') + '</div>'
       : ctx.layout === 'story' ? '<div class="slide-tag">' + pad2(idx + 1) + ' / ' + pad2(ctx.total) + '</div>'
       : ctx.layout === 'webpage' ? ''
       : '<div class="slide-tag">' + pad2(idx + 1) + '</div>';
@@ -1383,14 +1507,16 @@ globalThis.JMD = (function () {
 
     var title = slide.nodes.find(function (n) { return n.type === 'title'; });
     var images = slide.nodes.filter(function (n) { return n.type === 'image'; });
-    var right = images.find(function (n) { return has(n.attrs, 'right'); });
-    var cover = images.find(function (n) { return has(n.attrs, 'cover'); });
-    var rightBlock = slide.nodes.find(function (n) { return n.type === 'block' && has(n.attrs, 'right') && BLOCKS[n.name] && !BLOCKS[n.name].full; });
+    // in a doc nothing sits beside the page: a `.right` image or block is drawn where it is written, in the flow (engine.css)
+    var flow = ctx.layout === 'doc';
+    var right = flow ? null : images.find(function (n) { return has(n.attrs, 'right'); });
+    var cover = flow ? null : images.find(function (n) { return has(n.attrs, 'cover'); });
+    var rightBlock = flow ? null : slide.nodes.find(function (n) { return n.type === 'block' && has(n.attrs, 'right') && BLOCKS[n.name] && !BLOCKS[n.name].full; });
     var classes = ['slide', 'slide--' + bg];
     if (intent) classes.push('slide--' + intent, 'slide--intent');
     if (right) classes.push('slide--split');
     if (rightBlock) classes.push('slide--split-block');
-    if (title && title.level === 1) classes.push('slide--cover');
+    if (title && title.level === 1 && ctx.layout !== 'doc') classes.push('slide--cover'); // a long document's `#` is a chapter's title
 
     /* A statement or a section fills the page alone. Under a title, it keeps its size and the title heads the page; beside
        a text or another block (1.37.1: Circuit's cover — a title, its lead, its cards and a closing quote), it is drawn
@@ -1404,27 +1530,40 @@ globalThis.JMD = (function () {
     } else {
       var head = '';
       if (m.eyebrow || title) {
-        var h = title && title.level === 1 ? 'h1' : 'h2', hc = title && title.level === 1 ? 'slide-h1' : 'slide-h2';
+        var h = title && title.level === 1 && ctx.layout !== 'doc' ? 'h1' : 'h2', hc = ctx.layout === 'doc' ? 'slide-h2 doc-title' : title && title.level === 1 ? 'slide-h1' : 'slide-h2';
         head = '<div class="slide-head">' +
           (m.eyebrow ? '<div class="slide-eyebrow"' + src(metaLine(slide, 'eyebrow')) + '>' + inline(m.eyebrow) + '</div>' : '') +
-          (title ? '<' + h + ' class="' + hc + '"' + src(title.map[0]) + '>' + inline(title.text) + '</' + h + '>' : '') +
+          (title ? '<' + h + ' class="' + hc + '"' + (LONG ? ' id="' + LONG.anchor + '"' : '') + src(title.map[0]) + '>' + inline(title.text) + '</' + h + '>' : '') +
           '</div>';
       }
       var body = slide.nodes.map(function (n) {
         if (n.type === 'title') return '';
         if (n.type === 'lead') return '<p class="slide-lead"' + src(n.map[1] - n.map[0] === 1 ? n.map[0] : null) + '>' + inline(n.text) + '</p>';
-        if (n.type === 'prose') return renderProse(n);
+        if (n.type === 'prose') return ctx.layout === 'doc' ? renderLongProse(n) : renderProse(n);
         if (n.type === 'image') {
           if (n === right || n === cover) return '';
-          return '<figure class="figure' + (has(n.attrs, 'wide') ? ' figure--wide' : '') + '">' + imgTag(n.src, n.alt, ctx) + (n.alt ? '<figcaption>' + inline(n.alt) + '</figcaption>' : '') + '</figure>';
+          var fig = '<figure class="figure' + (has(n.attrs, 'wide') || (flow && has(n.attrs, 'cover')) ? ' figure--wide' : '') + (flow && has(n.attrs, 'right') ? ' figure--right' : '') + '">' + imgTag(n.src, n.alt, ctx) + (n.alt ? '<figcaption>' + inline(n.alt) + '</figcaption>' : '') + '</figure>';
+          return flow && has(n.attrs, 'right') ? '<div class="prose prose--long">' + fig + '</div>' : fig; // the text that follows runs around it
         }
         if (n.type === 'block') {
           if (n === rightBlock) return '';
-          if (BLOCKS[n.name]) return BLOCKS[n.name].render(n, ctx, !!BLOCKS[n.name].full && crowded);
+          if (BLOCKS[n.name]) return BLOCKS[n.name].render(n, ctx, !!BLOCKS[n.name].full && crowded); // in a doc's flow, a statement is a pull quote
           return '<div class="prose"><p><em>unknown block: ' + esc(n.name) + '</em></p></div>';
         }
         return '';
       }).join('');
+      if (LONG) body += chapterNotesHtml(ctx.lang);
+      if (LONG && String(m.columns) === '2') { // the title and the lead span the page; the rest goes in the columns
+        var lead = slide.nodes.filter(function (n) { return n.type === 'lead'; }).map(function (n) { return '<p class="slide-lead"' + src(n.map[1] - n.map[0] === 1 ? n.map[0] : null) + '>' + inline(n.text) + '</p>'; }).join('');
+        body = lead + '<div class="doc-cols">' + (lead ? body.replace(lead, '') : body) + '</div>';
+      }
+      if (opener) { // the lead and a `.cover` picture open the chapter on its own page; the body starts on the next
+        var openWith = slide.nodes.filter(function (n) { return n.type === 'lead' || (n.type === 'image' && has(n.attrs, 'cover')); });
+        var openHtml = openWith.map(function (n) { return n.type === 'lead' ? '<p class="slide-lead"' + src(n.map[1] - n.map[0] === 1 ? n.map[0] : null) + '>' + inline(n.text) + '</p>' : '<figure class="figure figure--wide">' + imgTag(n.src, n.alt, ctx) + '</figure>'; }).join('');
+        openWith.forEach(function (n) { var one = n.type === 'lead' ? '<p class="slide-lead"' + src(n.map[1] - n.map[0] === 1 ? n.map[0] : null) + '>' + inline(n.text) + '</p>' : '<figure class="figure figure--wide">' + imgTag(n.src, n.alt, ctx) + (n.alt ? '<figcaption>' + inline(n.alt) + '</figcaption>' : '') + '</figure>'; body = body.replace(one, ''); });
+        opener = { head: head + openHtml, intent: opener };
+        head = '';
+      }
       inner = '<div class="body-pad">' + head + body + '</div>';
       if (right) inner += '<div class="split-media">' + imgTag(right.src, right.alt, ctx) + '</div>';
       if (rightBlock) inner += '<div class="split-block">' + BLOCKS[rightBlock.name].render(rightBlock, ctx) + '</div>';
@@ -1436,7 +1575,28 @@ globalThis.JMD = (function () {
     var glyph = '<use href="#' + (+ctx.brand.glyphs ? 'brand-glyph-1' : 'brand-mark') + '"/>';
     var watermark = wm === 'none' || decorated ? ''
       : '<div class="wm wm--' + esc(wm) + ' wm--' + (idx % 2 ? 'b' : 'a') + '" aria-hidden="true">' + (wm === 'mark' ? '<svg class="wm-g">' + glyph + '</svg>' + (intent === 'celebrate' ? new Array(7).join('<svg class="wm-bit">' + glyph + '</svg>') : '') : '') + '</div>';
-    return '<section class="' + classes.join(' ') + '"' + notes + (intent ? ' data-intent="' + intent + '"' : '') + ' data-start="' + slide.map[0] + '">' + watermark + chrome + inner + tag + '</section>';
+    var page = watermark + chrome + inner + tag;
+    if (ctx.layout === 'doc') {
+      page = '<div class="sheet">' + page + '</div>'; // paginate() adds the sheets the chapter needs
+      if (opener) page = '<div class="sheet sheet--opener slide--' + INTENT_BG[opener.intent] + ' slide--' + opener.intent + ' slide--intent" data-intent="' + opener.intent + '">' +
+        '<div class="wm wm--' + esc(wm === 'none' ? 'none' : wm) + ' wm--a" aria-hidden="true">' + (wm === 'mark' ? '<svg class="wm-g">' + glyph + '</svg>' : '') + '</div>' + chrome +
+        '<div class="body-pad">' + opener.head + '</div>' + tag + '</div>' + page;
+      ctx.chapters.push({ id: LONG.anchor, text: title ? title.text : chapter, heads: LONG.heads });
+      ctx.chapterTitle = chapter;
+      LONG = null;
+    }
+    return '<section class="' + classes.join(' ') + '"' + notes + (intent ? ' data-intent="' + intent + '"' : '') + ' data-start="' + slide.map[0] + '">' + page + '</section>';
+  }
+
+  /* A page of its own in a long document (`page: yes`): a memo page set in the flow — any of the ten intents, its `bg:`, one
+     sheet, laid out as the memo lays out a page and never cut; a key figure, a quote, a decision, a call to act between two
+     stretches of reading. It opens no chapter: it is not in the contents, its running head is the chapter it sits in. */
+  function isPage(m) { return m.page != null && !/^(no|false|0)$/i.test(String(m.page)); }
+  function renderDocPage(slide, idx, ctx) {
+    var c = {}; for (var k in ctx) c[k] = ctx[k];
+    c.layout = 'memo'; c.section = ctx.chapterTitle || '';
+    var html = renderSlide(slide, idx, c), m = /^<section class="slide ([^"]*)"([^>]*)>([\s\S]*)<\/section>$/.exec(html);
+    return '<section class="' + ['slide', 'slide--page'].join(' ') + '"' + m[2] + '><div class="sheet sheet--page ' + m[1] + '">' + m[3] + '</div></section>';
   }
 
   // `watermark:` in the header overrules the brand's, for this deck only (R3, 2026-10-20: the agent could not take the shape off a
@@ -1450,8 +1610,36 @@ globalThis.JMD = (function () {
   }
   function render(doc, ctx) {
     ctx_lines_cache = doc.lines || null;
-    var c = { brand: withWatermark((ctx && ctx.brand) || {}, doc.meta.watermark), assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', lang: doc.meta.lang || '' };
-    return doc.slides.map(function (s, i) { return renderSlide(s, i, c); }).join('\n');
+    var c = { brand: withWatermark((ctx && ctx.brand) || {}, doc.meta.watermark), assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', lang: doc.meta.lang || '', chapters: [] };
+    var html = doc.slides.map(function (s, i) { return renderSlide(s, i, c); });
+    if (c.layout === 'doc' && html.length) html[0] = html[0].replace(/^(<section[^>]*>)/, function (open) { return open + frontMatter(doc, c); });
+    return html.join('\n');
+  }
+
+  /* The front of a long document (spec/doc.md, step 2), drawn from its header — no new syntax for what the header already
+     says: a cover (`title`, `subtitle`, `author`, `date`), then the contents, its chapters and their `##`, the page numbers
+     written by paginate() once it knows where each one landed. Both sit inside the first chapter's section, as sheets before
+     its own: the chapters stay the document's slides one for one (the linter, the editor, the versions count them).
+     `cover: none` and `contents: none` leave them out; a document of one chapter has no contents. */
+  var FRONT_WORDS = { fr: { contents: 'Sommaire' }, en: { contents: 'Contents' } };
+  function frontMatter(doc, c) {
+    var m = doc.meta, words = FRONT_WORDS[(c.lang || '').slice(0, 2).toLowerCase()] || FRONT_WORDS.en, out = '';
+    var lockup = '<div class="slide-chrome"><div class="lockup"><svg><use href="#brand-mark"/></svg>' + esc(c.brand.name || '') + '</div><div class="chrome-meta"></div></div>';
+    if (String(m.cover || '').toLowerCase() !== 'none' && m.title) {
+      var by = [m.author, m.date].filter(Boolean).map(function (x) { return inline(x); }).join(' · ');
+      out += '<div class="sheet sheet--front sheet--cover">' + lockup + '<div class="cover-pad">' +
+        '<h1 class="doc-cover-title">' + inline(m.title) + '</h1>' + (m.subtitle ? '<p class="doc-cover-sub">' + inline(m.subtitle) + '</p>' : '') +
+        (by ? '<p class="doc-cover-by">' + by + '</p>' : '') + '</div>' +
+        '<div class="wm wm--mark wm--a" aria-hidden="true"><svg class="wm-g"><use href="#' + (+c.brand.glyphs ? 'brand-glyph-1' : 'brand-mark') + '"/></svg></div></div>';
+    }
+    if (String(m.contents || '').toLowerCase() !== 'none' && c.chapters.length > 1) {
+      var line = function (cls, id, k, text) { return '<p class="' + cls + '"><a href="#' + id + '">' + (k ? '<span class="toc-k">' + k + '</span>' : '') + '<span class="toc-t">' + inline(text).replace(/<sup class="fn">.*?<\/sup>/g, '') + '</span><span class="toc-n" data-for="' + id + '"></span></a></p>'; };
+      var rows = c.chapters.map(function (ch, i) { return line('toc-ch', ch.id, pad2(i + 1), ch.text) + ch.heads.map(function (h) { return line('toc-sec', h.id, '', h.text); }).join(''); }).join('');
+      out += '<div class="sheet sheet--front sheet--toc">' + lockup.replace('<div class="chrome-meta"></div>', '<div class="chrome-meta">' + esc(words.contents) + '</div>') +
+        '<div class="body-pad"><div class="slide-head"><h2 class="slide-h2 doc-title">' + esc(words.contents) + '</h2></div><div class="prose prose--long toc">' + rows + '</div></div>' +
+        '<div class="slide-tag"></div><div class="slide-foot">' + esc(c.title || '') + '</div></div>';
+    }
+    return out;
   }
 
   /* ───────────────────────── assets ───────────────────────── */
@@ -1508,8 +1696,9 @@ globalThis.JMD = (function () {
     function info(slide, block, rule, msg) { out.push({ level: 'info', slide: slide, block: block, rule: rule, message: msg }); } // advice, never counted
 
     var fv = /^jmd\/(\d+)$/.exec(doc.meta.format || '');
-    if (!fv) err(0, null, 'format', 'missing or invalid `format: jmd/1` header');
+    if (!fv) err(0, null, 'format', 'missing or invalid `format: jmd/' + FORMAT_MAX + '` header');
     else if (+fv[1] > FORMAT_MAX) err(0, null, 'format', 'format jmd/' + fv[1] + ': this runtime reads up to jmd/' + FORMAT_MAX);
+    (doc.upgraded || []).forEach(function (m) { info(0, null, 'format', 'format jmd/' + fv[1] + ': ' + m + ' — write `format: jmd/' + FORMAT_MAX + '` and the word of today to change it'); });
     if (doc.meta.layout && !PAGES[doc.meta.layout]) err(0, null, 'layout', 'unknown layout `' + doc.meta.layout + '`: ' + LAYOUTS.join(', ') + ' (no layout = slide)');
     else if (!doc.meta.layout && fv) info(0, null, 'layout', 'no `layout:` in the header — write `layout: slide`: one word the user changes to make it a doc, a story or a webpage');
     if (doc.meta.watermark && WATERMARKS.indexOf(doc.meta.watermark) < 0) err(0, null, 'watermark', 'unknown watermark `' + doc.meta.watermark + '`: ' + WATERMARKS.join(', ') + ' (no watermark: = the brand\'s)');
@@ -1530,7 +1719,20 @@ globalThis.JMD = (function () {
       var exempt = blocks.some(function (b) { return b.name === 'statement' || b.name === 'quote' || b.name === 'section'; });
       if (!title && !exempt) err(n, null, 'no-title', 'slide without a title (except statement, quote, section)');
       var fullHere = blocks.find(function (b) { return BLOCKS[b.name] && BLOCKS[b.name].full; });
-      if (fullHere && s.nodes.filter(function (x) { return x.type !== 'title'; }).length > 1) warn(n, fullHere.name, 'full-alone', '`::: ' + fullHere.name + '` fills a page alone, or under its title; beside a text or another block it is drawn small inside the page — to give it the whole page, put it on a page of its own after a `---`');
+      // in a doc a chapter is running text: a statement there is a pull quote, drawn in the flow on purpose
+      if (fullHere && layout(doc) !== 'doc' && s.nodes.filter(function (x) { return x.type !== 'title'; }).length > 1) warn(n, fullHere.name, 'full-alone', '`::: ' + fullHere.name + '` fills a page alone, or under its title; beside a text or another block it is drawn small inside the page — to give it the whole page, put it on a page of its own after a `---`');
+      if (layout(doc) === 'doc' && !isPage(m) && m.bg && m.bg !== 'white') warn(n, null, 'doc-bg', '`bg: ' + m.bg + '` on a chapter is not drawn: its reading pages are white — a colored page is a page of its own (`page: yes`), or the opening page a dark intent gives the chapter');
+      if (layout(doc) === 'doc' && m.columns != null && ['1', '2'].indexOf(String(m.columns)) < 0) err(n, null, 'columns', '`columns: ' + m.columns + '`: a chapter has 1 or 2 columns');
+      if (layout(doc) === 'doc') { // notes: a call with no text is an error, a text never called a warning
+        var defs = chapterNotes(s), called = {};
+        s.nodes.forEach(function (x) {
+          (x.lines || [x.text || '']).forEach(function (l) {
+            if (NOTE_DEF.test(l)) return;
+            (String(l).match(/\[\^[\w-]+\]/g) || []).forEach(function (c) { var id = c.slice(2, -1).toLowerCase(); called[id] = 1; if (!defs[id]) err(n, x.name || null, 'note-missing', 'note `[^' + id + ']` is called but never given: write `[^' + id + ']: its text` on a line of its own in this chapter'); });
+          });
+        });
+        Object.keys(defs).forEach(function (id) { if (!called[id]) warn(n, null, 'note-unused', 'note `[^' + id + ']` is given but never called: put `[^' + id + ']` where it belongs in the text, or remove it'); });
+      }
       if (title && title.text.length > 60) warn(n, null, 'title-length', 'title is ' + title.text.length + ' characters, 60 recommended');
       var lead = s.nodes.find(function (x) { return x.type === 'lead'; });
       if (lead && lead.text.length > 200) warn(n, null, 'lead-length', 'lead is ' + lead.text.length + ' characters, 200 recommended');
@@ -1638,7 +1840,8 @@ globalThis.JMD = (function () {
       });
       if (!strays) {
         var loose = 0;
-        s.nodes.filter(function (x) { return x.type === 'prose'; }).forEach(function (p) { p.lines.forEach(function (l) { if (/^#{1,6}\s/.test(l)) loose++; }); });
+        var heads = layout(doc) === 'doc' ? /^(#|#{4,6})\s/ : /^#{1,6}\s/; // a long document's chapter holds `##` and `###`
+        s.nodes.filter(function (x) { return x.type === 'prose'; }).forEach(function (p) { p.lines.forEach(function (l) { if (heads.test(l)) loose++; }); });
         if (loose) err(n, null, 'loose-heading', loose + ' `#` heading' + (loose > 1 ? 's' : '') + ' outside a block, printed as text: one `##` title per slide; other headings live in a block (`cards`, `compare`)');
       }
     });
@@ -1701,7 +1904,7 @@ globalThis.JMD = (function () {
   }
   function fitOverflow(track, out, lay) {
     var page = PAGES[lay] || PAGES.slide, slides = track.querySelectorAll('.slide');
-    if (!page.limit) return out;
+    if (!page.limit || page.sheets) return out; // a long document is never shrunk: its text goes on to the next sheet
     Array.prototype.forEach.call(slides, function (sec, i) {
       var body = sec.querySelector('.body-pad'); if (!body) return;
       body.style.zoom = ''; body.style.width = ''; sec.classList.remove('is-fit'); delete sec.dataset.fit;
@@ -1719,6 +1922,125 @@ globalThis.JMD = (function () {
       out.push({ level: 'warning', slide: i + 1, block: null, rule: 'fit', message: 'content reached ' + Math.round(bottom) + 'px, limit ' + page.limit + ': shown at ' + Math.round(s * 100) + ' % — shorten a text or remove an item to keep the type at full size' });
     });
     return out;
+  }
+
+  /* A long document (layout doc, spec/doc.md) is laid out by the browser, where the text can be measured: each flow — the
+     contents, then each chapter — arrives drawn on one sheet, and its pieces (the title, a paragraph, a heading, a list, a
+     quote, a block, a figure) are put back one after the other, a new sheet opened when the next one would cross the page's
+     limit. A block is never cut; a list is cut between two items; a paragraph between two of its lines, two at least on
+     each side; a heading never stays alone at the foot of a sheet; a piece taller than a whole sheet stays where it is, and
+     lintOverflow says so. A chapter in two columns (`columns: 2`) fills a box the height of what is left of the sheet,
+     column after column: a piece is out when a part of it reaches past the foot or into a third column; its last sheet is
+     balanced. Then every sheet is numbered `n / N`, and the contents get their page numbers. Run again on a track that was
+     already paginated, it starts over from what render() made — only on a fresh render, so it is called after each one. */
+  function paginate(track, lay) {
+    var page = PAGES[lay]; if (!page || !page.sheets) return 0;
+    var slice = function (x) { return Array.prototype.slice.call(x); };
+    var isHead = function (el) { return /^H[34]$/.test(el.tagName); };
+    slice(track.querySelectorAll('.sheet')).forEach(function (first) {
+      var body = first.querySelector('.body-pad'); if (!body || first.classList.contains('sheet--page')) return; // a page of its own is one page, as written
+      // the pieces, in order: a prose opened into its paragraphs, headings, lists and quotes, each keeping the class of its
+      // box (the contents' `toc`) and whether it lives in the columns
+      var pieces = [];
+      (function take(box, cols) {
+        slice(box.children).forEach(function (el) {
+          if (el.classList.contains('doc-cols')) take(el, true);
+          else if (el.classList.contains('prose--long')) slice(el.children).forEach(function (c) { pieces.push({ el: c, prose: el.className, cols: cols }); });
+          else pieces.push({ el: el, prose: '', cols: cols });
+        });
+      })(body, false);
+      body.textContent = '';
+      var shell = first.cloneNode(true); // an empty sheet: the chrome, the watermark, the foot — the body to fill, on white
+      shell.className = shell.className.split(' ').filter(function (c) { return !/^slide--|^sheet--opener$/.test(c); }).join(' '); shell.removeAttribute('data-intent');
+      var sheet = first, cur = body, here = []; // `here`: the pieces on the current sheet
+      var frame = function () { var r = sheet.getBoundingClientRect(); return { top: r.top, k: r.width / page.w }; };
+      var colsOf = function (pc) { return pc.cols ? pc.el.closest('.doc-cols') : null; };
+      var outRect = function (r, f, box) { return (r.bottom - f.top) / f.k > page.limit + 0.5 || (box && r.left > box.right - 1); };
+      var out = function (pc) {
+        var f = frame(), c = colsOf(pc), box = c && c.getBoundingClientRect();
+        return slice(pc.el.getClientRects()).some(function (r) { return outRect(r, f, box); });
+      };
+      var into = function (pc) {
+        if (!pc.cols) return cur;
+        var c = cur.lastElementChild;
+        if (!c || !c.classList.contains('doc-cols')) {
+          c = document.createElement('div'); c.className = 'doc-cols'; cur.appendChild(c);
+          var f = frame(); c.style.height = Math.max(0, page.limit - (c.getBoundingClientRect().top - f.top) / f.k) + 'px';
+        }
+        return c;
+      };
+      var place = function (pc) {
+        var box = into(pc);
+        if (pc.prose) {
+          var last = box.lastElementChild;
+          if (!last || last.className !== pc.prose) { last = document.createElement('div'); last.className = pc.prose; box.appendChild(last); }
+          last.appendChild(pc.el);
+        } else box.appendChild(pc.el);
+        here.push(pc);
+      };
+      var tidy = function () { slice(cur.querySelectorAll('.prose--long, .doc-cols')).reverse().forEach(function (p) { if (!p.children.length) p.remove(); }); };
+      var newSheet = function () {
+        var next = shell.cloneNode(true); sheet.parentNode.insertBefore(next, sheet.nextSibling);
+        sheet = next; cur = next.querySelector('.body-pad'); here = [];
+      };
+      /* A paragraph that crosses the foot is cut between two lines: its words are read off the page, the first one out
+         marks the cut, moved back to the start of its line; two lines at least stay, two at least go on (no orphan, no
+         widow), or the paragraph moves whole. The tail is the same paragraph — the same source line, the next `data-part`. */
+      var cut = function (pc, back) {
+        back = back || 0;
+        var p = pc.el, f = frame(), c = colsOf(pc), box = c && c.getBoundingClientRect(), words = [], walk = document.createTreeWalker(p, NodeFilter.SHOW_TEXT), t;
+        var colOf = function (r) { return box ? Math.floor((r.left - box.left) / (box.width / 2)) : 0; };
+        while ((t = walk.nextNode())) { var re = /\S+/g, m; while ((m = re.exec(t.data))) { var rg = document.createRange(); rg.setStart(t, m.index); rg.setEnd(t, m.index + 1); var r = rg.getBoundingClientRect(); words.push({ node: t, at: m.index, line: colOf(r) + ':' + Math.round(r.top), out: outRect(r, f, box) }); } }
+        var k = 0; while (k < words.length && !words[k].out) k++;
+        if (k === 0 || k === words.length) return null;
+        var lines = function (ws) { var seen = []; ws.forEach(function (w) { if (seen.indexOf(w.line) < 0) seen.push(w.line); }); return seen.length; };
+        while (k > 0 && words[k - 1].line === words[k].line) k--; // the cut is at the start of a line
+        for (var b = (lines(words.slice(k)) < 2 ? 1 : 0) + back; b > 0 && k > 0; b--) { var prev = words[k - 1].line; while (k > 0 && words[k - 1].line === prev) k--; } // two lines go on (and `back` more)
+        if (k === 0 || lines(words.slice(0, k)) < 2 || lines(words.slice(k)) < 2) return null; // two lines stay
+        var rg2 = document.createRange(); rg2.setStart(words[k].node, words[k].at); rg2.setEndAfter(p.lastChild);
+        var tail = p.cloneNode(false); tail.appendChild(rg2.extractContents());
+        p.classList.add('p-cut'); tail.classList.add('p-cont'); tail.setAttribute('data-part', String((+p.getAttribute('data-part') || 0) + 1));
+        if (!p.hasAttribute('data-part')) p.setAttribute('data-part', '0');
+        /* A word hyphenated across the cut leaves its end on a line of its own, past the foot: the tail goes back and the
+           cut is made a line higher. */
+        if (out(pc)) { while (tail.firstChild) p.appendChild(tail.firstChild); p.normalize(); p.classList.remove('p-cut'); if (p.getAttribute('data-part') === '0' && !p.classList.contains('p-cont')) p.removeAttribute('data-part'); return back < 3 ? cut(pc, back + 1) : null; }
+        return tail;
+      };
+      for (var k = 0; k < pieces.length; k++) {
+        var pc = pieces[k];
+        place(pc);
+        if (!out(pc)) continue;
+        // a list: the items that fit stay, the others go on in a list of the same kind on the next sheet — first on its sheet too
+        if (/^(UL|OL)$/.test(pc.el.tagName) && pc.el.children.length > 1) {
+          var rest = pc.el.cloneNode(false), items = slice(pc.el.children);
+          while (pc.el.children.length > 1 && out(pc)) rest.insertBefore(pc.el.lastElementChild, rest.firstChild);
+          if (!out(pc)) {
+            if (pc.el.tagName === 'OL') rest.style.setProperty('--ol-start', String((+pc.el.style.getPropertyValue('--ol-start') || 1) + pc.el.children.length)); // the numbering goes on
+            pieces.splice(k + 1, 0, { el: rest, prose: pc.prose, cols: pc.cols });
+            continue;
+          }
+          items.forEach(function (li) { pc.el.appendChild(li); }); // not even one item fits here: the whole list moves
+        }
+        if (pc.el.tagName === 'P' && pc.prose) { var tail = cut(pc); if (tail) { pieces.splice(k + 1, 0, { el: tail, prose: pc.prose, cols: pc.cols }); continue; } }
+        if (here.length === 1) continue; // alone on its sheet and still too tall: it stays, and lintOverflow says so
+        pc.el.remove(); here.pop();
+        // a heading goes with what it heads — unless it would leave the sheet empty
+        var moved = [pc];
+        while (here.length > 1 && here[here.length - 1].prose && isHead(here[here.length - 1].el)) { var h = here.pop(); h.el.remove(); moved.unshift(h); }
+        tidy(); newSheet();
+        moved.slice(0, -1).forEach(place); // the headings that go with it
+        k--; // and the piece itself is laid out again on the new sheet, where a long list or paragraph is cut again
+      }
+      tidy();
+      var last = cur.querySelector('.doc-cols'); if (last) { last.style.height = ''; last.classList.add('doc-cols--end'); } // the last sheet of a chapter in columns: balanced
+    });
+    var sheets = Array.prototype.slice.call(track.querySelectorAll('.sheet')), n = sheets.length, pad = function (x) { return x < 10 ? '0' + x : String(x); };
+    sheets.forEach(function (sh, i) { var t = sh.querySelector('.slide-tag'); if (t) t.textContent = pad(i + 1) + ' / ' + pad(n); });
+    Array.prototype.forEach.call(track.querySelectorAll('.toc-n'), function (el) {
+      var to = track.querySelector('[id="' + el.getAttribute('data-for') + '"]'), sh = to && to.closest('.sheet');
+      el.textContent = sh ? String(sheets.indexOf(sh) + 1) : '';
+    });
+    return n;
   }
 
   // The glyph's poses that depend on where things landed: `act` beside its button, `decide` behind the recommended option
@@ -1745,9 +2067,21 @@ globalThis.JMD = (function () {
   }
 
   // Overflow measured in the DOM: the last body element must stay above the bottom margin of the page (the rects are read at
-  // screen scale, so the zoom that makes a Doc page A4 is already in them). A webpage has no bottom: only the boxes are checked.
+  // screen scale, so the zoom that makes a Memo page A4 is already in them). A webpage has no bottom: only the boxes are checked.
   function lintOverflow(track, out, lay) {
     var page = PAGES[lay] || PAGES.slide, slides = track.querySelectorAll('.slide');
+    if (page.sheets) { // a long document: only a piece taller than a whole sheet can still cross its foot
+      Array.prototype.forEach.call(slides, function (sec, i) {
+        Array.prototype.forEach.call(sec.querySelectorAll('.sheet'), function (sh) {
+          var body = sh.querySelector('.body-pad'), last = body && body.lastElementChild; if (!last) return;
+          var r0 = sh.getBoundingClientRect(), scale = r0.width / page.w, bottom = (last.getBoundingClientRect().bottom - r0.top) / scale;
+          if (bottom > page.limit) out.push({ level: 'error', slide: i + 1, block: null, rule: 'overflow', message: 'a piece taller than a page (it reaches ' + Math.round(bottom) + 'px, limit ' + page.limit + '): split the block, or shorten it' });
+          var cols = sh.querySelector('.doc-cols'), edge = cols && cols.getBoundingClientRect().right;
+          if (cols && Array.prototype.some.call(cols.querySelectorAll('*'), function (e) { return e.getBoundingClientRect().left > edge - 1; })) out.push({ level: 'error', slide: i + 1, block: null, rule: 'overflow', message: 'a piece taller than a column: split the block, or shorten it' });
+        });
+      });
+      return out;
+    }
     Array.prototype.forEach.call(slides, function (sec, i) {
       var body = sec.querySelector('.body-pad, .statement, .divider');
       if (!body) return;
@@ -1766,5 +2100,5 @@ globalThis.JMD = (function () {
     return out;
   }
 
-  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, fileName: fileName, withTitle: withTitle, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
+  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
 })();

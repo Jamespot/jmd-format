@@ -160,7 +160,7 @@ ${optional('--brand-bg-lavender', 'bg-lavender')}${optional('--brand-bg-wash', '
   const core = readFileSync(join(root, 'runtime/jmd-core.js'), 'utf8');
   const runtime = core + '\n' + readFileSync(join(root, 'runtime/james-jmd.js'), 'utf8')
     + (edit ? '\n' + readFileSync(join(root, 'runtime/vendor/collab.js'), 'utf8') + '\n' + readFileSync(join(root, 'runtime/collab.js'), 'utf8') : '');
-  const version = /VERSION = '([^']+)'/.exec(core)[1];
+  const version = /VERSION = '([^']+)'/.exec(core)[1], format = /FORMAT_MAX = (\d+)/.exec(core)[1];
   const safeJmd = jmd.replace(/<\/script/gi, '<\\/script');
   const assetMap = { ...(dir ? resolveAssets(jmd, dir).assets : {}), ...(assets || {}) }; // local files, then the bank images resolved upstream
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -170,6 +170,7 @@ ${optional('--brand-bg-lavender', 'bg-lavender')}${optional('--brand-bg-wash', '
 
   return readFileSync(join(root, 'runtime/index.html'), 'utf8')
     .replace('@@RUNTIME_VERSION@@', version)
+    .replace('@@FORMAT@@', format)
     .replace('@@BUILD_DATE@@', new Date().toISOString().slice(0, 16).replace('T', ' '))
     .replace('@@CSP@@', () => csp)
     .replace('@@FONTS@@', () => fontsCss.trim())
