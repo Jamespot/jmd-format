@@ -934,6 +934,12 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--decide .card.is-hero,.slide--decide .cards:not(:has(.is-hero)) .card:last-child,.slide--decide .col.is-hero,.slide--decide .compare:not(:has(.is-hero)) .col:last-child{opacity:1;transform:scale(1.03);position:relative;border:3px solid var(--brand-accent);box-shadow:0 22px 56px rgba(0,0,0,.16);z-index:2}
 .slide--decide .card.is-hero:after,.slide--decide .cards:not(:has(.is-hero)) .card:last-child:after,.slide--decide .col.is-hero:after,.slide--decide .compare:not(:has(.is-hero)) .col:last-child:after{content:"✓";position:absolute;top:-18px;right:22px;width:40px;height:40px;border-radius:50%;background:var(--brand-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px}
 .slide--decide .card.is-hero,.slide--decide .cards:not(:has(.is-hero)) .card:last-child{background:#fff}
+/* a vivid card brought forward is white now: it takes the pale card's ink back (#34) */
+.slide--decide :is(.card--vivid.is-hero,.cards:not(:has(.is-hero)) .card--vivid:last-child) h3{color:var(--jp-ink)}
+.slide--decide :is(.card--vivid.is-hero,.cards:not(:has(.is-hero)) .card--vivid:last-child) :is(p,li){color:var(--jp-ink-muted)}
+.slide--decide :is(.card--vivid.is-hero,.cards:not(:has(.is-hero)) .card--vivid:last-child) li:before{background:var(--jp-purple-500)}
+.slide--decide :is(.card--vivid.is-hero,.cards:not(:has(.is-hero)) .card--vivid:last-child) .num--glyph{color:var(--brand-accent)}
+.slide--decide :is(.card--vivid.is-hero,.cards:not(:has(.is-hero)) .card--vivid:last-child) .num--icon{background:var(--jp-purple-100);color:var(--jp-purple-700)}
 .slide--decide .col--dark.is-hero,.slide--decide .compare:not(:has(.is-hero)) .col--dark:last-child{border-color:var(--jp-yellow-500)}
 .slide--decide .col--dark.is-hero:after,.slide--decide .compare:not(:has(.is-hero)) .col--dark:last-child:after{background:var(--jp-yellow-500);color:var(--jp-indigo-800)}
 .slide--decide .metric{opacity:.62}.slide--decide .metric.is-hero,.slide--decide .metrics:not(:has(.is-hero)) .metric:last-child{opacity:1}

@@ -805,6 +805,10 @@ try {
     ok(diff.revealHero >= 180 && diff.revealOther < 50, `reveal: one hero number (${diff.revealHero}px), the others recede (${diff.revealOther}px)`);
     ok(diff.recapTick === '"✓"' && diff.explainNum.includes('counter(step'), 'recap lists are ticked, explain cards are numbered (' + diff.explainNum + ')');
     ok(diff.decideTick === '"✓"' && diff.decideDim < 0.7, 'decide: the recommended column carries a tick, the other is dimmed');
+    // a vivid card brought forward goes white: its words must not stay white with it (#34)
+    const vividHero = await p.eval(`(() => { const s = document.querySelector('.slide--decide'), d = document.createElement('div'); d.className = 'cards'; d.innerHTML = '<div class="card card--vivid is-hero"><h3>A</h3><p>a</p></div><div class="card"><h3>B</h3><p>b</p></div><div class="card card--vivid"><h3>C</h3><p>c</p></div>'; s.appendChild(d);
+      const c = d.querySelector('.is-hero'), r = { bg: getComputedStyle(c).backgroundColor, h3: getComputedStyle(c.querySelector('h3')).color, p: getComputedStyle(c.querySelector('p')).color }; d.remove(); return r; })()`);
+    ok(vividHero.bg === 'rgb(255, 255, 255)' && !/^rgba?\(255, 255, 255/.test(vividHero.h3) && !/^rgba?\(255, 255, 255/.test(vividHero.p), 'decide: a vivid card brought forward turns white and takes dark words (' + JSON.stringify(vividHero) + ')');
     ok(diff.funBg !== diff.hookBg && diff.hookBg !== diff.problemBg && diff.celebrateConfetti && diff.funTilt !== 'none' && diff.actCta >= 80, 'fun, hook and problem sit on three different backgrounds; celebrate has confetti, fun tilts, act has a big CTA');
     // the story arc in the Info card, and explain slides stepping their items whatever the motion mode
     await p.key('I'); await p.settle(50);
