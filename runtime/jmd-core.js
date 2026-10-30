@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.39.1';
+  var VERSION = '1.41.0';
   var FORMAT_MAX = 2;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -93,6 +93,16 @@ globalThis.JMD = (function () {
       return lines.slice(0, cut).join('\n').replace(/\s+$/, '') + '\n\n' + piece + '\n' + (tail ? '\n' + tail + '\n' : '');
     }
     return lines.slice(0, at.start).concat(piece.split('\n'), [''], lines.slice(at.map[1])).join('\n').replace(/\n{3,}(?=---)/g, '\n\n');
+  }
+  /* A part taken out (a slide of a deck, a chapter of a document), the others kept byte for byte and renumbered after it — the
+     same line-range edit as withChapter. The last part is never removed: a deck with nothing in it is not an edit, it is a mistake. */
+  function withoutChapter(src, n) {
+    var whole = String(src == null ? '' : src).replace(/\r\n?/g, '\n'), doc = parse(whole), at = doc.slides[n - 1];
+    if (!at) throw new Error('no part ' + n + ': there are ' + doc.slides.length);
+    if (doc.slides.length < 2) throw new Error('this is the only part left: removing it would leave nothing');
+    var lines = whole.split('\n'), tail = lines.slice(at.map[1]).join('\n').trim();
+    if (tail && !/^---(\n|$)/.test(tail)) tail = '---\n\n' + tail;
+    return lines.slice(0, at.start).join('\n').replace(/\s+$/, '') + '\n' + (tail ? '\n' + tail + '\n' : '');
   }
   /* The header of a long document, replaced and its chapters kept: what a document written chapter by chapter does when
      its cover changes (a subtitle, an author, a date) without sending the whole text again. `text` is a header and only
@@ -2277,5 +2287,5 @@ globalThis.JMD = (function () {
     return out;
   }
 
-  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
+  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withoutChapter: withoutChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
 })();

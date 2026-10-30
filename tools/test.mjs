@@ -1274,6 +1274,13 @@ try {
     ok(reHead.startsWith('---\nformat: jmd/2\nlayout: doc\ntitle: New title\nsubtitle: New subtitle\n---\n\n---\nnotes: A chapter opens') && JMD.parse(reHead).slides.length === 2 && JMD.parse(reHead).lines.slice(-20).join('\n') === JMD.parse(paper).lines.slice(-20).join('\n'), 'withHeader: the header replaced, the chapters kept as they were');
     let headErr = ''; try { JMD.withHeader(paper, '---\nformat: jmd/2\nlayout: doc\n---\n# A chapter\n'); } catch (e) { headErr = e.message; }
     ok(/nothing after/.test(headErr), 'withHeader refuses a header followed by a chapter');
+    // a slide taken out (1.40.0): the others byte for byte, a first slide written straight after the header included; never the last one
+    const deck3 = '---\nformat: jmd/2\nlayout: slide\ntitle: T\n---\n\n# One\n\nA.\n\n---\nbg: dark\n---\n## Two\n\nB.\n\n---\n\n## Three\n\nC.\n';
+    const heads = s => JMD.parse(s).slides.map(x => x.lines.find(l => /^#/.test(l))).join(' | ');
+    let lastErr = ''; try { JMD.withoutChapter('---\nlayout: slide\n---\n# Only\n', 1); } catch (e) { lastErr = e.message; }
+    let noErr = ''; try { JMD.withoutChapter(deck3, 4); } catch (e) { noErr = e.message; }
+    ok(heads(JMD.withoutChapter(deck3, 1)) === '## Two | ## Three' && JMD.parse(JMD.withoutChapter(deck3, 1)).slides[0].meta.bg === 'dark' && heads(JMD.withoutChapter(deck3, 2)) === '# One | ## Three' && JMD.withoutChapter(deck3, 3).endsWith('## Two\n\nB.\n')
+      && /only part left/.test(lastErr) && /no part 4: there are 3/.test(noErr), 'withoutChapter takes one slide out, the others kept; refuses the last one and a number past the end');
     const wrapped = JMD.render(JMD.parse('---\nformat: jmd/2\nlayout: doc\n---\n# T\nThe lead.\n\nOne sentence\nwritten on two lines.\n'), { brand: {} });
     ok(/<p data-line="\d+" data-span="2">One sentence written on two lines\.<\/p>/.test(wrapped), 'doc prose: a paragraph written over several lines is one paragraph, its first line and its span kept for the editor');
     execSync('node tools/build.mjs decks/samples/white-paper.jmd', BUILD);
