@@ -1269,7 +1269,21 @@ try {
     const ring = d => +/class="dg-stage" style="width:[\d.]+px;height:([\d.]+)px/.exec(JMD.render(JMD.parse(paper.replace('layout: doc', 'layout: ' + d).replace('::: timeline', '::: diagram {.cycle}\n- Ask\n- Decide\n- Ship\n- Learn\n:::\n\n::: timeline')), { brand: {} }))[1];
     ok(ring('doc') <= 520 && ring('memo') > 520, `a figure in running text takes a third of a page, not half (cycle: ${ring('doc')}px in a doc, ${ring('memo')}px in a memo)`);
     const longHtml = JMD.render(JMD.parse(paper), { brand: {} });
-    ok(/<h3 class="doc-h3"[^>]*>Where the time goes<\/h3>/.test(longHtml) && /<h4 class="doc-h4"/.test(longHtml) && /<ol><li data-line="\d+">When a request/.test(longHtml) && /<blockquote data-line="\d+">The work was never/.test(longHtml) && !/slide--cover/.test(longHtml),
+    /* A bullet is a flex row — the dot beside the words — so the words are one span, or every bold and link of the line
+       becomes a column of its own, centred: Pascal's meeting minutes (#44). Plain lists, as cards and columns already did. */
+    const minutes = JMD.render(JMD.parse('---\nformat: jmd/2\ntitle: t\nlayout: slide\n---\n# CR\n\n- **Netbox** : à supprimer — **PBA**\n- OCS : RAS\n'), { brand: {} });
+    ok(/<li data-line="\d+"><span><strong>Netbox<\/strong> : à supprimer — <strong>PBA<\/strong><\/span><\/li>/.test(minutes) && /<li data-line="\d+"><span>OCS : RAS<\/span><\/li>/.test(minutes),
+      'a bullet\'s words are one block beside its dot — bold, text and bold again stay one sentence, never three columns (#44)');
+    /* Who owns it (#45): `@names` at the very end of a bullet leave the sentence and become pills — in a plain list as in a
+       card; an address inside a sentence is text, an item that is only `@names` stays words, four at most. */
+    const owned = JMD.render(JMD.parse('---\nformat: jmd/2\ntitle: t\nlayout: slide\n---\n# CR\n\n- **Stoïk** : affiner @FPI @GDE\n- Écrire à alain@jamespot.com pour la suite\n- @jamespot\n- Trop @a @b @c @d @e\n- Avec <b> @x<y\n\n---\n## Cartes\n\n::: cards\n### Suivi\n- Relancer Jean @PBA\n:::\n'), { brand: {} });
+    const pills = [...owned.matchAll(/<span class="who">(.*?)<\/span>/g)].map(m => m[1]);
+    ok(/<span><strong>Stoïk<\/strong> : affiner<\/span><span class="who"><i>FPI<\/i><i>GDE<\/i><\/span>/.test(owned)
+      && owned.includes('<span>Écrire à alain@jamespot.com pour la suite</span></li>') && owned.includes('<span>@jamespot</span></li>')
+      && pills.length === 3 && pills[1] === '<i>a</i><i>b</i><i>c</i><i>d</i>' && !owned.includes('<i>e</i>') && !owned.includes('<b>') && !/<i>x<y/.test(owned)
+      && pills[2] === '<i>PBA</i>' && /<span data-line="\d+">Relancer Jean<\/span><span class="who">/.test(owned),
+      'an owner at the end of a bullet — `@FPI @GDE` — becomes a pill, in a list as in a card; an address in a sentence is text, a bullet of nothing but a handle stays words, four at most, nothing unescaped (#45)', JSON.stringify(pills));
+    ok(/<h3 class="doc-h3"[^>]*>Where the time goes<\/h3>/.test(longHtml) && /<h4 class="doc-h4"/.test(longHtml) && /<ol><li data-line="\d+"><span>When a request/.test(longHtml) && /<blockquote data-line="\d+">The work was never/.test(longHtml) && !/slide--cover/.test(longHtml),
       'doc prose: `##` → h3, `###` → h4, `1.` → a numbered list, `>` → a quote, one line each with its source line; a `#` is a chapter title, not a cover');
     const noted = t => JMD.lint(JMD.parse('---\nformat: jmd/2\nlayout: doc\ntitle: N\n---\n# T\nThe lead.\n\n' + t)).filter(f => /^note-/.test(f.rule)).map(f => f.level + ':' + f.rule);
     ok(!noted('A claim.[^a]\n\n[^a]: Its source.\n').length && noted('A claim.[^a]\n').join() === 'error:note-missing' && noted('A claim.\n\n[^a]: Its source.\n').join() === 'warning:note-unused', 'notes: a call with no text is an error, a text never called a warning');

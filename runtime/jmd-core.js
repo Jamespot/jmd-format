@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.43.0';
+  var VERSION = '1.44.0';
   var FORMAT_MAX = 2;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -137,6 +137,21 @@ globalThis.JMD = (function () {
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
       .replace(/\[\^([\w-]+)\]/g, function (all, id) { return LONG ? noteCall(id) || all : all; });
+  }
+  /* Who owns a bullet (#45, Pascal's meeting minutes): one or more `@name` at the very end of an item — `… @PBA @GDE` — leave
+     the sentence and stand on the right as small pills. Only at the end, only after a space (an address inside a sentence,
+     `alain@jamespot.com`, is never read), and never the whole item: `- @jamespot` stays words. */
+  var OWNERS = /((?:\s+@[\p{L}\p{N}][\p{L}\p{N}._-]{0,23})+)\s*$/u;
+  function owners(t) {
+    var m = OWNERS.exec(String(t)), rest = m ? String(t).slice(0, m.index) : '';
+    if (!m || !rest.trim()) return { text: String(t), who: [] };
+    return { text: rest, who: m[1].trim().split(/\s+/).map(function (w) { return w.slice(1); }).slice(0, 4) };
+  }
+  // a bullet's words, one block beside its dot (#44), and its owners after them (#45); `at` is the editor's line attribute
+  function item(t, at) {
+    var o = owners(t);
+    return '<span' + (at || '') + '>' + inline(o.text) + '</span>'
+      + (o.who.length ? '<span class="who">' + o.who.map(function (w) { return '<i>' + esc(w) + '</i>'; }).join('') + '</span>' : '');
   }
   function pad2(n) { return String(n).padStart(2, '0'); }
   // `{.hero .now}` → { classes:[...] } — `{.Hero}` reads the same: what the format names is case-insensitive
@@ -1346,7 +1361,7 @@ globalThis.JMD = (function () {
         (date ? '<div class="tl-date"' + src(p.line) + '>' + inline(date) + '</div>' : '') +
         '<div class="tl-card">' + (title ? '<h4' + (date ? '' : src(p.line)) + '>' + inline(title) + '</h4>' : '') +
         p.text.map(function (t, j) { return '<p' + src(p.textLines[j]) + '>' + inline(t) + '</p>'; }).join('') +
-        (p.items.length ? '<ul>' + p.items.map(function (t, j) { return '<li><span' + src(p.itemLines[j]) + '>' + inline(t) + '</span></li>'; }).join('') + '</ul>' : '') +
+        (p.items.length ? '<ul>' + p.items.map(function (t, j) { return '<li>' + item(t, src(p.itemLines[j])) + '</li>'; }).join('') + '</ul>' : '') +
         '</div></div>';
     }).join('') + '</div>';
   }
@@ -1390,7 +1405,7 @@ globalThis.JMD = (function () {
           return '<div class="col ' + (k === 0 || light ? 'col--light' : 'col--dark') + (has(c.attrs, 'hero') ? ' is-hero' : '') + '">' +
             (c.title ? '<h3' + src(c.line) + '>' + inline(c.title) + '</h3>' : '') +
             c.text.map(function (t, j) { return '<p' + src(c.textLines[j]) + '>' + inline(t) + '</p>'; }).join('') +
-            (c.items.length ? '<ul>' + c.items.map(function (t, j) { return '<li><span' + src(c.itemLines[j]) + '>' + inline(t) + '</span></li>'; }).join('') + '</ul>' : '') + '</div>';
+            (c.items.length ? '<ul>' + c.items.map(function (t, j) { return '<li>' + item(t, src(c.itemLines[j])) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
         }).join('') + '</div>';
       }
     },
@@ -1421,7 +1436,7 @@ globalThis.JMD = (function () {
               var j = +o.slice(1);
               if (o[0] === 't') return '<p' + src(c.textLines[j], c.col == null ? null : 1) + '>' + inline(c.text[j]) + '</p>';
               var prev = q && c.order[q - 1][0] === 'i', next = q + 1 < c.order.length && c.order[q + 1][0] === 'i';
-              return (prev ? '' : '<ul>') + '<li><span' + src(c.itemLines[j]) + '>' + inline(c.items[j]) + '</span></li>' + (next ? '' : '</ul>');
+              return (prev ? '' : '<ul>') + '<li>' + item(c.items[j], src(c.itemLines[j])) + '</li>' + (next ? '' : '</ul>');
             }).join('') +
             '</div>';
         }).join('') + '</div>';
@@ -1499,7 +1514,7 @@ globalThis.JMD = (function () {
           var ul = false, html = c.parts.map(function (p, q) {
             var next = c.parts[q + 1], open = '', close = '';
             if (p.t === 'li') { if (!ul) { open = '<ul>'; ul = true; } if (!next || next.t !== 'li') { close = '</ul>'; ul = false; } }
-            if (p.t === 'li') return open + '<li><span' + src(p.line) + '>' + inline(p.text) + '</span></li>' + close;
+            if (p.t === 'li') return open + '<li>' + item(p.text, src(p.line)) + '</li>' + close;
             if (p.t === 'fig') {
               var f = c.figure.cols;
               return '<div class="kpi-fig"><span class="kpi-v"' + src(p.line, 0) + '>' + inline(f[0] || '') + '</span>' +
@@ -1604,7 +1619,7 @@ globalThis.JMD = (function () {
       }
       if (isList(l) || isNum(l)) {
         var num = isNum(l), test = num ? isNum : isList, items = [];
-        while (i < L.length && test(L[i])) { items.push('<li' + src(at + i) + '>' + inline(L[i].replace(num ? /^\s*\d+[.)]\s+/ : /^\s*[-*]\s+/, '')) + '</li>'); i++; }
+        while (i < L.length && test(L[i])) { items.push('<li' + src(at + i) + '>' + item(L[i].replace(num ? /^\s*\d+[.)]\s+/ : /^\s*[-*]\s+/, '')) + '</li>'); i++; }
         html += num ? '<ol>' + items.join('') + '</ol>' : '<ul>' + items.join('') + '</ul>';
         continue;
       }
@@ -1618,7 +1633,7 @@ globalThis.JMD = (function () {
 
   function renderProse(node) {
     var html = '', list = null;
-    function flush() { if (list) { html += '<ul' + (list.length > 7 ? ' class="long"' : list.length <= 4 ? ' class="few"' : '') + '>' + list.map(function (t) { return '<li' + src(t.line) + '>' + inline(t.text) + '</li>'; }).join('') + '</ul>'; list = null; } }
+    function flush() { if (list) { html += '<ul' + (list.length > 7 ? ' class="long"' : list.length <= 4 ? ' class="few"' : '') + '>' + list.map(function (t) { return '<li' + src(t.line) + '>' + item(t.text) + '</li>'; }).join('') + '</ul>'; list = null; } }
     node.lines.forEach(function (l, k) {
       var mI = /^\s*[-*]\s+(.*)$/.exec(l);
       if (mI) { if (!list) list = []; list.push({ text: mI[1], line: node.map[0] + k }); return; }

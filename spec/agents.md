@@ -82,6 +82,7 @@ You are not filling slides, you are choosing the shape that says what the conten
 | customers, partners, integrations | `logos` |
 | a feature with its screenshot | title + lead + `[Label →](url){.cta}` + `![](shot.png){.right}` |
 | a screen to show, a screenshot to read | title (+ at most a lead) + `![](shot.png){.wide}` and nothing else: the image takes the whole height left, never cropped — one screen per slide |
+| meeting minutes, an action list: each point with who owns it | a bullet per point (`- **Subject** : what was decided @PBA @GDE`): the `@names` at the very end of a bullet become small owner pills on the right — initials or first names, at most 4, only those the source gives |
 
 A plain bullet list is the last resort, not the default: it is what you write when nothing above fits. Two thin items (`- Squads`, `- Rituels`) do not deserve a slide of their own — merge them with their neighbours into one `cards`. A card can carry one word when the content gives one word; do not pad it.
 

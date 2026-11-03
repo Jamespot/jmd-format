@@ -189,6 +189,11 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 .prose ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:calc(12px * var(--type-scale,1));
   font-size:max(17px, calc(22px * var(--type-scale,1)));line-height:1.45;color:var(--jp-ink-muted)}
 .prose li{display:flex;gap:18px;break-inside:avoid}
+/* the item's words are one block beside the bullet: without it, every bold or link of the line became a flex column of its own */
+.prose li>span{flex:1;min-width:0;text-align:left}
+/* who owns the bullet (#45): `@PBA` at the end of an item, a small pill on the right of its first line — one per name */
+ul li>span.who,ol li>span.who{display:flex;flex:none;gap:4px;margin-left:auto;padding-left:8px;align-self:flex-start;flex-wrap:nowrap}
+li>span.who i{font-style:normal;font-family:var(--font-body);font-weight:700;font-size:.72em;line-height:1;letter-spacing:.02em;padding:.32em .7em;border-radius:999px;background:var(--jp-purple-100);color:var(--jp-purple-700);white-space:nowrap;margin-top:.18em}
 .prose li:before{content:"";flex:none;width:10px;height:10px;border-radius:50%;background:var(--jp-purple-500);margin-top:.5em}
 .prose li strong{color:var(--jp-ink)}
 .prose ul.few{gap:0}
