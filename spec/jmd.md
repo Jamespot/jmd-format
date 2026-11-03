@@ -86,7 +86,7 @@ A chapter may be set in **two columns** (`columns: 2` in its frontmatter): its t
 | Item | `- a | b | c` | columns separated by `|`; `\|` for a literal pipe |
 | Modifier | `{.hero}` at the end of an item | component class |
 | Inline | `*italic*` `**bold**` `` `code` `` `[text](url)` | nothing else; **no raw HTML**. `[Label →](url){.cta}` renders as a button |
-| Image | `![caption](file.png){.right \| .cover \| .wide}` **alone on its line** — inside a text (a card title, a bullet, a cell) it is neither drawn nor printed: `inline-image` | paths are **relative to the `.jmd`**, or `img:<bank>/<slug>` from one of the brand's image banks, or an `https://` URL (spec/images.md); all embedded as data URIs at build, the deck loads nothing. `.right`: the feature layout (text left, image bleeding right); `.cover`: art under a level-1 title; `.wide`: full width; none: in a soft frame |
+| Image | `![caption](file.png){.right \| .cover \| .wide}` **alone on its line** — inside a text (a card title, a bullet, a cell) it is neither drawn nor printed: `inline-image` | paths are **relative to the `.jmd`**, or `img:<bank>/<slug>` from one of the brand's image banks, or an `https://` URL (spec/images.md); all embedded as data URIs at build, the deck loads nothing. `.right`: the feature layout (text left, image bleeding right); `.cover`: art under a level-1 title; `.wide`: full width — **alone under its title** (at most a lead, nothing else on the page) it is a **screen to show**: it takes the height left and is shown whole, never cropped, in its own proportions; beside other content it is a band cropped to its height (`wide-crop`); none: in a soft frame |
 | Plain Markdown | paragraphs, lists | rendered as a single column (`.prose`) |
 
 ## Blocks — V1

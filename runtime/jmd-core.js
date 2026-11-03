@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.41.1';
+  var VERSION = '1.42.0';
   var FORMAT_MAX = 2;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -1675,6 +1675,7 @@ globalThis.JMD = (function () {
     if (right) classes.push('slide--split');
     if (rightBlock) classes.push('slide--split-block');
     if (title && title.level === 1 && ctx.layout !== 'doc') classes.push('slide--cover'); // a long document's `#` is a chapter's title
+    if (isShot(slide, ctx.layout)) classes.push('slide--shot');
 
     /* A statement or a section fills the page alone. Under a title, it keeps its size and the title heads the page; beside
        a text or another block (1.37.1: Circuit's cover — a title, its lead, its cards and a closing quote), it is drawn
@@ -1750,6 +1751,15 @@ globalThis.JMD = (function () {
      sheet, laid out as the memo lays out a page and never cut; a key figure, a quote, a decision, a call to act between two
      stretches of reading. It opens no chapter: it is not in the contents, its running head is the chapter it sits in. */
   function isPage(m) { return m.page != null && !/^(no|false|0)$/i.test(String(m.page)); }
+  /* A screen to show (2026-11-02, Pascal's screenshots): a title, at most a lead, and one `.wide` image — nothing else on the page.
+     The image takes the height left and is shown whole, never cropped: a screenshot is read, its top and its foot matter.
+     Beside anything else `.wide` stays a band, cropped to its height, and the linter says so (`wide-crop`). Not in a doc
+     (its pages are laid out by the flow) nor in a webpage (no page height). */
+  function isShot(slide, lay) {
+    if (lay === 'doc' || lay === 'webpage') return false;
+    var rest = slide.nodes.filter(function (n) { return n.type !== 'title' && n.type !== 'lead'; });
+    return rest.length === 1 && rest[0].type === 'image' && has(rest[0].attrs, 'wide') && !has(rest[0].attrs, 'right') && !has(rest[0].attrs, 'cover');
+  }
   function renderDocPage(slide, idx, ctx) {
     var c = {}; for (var k in ctx) c[k] = ctx[k];
     c.layout = 'memo'; c.section = ctx.chapterTitle || '';
@@ -1837,7 +1847,7 @@ globalThis.JMD = (function () {
     { name: 'chart', hint: '- label | value · {.bar} {.hbar} {.line} {.pie} on the block · unit: € · series: A | B for two columns of values · {.hero} on an item', snippet: '::: chart {.bar}\nunit: k€\n- Q1 | 120\n- Q2 | 180\n- Q3 | 240 {.hero}\n:::' },
     { name: 'kpi', hint: '### title, then the figure: value | label | delta · ≤ 3 - details · one visual line: stack: cells: dots: bars: hbars: funnel: trend: with label = value | … · unit: target: series: · > message · 4 max', snippet: '::: kpi\n### Engagement\n4,3 / 5 | satisfaction\n- 28 answers out of 68\nstack: Rated 5 = 12 | Rated 4 = 12 | Rated 3 = 4\n> Expectations: shared rituals.\n\n### Pipeline\n179 k€ | in October\nbars: J = 902 | F = 361 | M = 437 | A = 179 {.partial}\nunit: k€\ntarget: 400–550\n> Steady leads, smaller deals.\n:::' },
     { name: 'diagram', hint: 'Mermaid: flowchart LR or TD, then A[Step] --> B{Choice} lines · -->|label| · -.-> dotted · A[Text]{.hero} · or a list with a form: {.tree} (indent) {.cycle} {.radial} {.pyramid} {.funnel} {.steps} {.venn} {.target} {.matrix} · center: x: y:', snippet: '::: diagram\nflowchart LR\n  A[Request] --> B{Approved?}\n  B -->|Yes| C[Publish]{.hero}\n  B -->|No| D[Revise]\n  D -.-> A\n:::' },
-    { name: 'image', hint: '![alt](file){.right} beside the text · {.cover} decoration · {.wide} below', snippet: '![](assets/image.png){.right}' },
+    { name: 'image', hint: '![alt](file){.right} beside the text · {.cover} decoration · {.wide} alone under the title: a screen, whole', snippet: '![](assets/image.png){.right}' },
     { name: 'link', hint: '[Label →](url){.cta} a button · [text](url) inline', snippet: '[Learn more →](https://example.com){.cta}' }
   ];
   var CONTEXT_HINTS = {
@@ -1897,6 +1907,8 @@ globalThis.JMD = (function () {
       if (lead && lead.text.length > 200) warn(n, null, 'lead-length', 'lead is ' + lead.text.length + ' characters, 200 recommended');
       var rights = s.nodes.filter(function (x) { return x.type === 'image' && has(x.attrs, 'right'); });
       if (rights.length > 1) err(n, null, 'one-right-image', 'only one image can sit on the right of a slide');
+      if (['doc', 'webpage'].indexOf(layout(doc)) < 0 && !isShot(s, layout(doc)) && s.nodes.some(function (x) { return x.type === 'image' && has(x.attrs, 'wide'); }))
+        warn(n, null, 'wide-crop', 'a `{.wide}` image beside other content is a band, cropped to its height — to show a screen whole, give it a slide of its own: a title, at most a lead, and the image');
 
       // HTML in a text is shown as text — the format has no raw HTML (spec/security.md §1). Said once per slide, so `<b>` is not mistaken for formatting.
       var markup = null;

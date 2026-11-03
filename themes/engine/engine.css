@@ -260,6 +260,16 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 .figure--wide img{width:100%;object-fit:cover}
 .slide--indigo .figure,.slide--accent .figure,.slide--sky .figure{background:rgba(255,255,255,.94)} /* a light frame keeps a logo or a screenshot readable on a dark slide */
 .figure figcaption{font-size:13px;color:var(--jp-ink-soft);padding:8px 12px}
+/* a screen to show (isShot): alone under its title, the image takes the height left and is shown whole — never cropped,
+   never enlarged past its own pixels, centered under the title. A hairline and a shadow hug the picture itself, so a white
+   screen keeps its edge on a white slide, a dark one on a dark slide. `.slide.` outweighs the layouts' figure heights */
+.slide.slide--shot .figure{flex:1 1 0;min-height:0;max-width:none;width:auto;background:none;border-radius:0;overflow:visible;
+  display:flex;flex-direction:column;align-items:center}
+.slide.slide--shot .figure img{flex:none;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;
+  box-shadow:0 0 0 1px var(--jp-line),0 18px 44px rgba(27,26,78,.16)}
+.slide.slide--shot .figure:has(figcaption) img{max-height:calc(100% - 36px)}
+.slide.slide--shot .figure figcaption{flex:none;text-align:center}
+:is(.slide--indigo,.slide--accent,.slide--sky).slide--shot .figure img{box-shadow:0 0 0 1px rgba(255,255,255,.22),0 18px 44px rgba(0,0,0,.35)}
 .img-missing{border:2px dashed var(--jp-purple-300);border-radius:16px;min-height:120px;display:flex;align-items:center;
   justify-content:center;color:var(--jp-ink-soft);font-family:var(--font-mono);font-size:12px;padding:12px;text-align:center}
 .img-missing span:before{content:"missing image · "}

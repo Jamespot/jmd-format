@@ -11,8 +11,10 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Browser } from './cdp.mjs';
+import { waitMyTurn } from './one-at-a-time.mjs';
 import '../runtime/jmd-core.js'; // defines globalThis.JMD
 const JMD = globalThis.JMD;
+await waitMyTurn('tools/test.mjs'); // fixed ports: one suite at a time on this machine, whichever worktree runs it
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const document_has_status = html => /id="status"/.test(html);
@@ -1236,6 +1238,27 @@ try {
     const png = readFileSync(join(root, 'build/one-pager-pages/slide-02.png'));
     ok(png.readUInt32BE(16) === 794 && png.readUInt32BE(20) === 1122, 'jmd render: each page is a 794×1122 PNG (A4 at 96 dpi, whole pixels whatever Chrome rounds)', png.readUInt32BE(16) + '×' + png.readUInt32BE(20));
     ok(JSON.parse(cli('lint decks/samples/one-pager.jmd --dom --json')).ok === true, 'jmd lint --dom: the sample passes the DOM overflow check');
+
+    // a screen to show (Pascal, #38): a title and one `.wide` image, nothing else — the image takes the height left, whole;
+    // beside anything else `.wide` stays a band, cropped, and the linter says so. The screenshots are the PNGs rendered above.
+    const shots = join(tmp, 'shots'); mkdirSync(shots, { recursive: true });
+    writeFileSync(join(shots, 'screen.png'), readFileSync(join(root, 'build/four-blocks-slides/slide-01.png')));
+    writeFileSync(join(shots, 'phone.png'), png);
+    const shotDeck = '---\nformat: jmd/2\nlayout: slide\nbrand: mono\ntitle: t\n---\n## The dashboard\n![](screen.png){.wide}\n\n---\nbg: indigo\n---\n## A phone\nIts lead.\n\n![Its caption](phone.png){.wide}\n\n---\n## A band\n- a point beside it\n\n![](screen.png){.wide}\n';
+    writeFileSync(join(shots, 'shots.jmd'), shotDeck);
+    const shotLint = JMD.lint(JMD.parse(shotDeck)).filter(f => f.rule === 'wide-crop');
+    ok(shotLint.length === 1 && shotLint[0].slide === 3 && shotLint[0].level === 'warning' && !JMD.lint(JMD.parse(shotDeck.replace('layout: slide', 'layout: doc'))).some(f => f.rule === 'wide-crop'),
+      'wide-crop: a `.wide` image beside a list is warned, one alone under its title is not, nor anything in a doc');
+    execSync(`node tools/build.mjs ${join(shots, 'shots.jmd')}`, BUILD);
+    p = await open('file://' + join(root, 'build/shots.james-jmd.html')); await p.settle();
+    const shotBoxes = JSON.parse(await p.eval(`JSON.stringify([...document.querySelectorAll('.slide')].map(s => { const r = s.getBoundingClientRect(), i = s.querySelector('img'), b = i.getBoundingClientRect(), k = r.width / 1280;
+      return { shot: s.classList.contains('slide--shot'), h: b.height / k, ratio: b.width / b.height, natural: i.naturalWidth / i.naturalHeight, fit: getComputedStyle(i).objectFit, bottom: (b.bottom - r.top) / k }; }))`));
+    const [wide, phone, band] = shotBoxes;
+    ok(wide.shot && phone.shot && !band.shot, 'a title (and a lead) with one `.wide` image makes a screen slide; beside a list it does not', JSON.stringify(shotBoxes));
+    ok(wide.h > 400 && Math.abs(wide.ratio - wide.natural) < 0.01 && phone.h > 300 && Math.abs(phone.ratio - phone.natural) < 0.01 && wide.bottom <= 660 && phone.bottom <= 660,
+      `the screen takes the height left, whole and in its own proportions, within the slide (${Math.round(wide.h)} px, phone ${Math.round(phone.h)} px; a band was 340)`, JSON.stringify(shotBoxes));
+    ok(band.fit === 'cover' && band.h <= 340, 'beside a list, `.wide` stays a band (cropped to 340 px)', JSON.stringify(band));
+    await p.close();
 
     // Doc, the long document (spec/doc.md): a `---` is a chapter, the browser lays its text out on as many A4 sheets as it takes
     const paper = readFileSync(join(root, 'decks/samples/white-paper.jmd'), 'utf8');
