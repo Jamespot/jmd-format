@@ -902,6 +902,22 @@ try {
     const ihdr = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]), Buffer.from('IHDR'), Buffer.from([0, 0, 0x75, 0x30, 0, 0, 0x75, 0x30, 8, 6, 0, 0, 0])]);
     const jpg = Buffer.from('ffd8ffe000104a46494600010100000100010000ffc0000b080100020003011100', 'hex'); // JFIF, then SOF0: 256 high, 512 wide
     ok(pixels(ihdr) === 900_000_000 && pixels(jpg) === 512 * 256 && pixels(Buffer.from('nope')) === null, 'pixels(): the size a PNG or a JPEG claims in its header, without decoding it');
+    /* A slide with one plain text box holding a list (« Attendees : » then a name per line) is no section divider: its first
+       paragraph is the title, the others its bullets — the whole box on one line was what a copil deck came back as (2026-11-04).
+       One box with one paragraph is still a section. */
+    {
+      const para = t => `<a:p><a:r><a:rPr sz="2400"/><a:t>${t}</a:t></a:r></a:p>`;
+      const box = ps => `<p:sp><p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8000000" cy="4000000"/></a:xfrm></p:spPr><p:txBody>${ps.map(para).join('')}</p:txBody></p:sp>`;
+      const slide = ps => `<p:sld><p:cSld><p:spTree>${box(ps)}</p:spTree></p:cSld></p:sld>`;
+      writeFileSync(join(tmp, 'listbox.pptx'), writeZip({
+        'ppt/slides/slide1.xml': slide(['Kickoff']), 'ppt/slides/slide2.xml': slide(['Attendees : ', 'Ada Lovelace - CTO', 'Alan Turing - DevOps', 'Grace Hopper - CISO']),
+        'ppt/slides/slide3.xml': slide(['Next steps']),
+      }, { paths: true }));
+      const { importPptx } = await import('../lib/import-pptx.mjs');
+      const lb = await importPptx(join(tmp, 'listbox.pptx'), join(tmp, 'listbox'));
+      const [, , s2, s3] = lb.draft.split(/\n---\nbg: \w+\n---\n/);
+      ok(/^## Attendees\n\n- Ada Lovelace - CTO\n- Alan Turing - DevOps\n- Grace Hopper - CISO\n/.test(s2) && /^::: section\nNext steps\n:::/.test(s3), 'import: one text box holding a list is a title and its bullets, never a section of one long line; one short box is still a section', JSON.stringify([s2, s3]));
+    }
     if (process.env.JMD_TEST_PPTX && existsSync(process.env.JMD_TEST_PPTX)) {
       const out = execSync(`node bin/jmd.mjs import "${process.env.JMD_TEST_PPTX}" -o ${join(tmp, 'imp')}`, { cwd: root }).toString();
       ok(/\d+ slides, \d+ images/.test(out) && existsSync(join(tmp, 'imp/import-report.md')) && existsSync(join(tmp, 'imp/brand-draft.yaml')), 'jmd import: draft, media, brand draft and report written');
