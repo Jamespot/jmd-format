@@ -297,6 +297,16 @@ try {
   ok(loose.filter(x => x.rule === 'loose-heading').length === 1 && loose.find(x => x.rule === 'loose-heading').message.startsWith('2 `#` headings'), 'loose-heading: `###` outside a block is one error per slide, with the count');
   const bare = JMD.lint(JMD.parse('---\nformat: jmd/1\n---\n---\nnotes: x\n---\n## T\n:::\n\n::: cards\n- a | b\n:::\n'));
   ok(bare.some(x => x.rule === 'stray-fence' && x.message.includes('closes nothing')), 'a bare `:::` under the title closes nothing: said so');
+  { // syntax printed as words: under the title, in the text, in a block; and what only looks like it stays a sentence
+    const debris = body => JMD.lint(JMD.parse('---\nformat: jmd/3\nlayout: slide\n---\n## T\n' + body + '\n')).filter(x => x.rule === 'code-debris');
+    for (const [body, says] of [['```html', 'no code block'], ['Text.\n\n```', 'no code block'], ['Text.\n{.right}', 'modifier'], ['Text.\n\n{.right}', 'modifier'], ['![A visual](img:jamespot/x {.right}', 'whole on one line'], ['intent: prove', 'above its title'], ['Text.\n\nBG: Sky', 'above its title'], ['notes: to say', 'above its title'], ['Text.\n\npage: yes', 'above its title'], ['<div class="card">Hello</div>', 'no HTML'], ['Text.\n\n</section>', 'no HTML'], ['::: cards\n### A\n- One\n{.plain}\n:::', 'modifier'], ['::: cards\n```\n### A\n- One\n:::', 'no code block']]) {
+      const f = debris(body);
+      ok(f.length >= 1 && f[0].level === 'error' && f[0].message.includes(says), 'code-debris: ' + JSON.stringify(body) + ' is an error that says ' + says, JSON.stringify(f));
+    }
+    ok(debris('Text.\n\n```\n').length && debris('Text.\n{.right}')[0].message.startsWith('line 7:') && debris('intent: prove')[0].message.startsWith('line 6:'), 'code-debris names the line of the source', JSON.stringify(debris('Text.\n{.right}')));
+    for (const body of ['Page: 12 of the report', 'Notes : voir plus bas', 'Notes: see below', 'Intent: to reach the market', 'Layout: two rooms', 'Text with <b>bold</b> inside.', 'An {.aside} in a sentence.', 'See ![a](b.png) here.', '![Fine](b.png){.right}', '- A bullet {.x}', '> `code` in a line', '::: diagram\nflowchart LR\n  A[{x}] --> B\n:::'])
+      ok(debris(body).length === 0, 'code-debris leaves alone: ' + JSON.stringify(body), JSON.stringify(debris(body)));
+  }
 
   console.log('\n6. Every sample deck passes the linter (with its own brand and files)');
   for (const f of execSync('ls decks/samples/*.jmd', { cwd: root }).toString().trim().split('\n')) {

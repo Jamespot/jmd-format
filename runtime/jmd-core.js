@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.46.0';
+  var VERSION = '1.46.1';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -2054,6 +2054,32 @@ globalThis.JMD = (function () {
             if (count > KPI_MAX[v.kind]) err(n, b.name, 'max-items', who + ': ' + count + (v.kind === 'cells' || v.kind === 'dots' ? ' units' : ' values') + ', maximum ' + KPI_MAX[v.kind] + ' in `' + v.kind + ':`' + (v.kind === 'cells' || v.kind === 'dots' ? ' — one unit each: for a bigger count, `stack:`' : ''));
           });
           if (c.opts.target && !c.visuals.some(function (v) { return v.kind === 'bars' || v.kind === 'hbars'; })) warn(n, b.name, 'kpi-visual', who + ': `target:` is drawn on `bars:` and `hbars:` only');
+        });
+      });
+
+      // Syntax printed as words. The deck builds and shows it to the audience: a code fence, a modifier on a line of its own, an
+      // image whose brackets do not close, a slide's setting under its title, a line of HTML. Seen in the field (Nicolas, 2026-11-04,
+      // « des erreurs de code qui traînent », with models one step under the largest). In a block only what no block item can mean;
+      // a diagram, a chart and a kpi have a grammar of their own. A setting counts only with a value the format knows, so that
+      // « Page: 12 » or « Notes : voir plus bas » stay ordinary sentences.
+      var debris = function (t, line, isProse) {
+        var where = 'line ' + line + ': `' + cut(t, 50) + '` is printed on the page';
+        if (/^(```|~~~)/.test(t)) return where + ' — the format has no code block: remove the fence, and write a block with `:::` or plain text';
+        if (/^\{[.#\w][^{}]*\}$/.test(t)) return where + ' — a modifier goes at the end of its image or its fence, `![caption](src){.right}`, `::: cards {.plain}`, never alone on a line';
+        if (/^!\[/.test(t) && t.search(INLINE_IMG) < 0) return where + ' — an image is written whole on one line: `![caption](src){.right}`';
+        if (!isProse) return null;
+        var set = /^(intent|bg|layout|page|notes):\s*(\S.*)$/i.exec(t), key = set && set[1].toLowerCase(), val = set && set[2].trim().toLowerCase();
+        if (set && (key === 'intent' ? INTENTS.indexOf(val) >= 0 : key === 'bg' ? BGS.indexOf(val) >= 0 : key === 'layout' ? LAYOUTS.indexOf(val) >= 0 : key === 'page' ? val === 'yes' || val === 'no' : set[1] === 'notes'))
+          return where + ' — a slide\'s settings go above its title, between two `---` lines';
+        if (/^<\/?[a-z][^>]*>(.*<\/?[a-z][^>]*>)?$/i.test(t)) return where + ' — the format has no HTML: use **bold**, *italic*, or a block with `:::`';
+        return null;
+      };
+      s.nodes.forEach(function (p) {
+        if (p.type === 'block' && ['diagram', 'chart', 'kpi'].indexOf(p.name) >= 0) return;
+        if (p.type !== 'prose' && p.type !== 'lead' && p.type !== 'block') return;
+        (p.type === 'lead' ? doc.lines.slice(p.map[0], p.map[1]) : p.lines).forEach(function (l, k) {
+          var said = debris(l.trim(), p.map[0] + 1 + k + (p.type === 'block' ? 1 : 0), p.type !== 'block');
+          if (said) err(n, p.type === 'block' ? p.name : null, 'code-debris', said);
         });
       });
 

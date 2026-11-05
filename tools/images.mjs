@@ -132,25 +132,43 @@ export async function resolveImages(refs, brandBanks) {
   return { assets, refused, warnings };
 }
 
+/* Words that say nothing about a picture. « château de Versailles » used to match every caption through « de », and the agent,
+   told to pick one, illustrated Versailles with a padlock (Nicolas, 2026-11-04). */
+const STOP_WORDS = new Set('au aux avec ce ces dans de des du elle en est et il la le les leur ma mes mon ne nos notre on ou par pas pour qu que qui sa se ses son sur ta tes ton un une vos votre an and are as at by for from in into is it of on or our the to with'.split(' '));
+
 /** Lexical search over the brand's banks: every word of the query against slug, caption and tags (accents ignored); `kind` narrows.
-    Returns the best `limit` entries with their `img:` reference and file URL — what an agent reads before pinning a slug. */
+    Returns the best `limit` entries with their `img:` reference and file URL — what an agent reads before pinning a slug.
+    A word matches whole words or their start (« equipes » finds « equipe »), and a word of three letters or fewer matches whole
+    (« art » never finds « article »). An entry is a hit when every word of the subject is found, or, from three words, all but one
+    with one of them in its tags or its slug. Of a caption only the first sentence counts: it says what is seen (the bank's contract),
+    and what follows says where the picture comes from — « Illustre l'article… (Réseau social) » gave a ministry's façade to
+    « réseau social ». Better nothing than a wrong picture: nothing is an answer the agent knows what to do with. */
 export async function searchImages(brandBanks, query, { kind = null, limit = 12 } = {}) {
   const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const words = norm(query).split(/[^a-z0-9]+/).filter(w => w.length > 1);
+  const wordsOf = s => norm(s).split(/[^a-z0-9]+/).filter(Boolean);
+  const words = wordsOf(query).filter(w => w.length > 1 && !STOP_WORDS.has(w));
+  if (!words.length && wordsOf(query).length) return { hits: [], errors: [] }; // « de la » asks for nothing: it does not list the bank
+  const stem = w => w.length > 3 ? w.replace(/s$/, '') : w; // the plural a person types against the singular a tag holds
   const hits = [];
   for (const [bank, base] of Object.entries(brandBanks)) {
     let entries; try { entries = await loadIndex(base); } catch (e) { hits.push({ bank, error: e.message }); continue; }
     for (const e of entries) {
       if ((e.status || 'approved') === 'retired' || (kind && e.kind !== kind)) continue;
-      const slug = norm(e.slug), cap = norm(e.caption), tags = (Array.isArray(e.tags) ? e.tags : []).map(norm), kindWord = norm(e.kind);
-      let score = 0;
+      const slug = wordsOf(e.slug), cap = wordsOf(String(e.caption || '').split(/\.\s/)[0]), tags = (Array.isArray(e.tags) ? e.tags : []).map(norm), tagWords = tags.flatMap(wordsOf), kindWord = norm(e.kind);
+      const isKind = w => kindWord && (w === kindWord || w === kindWord + 's'); // "logo client": the kind is a word of the query, no `kind` argument needed
+      const starts = (list, w) => list.some(x => w.length <= 3 ? x === w : x.startsWith(stem(w)));
+      const subject = words.filter(w => !isKind(w));
+      let score = 0, found = 0, strong = 0;
       for (const w of words) {
-        if (kindWord && (w === kindWord || w === kindWord + 's')) score += 2; // "logo client": the kind is a word of the query, no `kind` argument needed
-        if (tags.some(t => t === w)) score += 3; else if (tags.some(t => t.includes(w))) score += 2;
-        if (slug.includes(w)) score += 2;
-        if (cap.includes(w)) score += 1;
+        if (isKind(w)) { score += 2; continue; }
+        const inTags = starts(tagWords, w), inSlug = starts(slug, w), inCap = starts(cap, w);
+        if (tags.includes(w)) score += 3; else if (inTags) score += 2;
+        if (inSlug) score += 2;
+        if (inCap) score += 1;
+        if (inTags || inSlug || inCap) found++;
+        if (inTags || inSlug) strong++;
       }
-      if (words.length && score === 0) continue;
+      if (subject.length ? !(found === subject.length || (subject.length >= 3 && strong && found === subject.length - 1)) : words.length && !score) continue;
       if (!words.length) score = 1;
       hits.push({ ref: `img:${bank}/${e.slug}`, bank, slug: e.slug, caption: e.caption, tags: e.tags || [], kind: e.kind, fit: e.fit || [], status: e.status || 'approved', url: new URL(e.file, base).href, origin: e.origin, score });
     }
