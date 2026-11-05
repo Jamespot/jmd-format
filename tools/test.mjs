@@ -10,9 +10,12 @@ import { createServer } from 'node:http';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { Browser } from './cdp.mjs';
+import { Browser, steadyEval } from './cdp.mjs';
+steadyEval();
 import { waitMyTurn } from './one-at-a-time.mjs';
 import '../runtime/jmd-core.js'; // defines globalThis.JMD
+// the bar as it shows: « online » (#hud-home) only on a copy that names its page online (spec/export.md, a copy that travels)
+const HUD_SHOWN = '(h => { h = h.cloneNode(true); if (!document.body.classList.contains("has-home")) h.querySelector("#hud-home").remove(); return h.textContent; })(document.getElementById("hud")).replace(/\\s+/g, " ").trim()';
 const JMD = globalThis.JMD;
 await waitMyTurn('tools/test.mjs'); // fixed ports: one suite at a time on this machine, whichever worktree runs it
 
@@ -80,7 +83,7 @@ try {
   ok((await p.eval('document.getElementById("help").textContent')).includes('info:') && !(await p.eval('document.getElementById("hud").textContent')).includes('linter'), 'the help offers I info, not L linter');
   await p.key('I');
   const card = await p.eval('document.getElementById("info").textContent');
-  ok(await p.eval('document.getElementById("info").classList.contains("is-open")') && card.includes('four-blocks') && card.includes('slides4') && card.includes(ANY_BRAND) && card.includes('jmd/2'), 'I opens the file card: name, slides, brand, format');
+  ok(await p.eval('document.getElementById("info").classList.contains("is-open")') && card.includes('four-blocks') && card.includes('slides4') && card.includes(ANY_BRAND) && card.includes('jmd/3'), 'I opens the file card: name, slides, brand, format');
   ok(card.includes('1 error') && await p.eval('document.getElementById("info-lint").classList.contains("is-err")'), 'the card ends with the linter line: a red light, "1 error"');
   await p.eval('document.getElementById("info-lint").click(); true');
   ok(await p.eval('document.getElementById("info").classList.contains("is-report")') && (await p.eval('document.getElementById("info-report").textContent')).includes('content reaches') && (await p.eval('document.getElementById("info").textContent')).includes(ANY_BRAND), 'clicking the light unfolds the readable report under the card — the card stays');
@@ -175,7 +178,7 @@ try {
        this one is French. The template a download starts from is taken before anything is translated. */
     const fr = await Browser.launch({ lang: 'fr-FR' });
     const q = await fr.page('file://' + exp, { network: false }); await q.settle(300);
-    const hudFr = await q.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()');
+    const hudFr = await q.eval(HUD_SHOWN);
     await q.key('D'); await q.settle(80);
     const dlFr = await q.eval('document.getElementById("dl-lbl").textContent + " | " + document.getElementById("dl-list").textContent');
     await q.key('Escape'); await q.key('?'); await q.settle(50);
@@ -185,7 +188,7 @@ try {
     const notesFr = await q.eval('document.querySelector("#notes .lbl").textContent'), tplEn = await q.eval('jamesJmd.lang');
     await q.close();
     const q2 = await fr.page('file://' + exp + '?lang=en', { network: false }); await q2.settle(300);
-    const hudForced = await q2.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()');
+    const hudForced = await q2.eval(HUD_SHOWN);
     await q2.close(); fr.close();
     ok(hudFr === '← → naviguer F présenter E modifier D télécharger O ouvrir ? toutes les touches' && /^Télécharger \| Page · \.html.*le deck en un fichier/.test(dlFr) && dlFr.includes('par la fenêtre d’impression')
       && helpFr.includes('Espace') && helpFr.includes('notes de l’orateur') && !helpFr.includes('speaker notes') && /fichier.*moteur.*langue/s.test(infoFr) && !/\bfile\b/.test(infoFr)
@@ -199,13 +202,29 @@ try {
        deck's own page there offers them — a file from disk or a 24-hour link would offer a door nothing answers. */
     const items = async q => JSON.parse(await q.eval(`JSON.stringify([...document.querySelectorAll('#dl-list a, #dl-list button')].map(e => e.querySelector('b').textContent.split(' ')[0] + (e.getAttribute('href') ? ' ' + e.getAttribute('href') : '')))`));
     p = await open('file://' + exp); await p.settle();
-    ok(await p.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()') === '← → navigate F present E edit D download O open ? all keys', 'the bar holds what one reaches for: navigate, present, edit, download, (open, from disk), all keys — no longer P and S apart', await p.eval('document.getElementById("hud").textContent.replace(/\\s+/g, " ").trim()'));
+    ok(await p.eval(HUD_SHOWN) === '← → navigate F present E edit D download O open ? all keys', 'the bar holds what one reaches for: navigate, present, edit, download, (open, from disk), all keys — no longer P and S apart', await p.eval(HUD_SHOWN));
     await p.key('D'); await p.settle(80);
     ok(await p.eval('document.getElementById("dl").classList.contains("is-open")') && JSON.stringify(await items(p)) === '["Page","PDF"]' && await p.eval('document.activeElement.matches("#dl-list button")'), 'from disk: D opens the menu on the page and the PDF, the first one focused');
     await p.key('Escape'); await p.settle(50);
     ok(!(await p.eval('document.getElementById("dl").classList.contains("is-open")')), 'Esc closes it');
     await p.eval('document.getElementById("hud-dl").click(); true'); await p.settle(50);
     ok(await p.eval('document.getElementById("dl").classList.contains("is-open")'), 'the hud\'s download is a button, for the mouse');
+    await p.key('Escape'); await p.close();
+    /* A copy that travels (spec/export.md, Pascal 2026-11-04): the file names its page online on the tag of its source; opened
+       from disk, the bar says « online » and D offers it (L) — a link, nothing called; a data-url of any other shape is nothing. */
+    const named = readFileSync(exp, 'utf8').replace('<script type="text/jmd" id="jmd" ', '<script type="text/jmd" id="jmd" data-url="https://slides.jamespot.io/deck/AbCdEfGhIjKlMnOp" ');
+    writeFileSync(join(tmp, 'named.html'), named); writeFileSync(join(tmp, 'forged.html'), named.replace('https://slides.jamespot.io/deck/AbCdEfGhIjKlMnOp', 'javascript:alert(1)//deck/AbCdEfGhIjKlMnOp'));
+    p = await open('file://' + join(tmp, 'named.html')); await p.settle();
+    const hudNamed = await p.eval(HUD_SHOWN), homeHref = await p.eval('document.getElementById("hud-home").getAttribute("href")');
+    await p.key('D'); await p.settle(80);
+    const namedItems = await items(p), lHref = await p.eval('(document.querySelector("#dl-list [data-key=L]") || {}).href || ""'), namedLbl = await p.eval('document.getElementById("dl-lbl").textContent');
+    await p.key('Escape'); await p.close();
+    ok(hudNamed.endsWith('? all keys ↗ online') && homeHref === 'https://slides.jamespot.io/deck/AbCdEfGhIjKlMnOp' && namedItems[0] === 'Online https://slides.jamespot.io/deck/AbCdEfGhIjKlMnOp' && lHref === homeHref && namedLbl === 'Share or download', 'a copy that names its page: the bar says online, D offers its link first (L), the menu shares or downloads', JSON.stringify([hudNamed, namedItems, lHref]));
+    p = await open('file://' + join(tmp, 'forged.html')); await p.settle();
+    ok(await p.eval(HUD_SHOWN) === '← → navigate F present E edit D download O open ? all keys' && !(await p.eval('document.getElementById("hud-home").hasAttribute("href")')), 'a data-url of any other shape: no link, nothing said');
+    await p.close();
+    p = await open('file://' + exp); await p.settle();
+    await p.eval('document.getElementById("hud-dl").click(); true'); await p.settle(50); // the menu open again, as it was
     await p.eval('document.getElementById("dl").click(); true'); await p.settle(50);
     ok(!(await p.eval('document.getElementById("dl").classList.contains("is-open")')), 'a click beside the box closes it');
     /* Without a mouse (2026-10-07): ↑ ↓ move round the list, the letters take a format, and while the menu is open its keys
@@ -256,7 +275,7 @@ try {
   }
 
   console.log('\n5. Linter on a broken deck');
-  const bad = `---\nformat: jmd/3\n---\n---\nbg: pink\n---\n::: foo\n- a\n:::\n---\n---\n## A title that is far too long to fit the sixty characters budget\n::: metrics\n- 1|a\n- 2|b\n- 3|c\n- 4|d\n- 5|e\n:::\n---\nnotes: x\n---\n## T\n::: metrics\n- 1|a\n::: cards\n:::\n:::\n`;
+  const bad = `---\nformat: jmd/9\n---\n---\nbg: pink\n---\n::: foo\n- a\n:::\n---\n---\n## A title that is far too long to fit the sixty characters budget\n::: metrics\n- 1|a\n- 2|b\n- 3|c\n- 4|d\n- 5|e\n:::\n---\nnotes: x\n---\n## T\n::: metrics\n- 1|a\n::: cards\n:::\n:::\n`;
   p = await open('file://' + EMPTY); await p.settle();
   await p.eval(`jamesJmd.load(${JSON.stringify(bad)}, "bad.jmd"); true`); await p.settle();
   const rules = await p.eval('jamesJmd.state.lint.map(x => x.level[0] + ":" + x.rule).sort().join(" ")');
@@ -315,7 +334,7 @@ try {
   ok(await p.eval('document.querySelectorAll(".logos .logo img").length') === 12 && await p.eval('document.querySelector(".logos .logo img").getBoundingClientRect().width') > 20, 'logos render with a real width');
   ok(await p.eval('document.querySelectorAll("img").length') > 0 && await p.eval('[...document.querySelectorAll("img")].every(i => i.src.startsWith("data:image/svg+xml"))'), 'every image is embedded as a data URI');
   ok(await p.eval('jamesJmd.state.lint.filter(x => x.level === "error").length') === 0, 'no linter error in the browser');
-  ok(await p.eval('document.querySelector(".slide--sky") !== null && getComputedStyle(document.querySelector(".slide--sky .slide-h2")).color') === 'rgb(255, 255, 255)', 'bg: sky is white-on-color');
+  ok(await p.eval(`(() => { const deep = document.querySelector(".slide--sky"), pale = document.querySelector(".slide--skylight"), c = el => getComputedStyle(el.querySelector(".slide-h2")).color; return deep ? c(deep) === 'rgb(255, 255, 255)' : !!pale && c(pale) !== 'rgb(255, 255, 255)'; })()`), 'bg: sky is white on a deep secondary, dark on a pale one');
   await p.close();
   // assets: missing file → error from the CLI (it sees the disk); not embedded → warning in the browser
   writeFileSync(join(tmp, 'noimg.jmd'), fixed.replace('## Northwind in three numbers.', '## Northwind in three numbers.\n\n![](nope.png){.right}'));
@@ -507,7 +526,7 @@ try {
     for (const lay of ['story', 'memo']) {
       const f = join(tmp, `numbers-${lay}.jmd`); writeFileSync(f, numbersSrc.replace('layout: slide', 'layout: ' + lay));
       const r = cli(`lint ${f} --dom --json`, false); const js = JSON.parse(typeof r === 'string' ? r : r.out);
-      ok(js.ok === true && js.findings.every(x => x.level !== 'warning'), `numbers.jmd as a ${lay}: no error, no fit`, JSON.stringify(js.findings));
+      ok(js.ok === true && js.findings.every(x => x.level !== 'warning' || (lay === 'memo' && ['memo-intent', 'doc-bg'].includes(x.rule))), `numbers.jmd as a ${lay}: no error, no fit (a memo says which intents it does not draw)`, JSON.stringify(js.findings));
     }
   }
 
@@ -704,12 +723,25 @@ try {
     // Q shows the code where the page has one (a shared deck), and does nothing on a file that has none
     const q = await p.eval('(() => { const key = () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "q" })); key(); const none = !document.getElementById("qr"); const d = document.createElement("div"); d.id = "qr"; document.body.appendChild(d); key(); const open = d.classList.contains("is-open"); key(); const shut = !d.classList.contains("is-open"); d.remove(); return { none, open, shut }; })()');
     ok(q.none && q.open && q.shut, 'Q opens and closes the QR code of a shared deck, and is nothing on a file that has none (' + JSON.stringify(q) + ')');
+    // the driver itself: a page that moves under an eval, on purpose — the same thing that used to stop this suite by chance
+    const moving = await open('file://' + EMPTY);
+    const moves = 'setTimeout(() => location.reload(), 50), new Promise(() => {})';
+    const second = await moving.eval('window.name === "again" ? "second" : (window.name = "again", ' + moves + ')');
+    ok(second === 'second', 'an eval the page moved under runs once more on the page that replaced it (' + second + ')');
+    const twice = await moving.eval('(' + moves + ')').catch(e => e.message);
+    await moving.loaded();
+    ok(/destroyed|navigated/.test(twice) && twice.includes('location.reload'), 'once only: a second loss fails, and names what it was running (' + twice.slice(0, 60) + ')');
+    steadyEval(false);
+    const unasked = await moving.eval('(' + moves + ')').catch(e => e.message);
+    steadyEval();
+    await moving.close();
+    ok(/destroyed|navigated/.test(unasked) && !unasked.includes('location.reload'), 'without the suites asking, an eval is not run again and its error carries no source');
     // a phone held upright: the Slide deck is drawn as a Story, one screen at a time; turned sideways, the slides again
     const phone = await browser.page('file://' + join(root, 'build/james-jmd.html'), { network: false });
     await phone.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     await phone.send('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
     await phone.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true, screenOrientation: { type: 'portraitPrimary', angle: 0 } });
-    await phone.eval('location.reload(); true'); await phone.settle(600);
+    await phone.reload(); await phone.settle(600);
     await phone.eval('jamesJmd.load(' + JSON.stringify(readFileSync(join(root, 'decks/samples/team-update.jmd'), 'utf8')) + ', "team-update.jmd"); true'); await phone.settle(300);
     const upright = JSON.parse(await phone.eval('JSON.stringify({ layout: jamesJmd.state.layout, reflowed: jamesJmd.state.reflowed, src: /layout: slide/.test(jamesJmd.state.src), story: document.body.classList.contains("layout-story") })'));
     await phone.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 300, y: 400 }] });
@@ -845,10 +877,10 @@ try {
     ok(await p.eval('document.getElementById("edit-target").textContent') === 'document' && (await p.eval('document.getElementById("edit-title").textContent')).startsWith('Slide 02'), 'the editor opens on the slide, with a `document` button');
     await p.eval('document.getElementById("edit-target").click(); true'); await p.settle(100);
     const hdr = await p.eval('document.getElementById("edit-src").value');
-    ok((await p.eval('document.getElementById("edit-title").textContent')).startsWith('Document · lines 1–') && hdr.startsWith('---\nformat: jmd/2\n') && hdr.includes('\nlayout: slide\n') && hdr.includes('\ntitle: ') && await p.eval('document.getElementById("edit-target").textContent') === 'slide', 'document: the header lines open in the editor, the button now reads `slide`');
+    ok((await p.eval('document.getElementById("edit-title").textContent')).startsWith('Document · lines 1–') && hdr.startsWith('---\nformat: jmd/3\n') && hdr.includes('\nlayout: slide\n') && hdr.includes('\ntitle: ') && await p.eval('document.getElementById("edit-target").textContent') === 'slide', 'document: the header lines open in the editor, the button now reads `slide`');
     ok((await p.eval('document.getElementById("edit-chips").textContent')) === 'layout: slide ▸' && (await p.eval('document.getElementById("edit-ctx").textContent')).includes('layout: slide · memo · doc · story · webpage'), 'the header has one chip, `layout: slide ▸`, and its own hint');
     await p.eval('document.querySelector("#edit-chips .layout").click(); true'); await p.settle(400);
-    ok(await p.eval('document.body.classList.contains("layout-memo")') && await p.eval('jamesJmd.state.layout') === 'memo' && (await p.eval('document.getElementById("edit-src").value')).split('\n')[2] === 'layout: memo' && await p.eval('jamesJmd.state.i') === 1 && await p.eval('document.querySelectorAll(".slide").length') === 4, 'clicking the chip inserts `layout: memo` under `format:` and the deck re-renders as A4 pages, on the same slide');
+    ok(await p.eval('document.body.classList.contains("layout-doc")') && await p.eval('jamesJmd.state.layout') === 'doc' && await p.eval('document.getElementById("edit-chips").textContent') === 'layout: memo ▸' && (await p.eval('document.getElementById("edit-src").value')).split('\n')[2] === 'layout: memo' && await p.eval('jamesJmd.state.i') === 1 && await p.eval('document.querySelectorAll(".slide").length') === 4, 'clicking the chip inserts `layout: memo` under `format:` and the deck re-renders as A4 pages, on the same slide');
     await p.eval('document.querySelector("#edit-chips .layout").click(); true'); await p.settle(400);
     await p.eval('document.querySelector("#edit-chips .layout").click(); true'); await p.settle(400);
     await p.eval('document.querySelector("#edit-chips .layout").click(); true'); await p.settle(400);
@@ -866,9 +898,9 @@ try {
     ok((await p.eval('document.getElementById("edit-title").textContent')).startsWith('Slide 02'), 'E always opens on the slide');
     // a deck with no header at all: the editor offers a minimal one
     await p.eval(`jamesJmd.load(${JSON.stringify(fixed.replace(/^---\n[\s\S]*?\n---\n/, ''))}, "bare.jmd"); jamesJmd.editTarget("doc"); true`); await p.settle(200);
-    ok((await p.eval('document.getElementById("edit-title").textContent')).includes('no header yet') && (await p.eval('document.getElementById("edit-src").value')) === '---\nformat: jmd/2\nlayout: slide\n---', 'a deck without a header: the editor offers `format` and `layout`, to be inserted at line 1');
+    ok((await p.eval('document.getElementById("edit-title").textContent')).includes('no header yet') && (await p.eval('document.getElementById("edit-src").value')) === '---\nformat: jmd/3\nlayout: slide\n---', 'a deck without a header: the editor offers `format` and `layout`, to be inserted at line 1');
     await p.eval('document.querySelector("#edit-chips .layout").click(); true'); await p.settle(400);
-    ok(await p.eval('jamesJmd.state.layout') === 'memo' && (await p.eval('jamesJmd.state.src')).startsWith('---\nformat: jmd/2\nlayout: memo\n---\n') && JSON.parse(await p.eval('JSON.stringify(jamesJmd.state.lint)')).every(f => f.rule !== 'format'), 'the chip writes that header in, and the format error goes away');
+    ok(await p.eval('jamesJmd.state.layout') === 'doc' && (await p.eval('jamesJmd.state.src')).startsWith('---\nformat: jmd/3\nlayout: memo\n---\n') && JSON.parse(await p.eval('JSON.stringify(jamesJmd.state.lint)')).every(f => f.rule !== 'format'), 'the chip writes that header in, and the format error goes away');
     await p.close();
   }
 
@@ -1208,10 +1240,15 @@ try {
     /* The frozen fixture of jmd/1 (spec/jmd.md § Versioning): a past format reads exactly as it did. In jmd/1 `doc` was the A4
        page per `---`, which jmd/2 calls `memo`: the same file, written either way, draws the same pages — and the source is
        left as it was. A step missing from UPGRADES breaks this, not somebody's deck. */
-    const asV1 = onePager.replace('format: jmd/2', 'format: jmd/1').replace('layout: memo', 'layout: doc'), v1 = JMD.parse(asV1);
+    const asV1 = onePager.replace('format: jmd/3', 'format: jmd/1').replace('layout: memo', 'layout: doc'), v1 = JMD.parse(asV1);
     ok(JMD.layout(v1) === 'memo' && JMD.render(v1, { brand: {} }) === JMD.render(JMD.parse(onePager), { brand: {} }) && v1.lines.join('\n') === asV1.replace(/\r\n?/g, '\n'), 'jmd/1: `layout: doc` draws the memo it meant, page for page; the source untouched');
-    ok(JMD.lint(v1).some(f => f.rule === 'format' && f.level === 'info' && /read as `memo`/.test(f.message)) && !JMD.lint(JMD.parse(onePager)).some(f => f.rule === 'format'), 'lint: the jmd/1 reading is said (info, never counted); a jmd/2 file says nothing');
-    ok(JMD.layout(JMD.parse(asV1.replace('format: jmd/1', 'format: jmd/2'))) === 'doc', 'jmd/2: `doc` is the long document');
+    ok(JMD.lint(v1).some(f => f.rule === 'format' && f.level === 'info' && /read as `memo`/.test(f.message)) && !JMD.lint(JMD.parse(onePager)).some(f => f.rule === 'format'), 'lint: the jmd/1 reading is said (info, never counted); a jmd/3 file says nothing');
+    ok(JMD.layout(JMD.parse(asV1.replace('format: jmd/1', 'format: jmd/3'))) === 'doc', 'jmd/2 and after: `doc` is the long document');
+    /* The frozen fixture of jmd/2: `memo` was the A4 page per `---`, which jmd/3 writes `pages: fixed`. The same file draws the same pages. */
+    const noLines = h => h.replace(/ data-(?:line|start|node-line)="\d+"/g, ''); // `pages: fixed` is one line more in the header
+    const asV2 = onePager.replace('format: jmd/3', 'format: jmd/2').replace('pages: fixed\n', ''), v2 = JMD.parse(asV2);
+    ok(JMD.layout(v2) === 'memo' && !JMD.memoFlows(v2) && noLines(JMD.render(v2, { brand: {} })) === noLines(JMD.render(JMD.parse(onePager), { brand: {} })) && v2.lines.join('\n') === asV2.replace(/\r\n?/g, '\n'), 'jmd/2: `layout: memo` draws the fixed pages it meant; the source untouched');
+    ok(JMD.lint(v2).some(f => f.rule === 'format' && f.level === 'info' && /pages: fixed/.test(f.message)), 'lint: the jmd/2 reading of a memo is said (info, never counted)');
     ok(JMD.lint(JMD.parse(noLayout)).some(f => f.rule === 'layout' && f.level === 'info' && /write `layout: slide`/.test(f.message)) && !JMD.lint(JMD.parse(fixed)).some(f => f.rule === 'layout'), 'lint: a header without `layout:` gets the advice to write it (info, never counted) — the samples all carry it');
     const badLayout = JMD.lint(JMD.parse(fixed.replace('layout: slide', 'layout: poster')));
     ok(badLayout.some(f => f.rule === 'layout' && f.level === 'error' && /slide, memo, doc, story, webpage/.test(f.message)), 'lint: an unknown layout is an error naming the five layouts', JSON.stringify(badLayout));
@@ -1242,6 +1279,36 @@ try {
     await p.eval(`jamesJmd.load(${JSON.stringify(onePager)}, "one-pager.jmd"); true`); await p.settle(300);
     await p.key('D'); await p.key('P');
     ok(await p.eval('window.__printed') === 1, 'P prints a clean Doc');
+    /* A memo flows (jmd/3, the RETEX test of 2026-11-05: eight half-empty pages, 7 pt in the cards, white on cyan, and a linter that saw none of it). */
+    const memoSrc = readFileSync(join(root, 'decks/samples/note.jmd'), 'utf8'), memoDoc = JMD.parse(memoSrc);
+    ok(JMD.memoFlows(memoDoc) && JMD.layout(memoDoc) === 'doc' && JMD.layoutWord(memoDoc) === 'memo' && JMD.layoutWord(JMD.parse(onePager)) === 'memo' && JMD.layout(JMD.parse(onePager)) === 'memo', 'memo: it flows on the long document\'s engine, its word stays `memo`; `pages: fixed` keeps the page per `---`');
+    ok(JMD.lint(memoDoc).every(f => f.level === 'info'), 'lint: the memo sample is clean', JSON.stringify(JMD.lint(memoDoc)));
+    const memoHtml = JMD.render(memoDoc, { brand: {} });
+    ok(!/sheet--cover|sheet--toc/.test(memoHtml) && /memo-title/.test(memoHtml) && /memo-by/.test(memoHtml), 'memo: no cover and no contents, its head comes from the header');
+    const memoOf = (head, body) => JMD.lint(JMD.parse('---\nformat: jmd/3\nlayout: memo\ntitle: M\n' + head + '---\n\n---\n' + body));
+    ok(memoOf('', 'intent: hook\n---\n## T\n\nText.\n').some(f => f.rule === 'memo-intent') && !memoOf('', 'intent: hook\npage: yes\n---\n## T\n\nText.\n').some(f => f.rule === 'memo-intent') && !memoOf('', 'intent: recap\n---\n## T\n\nText.\n').some(f => f.rule === 'memo-intent'), 'lint: a dark intent on a section is said not to be drawn, unless the section is a page of its own');
+    ok(memoOf('pages: free\n', '---\n## T\n\nText.\n').some(f => f.rule === 'pages' && f.level === 'error'), 'lint: `pages:` has one value');
+    ok(memoOf('pages: fixed\n', 'bg: accent\n---\n## T\n\n::: cards\n- A | a\n- B | b\n:::\n').some(f => f.rule === 'memo-dark') && !memoOf('pages: fixed\n', 'bg: accent\n---\n## T\n\n::: metrics\n- 1 | a\n- 2 | b\n:::\n').some(f => f.rule === 'memo-dark'), 'lint: small text on a vivid page of a fixed memo is a warning, large figures are not');
+    const skyOf = secondary => JMD.render(JMD.parse('---\nformat: jmd/3\nlayout: slide\n---\n\n---\nbg: sky\n---\n## T\n'), { brand: { secondary } });
+    ok(/slide--skylight/.test(skyOf('#40BCD8')) && /slide--sky"/.test(skyOf('#1B2A6B').replace(/slide--sky /, 'slide--sky"')) && !/slide--skylight/.test(skyOf('#1B2A6B')), '`bg: sky`: the words stay dark on a pale secondary, white on a deep one');
+    execSync('node tools/build.mjs decks/samples/note.jmd', BUILD);
+    const pm = await open('file://' + join(root, 'build/note.james-jmd.html')); await pm.settle(400);
+    const flowed = JSON.parse(await pm.eval(`JSON.stringify((() => { const sh = [...document.querySelectorAll('.sheet')], k = sh[0].getBoundingClientRect().width / 1280, s0 = sh[0];
+      return { sheets: sh.length, sections: jamesJmd.state.slides.length, onFirst: new Set([...s0.querySelectorAll('[data-of]')].map(e => e.dataset.of)).size,
+        tag: s0.querySelector('.slide-tag').textContent, meta: s0.querySelector('.chrome-meta').textContent,
+        over: sh.some(s => { const r0 = s.getBoundingClientRect(), b = s.querySelector('.body-pad').lastElementChild; return (b.getBoundingClientRect().bottom - r0.top) / k > 1680.5; }),
+        sizes: ['.metric .s', '.tl-step p', '.table td', '.prose--long p', '.prose--long li'].map(q => parseFloat(getComputedStyle(document.querySelector(q)).fontSize)) }; })())`));
+    ok(flowed.sheets < flowed.sections && flowed.onFirst > 1 && !flowed.over && flowed.meta === '' && flowed.tag === '01 / 0' + flowed.sheets, 'memo: sections go on on the same sheet, nothing crosses the foot, the sheets are numbered', JSON.stringify(flowed));
+    ok(flowed.sizes.every(px => px >= 21), 'memo: the blocks are at reading size (10 pt on the sheet), not a slide\'s', JSON.stringify(flowed.sizes));
+    /* The editor: a section that starts on the last one's sheet is still its own */
+    await pm.eval('jamesJmd.show(1); true');
+    ok(await pm.eval(`(() => { const of = document.querySelector('[data-of="1"]'); return !!of && of.closest('.sheet') === document.querySelector('.sheet') && jamesJmd.state.i === 1; })()`), 'memo: a piece knows its section on another section\'s sheet');
+    await pm.close();
+    const emptyPage = '---\nformat: jmd/3\nlayout: memo\npages: fixed\ntitle: E\n---\n\n---\n---\n## Half a page\n\n- One line.\n';
+    const pe = await open('file://' + join(root, 'build/note.james-jmd.html')); await pe.settle(200);
+    await pe.eval(`jamesJmd.load(${JSON.stringify(emptyPage)}, "empty.jmd"); true`); await pe.settle(400);
+    ok(await pe.eval(`jamesJmd.state.lint.some(f => f.rule === 'page-empty' && f.level === 'warning')`), 'lint: a designed page that stops halfway is a warning');
+    await pe.close();
     // back to a Slide deck in the same window: the stage returns to the single-slide stage
     await p.eval(`jamesJmd.load(${JSON.stringify(fixed)}, "four-blocks.jmd"); true`); await p.settle(200);
     ok(!(await p.eval('document.body.classList.contains("layout-memo")')) && await p.eval('[...document.querySelectorAll("style")].every(s => !/210mm/.test(s.textContent))') && await p.eval('document.querySelector(".slide .slide-tag").textContent') === '01', 'loading a Slide deck after a Doc restores the Slide stage and print size');
@@ -1260,7 +1327,7 @@ try {
     const shots = join(tmp, 'shots'); mkdirSync(shots, { recursive: true });
     writeFileSync(join(shots, 'screen.png'), readFileSync(join(root, 'build/four-blocks-slides/slide-01.png')));
     writeFileSync(join(shots, 'phone.png'), png);
-    const shotDeck = '---\nformat: jmd/2\nlayout: slide\nbrand: mono\ntitle: t\n---\n## The dashboard\n![](screen.png){.wide}\n\n---\nbg: indigo\n---\n## A phone\nIts lead.\n\n![Its caption](phone.png){.wide}\n\n---\n## A band\n- a point beside it\n\n![](screen.png){.wide}\n';
+    const shotDeck = '---\nformat: jmd/3\nlayout: slide\nbrand: mono\ntitle: t\n---\n## The dashboard\n![](screen.png){.wide}\n\n---\nbg: indigo\n---\n## A phone\nIts lead.\n\n![Its caption](phone.png){.wide}\n\n---\n## A band\n- a point beside it\n\n![](screen.png){.wide}\n';
     writeFileSync(join(shots, 'shots.jmd'), shotDeck);
     const shotLint = JMD.lint(JMD.parse(shotDeck)).filter(f => f.rule === 'wide-crop');
     ok(shotLint.length === 1 && shotLint[0].slide === 3 && shotLint[0].level === 'warning' && !JMD.lint(JMD.parse(shotDeck.replace('layout: slide', 'layout: doc'))).some(f => f.rule === 'wide-crop'),
@@ -1279,20 +1346,20 @@ try {
     // Doc, the long document (spec/doc.md): a `---` is a chapter, the browser lays its text out on as many A4 sheets as it takes
     const paper = readFileSync(join(root, 'decks/samples/white-paper.jmd'), 'utf8');
     ok(JMD.layout(JMD.parse(paper)) === 'doc' && JMD.lint(JMD.parse(paper)).every(f => f.level !== 'error'), 'doc: the white paper sample is clean — its `##` and `###` are headings, not loose ones');
-    ok(JMD.lint(JMD.parse(paper.replace('layout: doc', 'layout: memo'))).some(f => f.rule === 'loose-heading'), 'the same `##` in a memo is still a loose heading');
+    ok(JMD.lint(JMD.parse(paper.replace('layout: doc', 'layout: memo\npages: fixed'))).some(f => f.rule === 'loose-heading'), 'the same `##` in a fixed memo is still a loose heading');
     const pull = paper.replace('### What to measure', '::: statement\nA view, not a document.\n:::\n\n### What to measure');
-    ok(!JMD.lint(JMD.parse(pull)).some(f => f.rule === 'full-alone') && JMD.lint(JMD.parse(pull.replace('layout: doc', 'layout: memo'))).some(f => f.rule === 'full-alone'), 'a statement in a chapter is a pull quote, not a misplaced page (full-alone stays for the memo)');
+    ok(!JMD.lint(JMD.parse(pull)).some(f => f.rule === 'full-alone') && JMD.lint(JMD.parse(pull.replace('layout: doc', 'layout: memo\npages: fixed'))).some(f => f.rule === 'full-alone'), 'a statement in a chapter is a pull quote, not a misplaced page (full-alone stays for the fixed memo)');
     const ring = d => +/class="dg-stage" style="width:[\d.]+px;height:([\d.]+)px/.exec(JMD.render(JMD.parse(paper.replace('layout: doc', 'layout: ' + d).replace('::: timeline', '::: diagram {.cycle}\n- Ask\n- Decide\n- Ship\n- Learn\n:::\n\n::: timeline')), { brand: {} }))[1];
-    ok(ring('doc') <= 520 && ring('memo') > 520, `a figure in running text takes a third of a page, not half (cycle: ${ring('doc')}px in a doc, ${ring('memo')}px in a memo)`);
+    ok(ring('doc') <= 520 && ring('memo\npages: fixed') > 520, `a figure in running text takes a third of a page, not half (cycle: ${ring('doc')}px in a doc, ${ring('memo\npages: fixed')}px in a fixed memo)`);
     const longHtml = JMD.render(JMD.parse(paper), { brand: {} });
     /* A bullet is a flex row — the dot beside the words — so the words are one span, or every bold and link of the line
        becomes a column of its own, centred: Pascal's meeting minutes (#44). Plain lists, as cards and columns already did. */
-    const minutes = JMD.render(JMD.parse('---\nformat: jmd/2\ntitle: t\nlayout: slide\n---\n# CR\n\n- **Netbox** : à supprimer — **PBA**\n- OCS : RAS\n'), { brand: {} });
+    const minutes = JMD.render(JMD.parse('---\nformat: jmd/3\ntitle: t\nlayout: slide\n---\n# CR\n\n- **Netbox** : à supprimer — **PBA**\n- OCS : RAS\n'), { brand: {} });
     ok(/<li data-line="\d+"><span><strong>Netbox<\/strong> : à supprimer — <strong>PBA<\/strong><\/span><\/li>/.test(minutes) && /<li data-line="\d+"><span>OCS : RAS<\/span><\/li>/.test(minutes),
       'a bullet\'s words are one block beside its dot — bold, text and bold again stay one sentence, never three columns (#44)');
     /* Who owns it (#45): `@names` at the very end of a bullet leave the sentence and become pills — in a plain list as in a
        card; an address inside a sentence is text, an item that is only `@names` stays words, four at most. */
-    const owned = JMD.render(JMD.parse('---\nformat: jmd/2\ntitle: t\nlayout: slide\n---\n# CR\n\n- **Stoïk** : affiner @FPI @GDE\n- Écrire à alain@jamespot.com pour la suite\n- @jamespot\n- Trop @a @b @c @d @e\n- Avec <b> @x<y\n\n---\n## Cartes\n\n::: cards\n### Suivi\n- Relancer Jean @PBA\n:::\n'), { brand: {} });
+    const owned = JMD.render(JMD.parse('---\nformat: jmd/3\ntitle: t\nlayout: slide\n---\n# CR\n\n- **Stoïk** : affiner @FPI @GDE\n- Écrire à alain@jamespot.com pour la suite\n- @jamespot\n- Trop @a @b @c @d @e\n- Avec <b> @x<y\n\n---\n## Cartes\n\n::: cards\n### Suivi\n- Relancer Jean @PBA\n:::\n'), { brand: {} });
     const pills = [...owned.matchAll(/<span class="who">(.*?)<\/span>/g)].map(m => m[1]);
     ok(/<span><strong>Stoïk<\/strong> : affiner<\/span><span class="who"><i>FPI<\/i><i>GDE<\/i><\/span>/.test(owned)
       && owned.includes('<span>Écrire à alain@jamespot.com pour la suite</span></li>') && owned.includes('<span>@jamespot</span></li>')
@@ -1301,19 +1368,19 @@ try {
       'an owner at the end of a bullet — `@FPI @GDE` — becomes a pill, in a list as in a card; an address in a sentence is text, a bullet of nothing but a handle stays words, four at most, nothing unescaped (#45)', JSON.stringify(pills));
     ok(/<h3 class="doc-h3"[^>]*>Where the time goes<\/h3>/.test(longHtml) && /<h4 class="doc-h4"/.test(longHtml) && /<ol><li data-line="\d+"><span>When a request/.test(longHtml) && /<blockquote data-line="\d+">The work was never/.test(longHtml) && !/slide--cover/.test(longHtml),
       'doc prose: `##` → h3, `###` → h4, `1.` → a numbered list, `>` → a quote, one line each with its source line; a `#` is a chapter title, not a cover');
-    const noted = t => JMD.lint(JMD.parse('---\nformat: jmd/2\nlayout: doc\ntitle: N\n---\n# T\nThe lead.\n\n' + t)).filter(f => /^note-/.test(f.rule)).map(f => f.level + ':' + f.rule);
+    const noted = t => JMD.lint(JMD.parse('---\nformat: jmd/3\nlayout: doc\ntitle: N\n---\n# T\nThe lead.\n\n' + t)).filter(f => /^note-/.test(f.rule)).map(f => f.level + ':' + f.rule);
     ok(!noted('A claim.[^a]\n\n[^a]: Its source.\n').length && noted('A claim.[^a]\n').join() === 'error:note-missing' && noted('A claim.\n\n[^a]: Its source.\n').join() === 'warning:note-unused', 'notes: a call with no text is an error, a text never called a warning');
     const bare = JMD.render(JMD.parse(paper.replace('author:', 'cover: none\ncontents: none\nauthor:')), { brand: {} });
     ok(!/sheet--cover|sheet--toc/.test(bare) && /sheet--cover/.test(longHtml) && /sheet--toc/.test(longHtml), '`cover: none` and `contents: none` leave the front out');
     ok(!/sheet--toc/.test(JMD.render(JMD.parse(paper.split('\n---\nnotes: A second chapter')[0]), { brand: {} })), 'a document of one chapter has no contents');
-    ok(/>A \[\^x\] here\.<\/p>/.test(JMD.render(JMD.parse('---\nformat: jmd/2\nlayout: webpage\n---\n## T\n\nA [^x] here.\n'), {}).replace(/ data-line="\d+"/g, '')), 'outside a doc, `[^x]` is text');
-    const docOf = (meta, body) => JMD.parse('---\nformat: jmd/2\nlayout: doc\ntitle: D\n---\n\n---\n' + meta + '\n---\n# Chapter\nThe lead.\n\n' + body + '\n');
+    ok(/>A \[\^x\] here\.<\/p>/.test(JMD.render(JMD.parse('---\nformat: jmd/3\nlayout: webpage\n---\n## T\n\nA [^x] here.\n'), {}).replace(/ data-line="\d+"/g, '')), 'outside a doc, `[^x]` is text');
+    const docOf = (meta, body) => JMD.parse('---\nformat: jmd/3\nlayout: doc\ntitle: D\n---\n\n---\n' + meta + '\n---\n# Chapter\nThe lead.\n\n' + body + '\n');
     const hooked = docOf('intent: hook\nbg: indigo', 'Text.'), decided = docOf('intent: decide', '::: cards\n- A | a\n- B | b {.hero}\n:::');
     const hookHtml = JMD.render(hooked, {});
     ok(/<section class="slide slide--white"/.test(hookHtml) && /<div class="sheet sheet--opener slide--accent slide--hook slide--intent" data-intent="hook">.*<h2 class="slide-h2 doc-title" id="ch-1"[^>]*>Chapter<\/h2>.*The lead\..*<\/div><div class="sheet">/.test(hookHtml) && !/<div class="sheet">.*The lead/.test(hookHtml),
       'a dark intent on a chapter gives it an opening page in that form — its title and lead — and the reading goes on on white pages');
     ok(/slide--decide/.test(JMD.render(decided, {})) && !/slide--lavender|sheet--opener/.test(JMD.render(decided, {})), 'a light intent shapes the chapter\'s blocks, on white');
-    const paged = JMD.parse('---\nformat: jmd/2\nlayout: doc\ntitle: D\n---\n\n---\n---\n# One\nThe lead.\n\nText.\n\n---\npage: yes\nintent: reveal\n---\n## The number\n\n::: metrics\n- 38 % | reopened {.hero}\n- 4 | tools\n:::\n\n---\npage: yes\nbg: indigo\n---\n::: statement\nOne sentence.\n:::\n\n---\n---\n# Two\nThe lead.\n\nText.\n');
+    const paged = JMD.parse('---\nformat: jmd/3\nlayout: doc\ntitle: D\n---\n\n---\n---\n# One\nThe lead.\n\nText.\n\n---\npage: yes\nintent: reveal\n---\n## The number\n\n::: metrics\n- 38 % | reopened {.hero}\n- 4 | tools\n:::\n\n---\npage: yes\nbg: indigo\n---\n::: statement\nOne sentence.\n:::\n\n---\n---\n# Two\nThe lead.\n\nText.\n');
     const pagedHtml = JMD.render(paged, {});
     ok(/<section class="slide slide--page"[^>]*><div class="sheet sheet--page slide--white slide--reveal slide--intent">/.test(pagedHtml) && /<div class="sheet sheet--page slide--indigo">/.test(pagedHtml) && /<div class="chrome-meta">One<\/div>/.test(pagedHtml.split('sheet--page')[1]),
       '`page: yes`: a page of its own in the flow, any intent and any bg, its running head the chapter it sits in');
@@ -1323,18 +1390,18 @@ try {
     const pics = JMD.render(docOf('notes: n', 'Text.\n\n![Beside](a.png){.right}\n\nMore.\n\n![Across](b.png){.cover}\n'), {});
     ok(/<div class="prose prose--long"><figure class="figure figure--right">/.test(pics) && /<figure class="figure figure--wide">/.test(pics) && !/split-media|cover-art/.test(pics), 'in a doc a `.right` image floats in the text, a `.cover` one spans the column — nothing beside or behind the page');
     ok(/<div class="doc-cols">/.test(JMD.render(docOf('columns: 2', 'Text.'), {})) && JMD.lint(docOf('columns: 3', 'Text.')).some(f => f.rule === 'columns' && f.level === 'error'), '`columns: 2` sets a chapter in two columns; 3 is an error');
-    const reHead = JMD.withHeader(paper, '---\nformat: jmd/2\nlayout: doc\ntitle: New title\nsubtitle: New subtitle\n---');
-    ok(reHead.startsWith('---\nformat: jmd/2\nlayout: doc\ntitle: New title\nsubtitle: New subtitle\n---\n\n---\nnotes: A chapter opens') && JMD.parse(reHead).slides.length === 2 && JMD.parse(reHead).lines.slice(-20).join('\n') === JMD.parse(paper).lines.slice(-20).join('\n'), 'withHeader: the header replaced, the chapters kept as they were');
-    let headErr = ''; try { JMD.withHeader(paper, '---\nformat: jmd/2\nlayout: doc\n---\n# A chapter\n'); } catch (e) { headErr = e.message; }
+    const reHead = JMD.withHeader(paper, '---\nformat: jmd/3\nlayout: doc\ntitle: New title\nsubtitle: New subtitle\n---');
+    ok(reHead.startsWith('---\nformat: jmd/3\nlayout: doc\ntitle: New title\nsubtitle: New subtitle\n---\n\n---\nnotes: A chapter opens') && JMD.parse(reHead).slides.length === 2 && JMD.parse(reHead).lines.slice(-20).join('\n') === JMD.parse(paper).lines.slice(-20).join('\n'), 'withHeader: the header replaced, the chapters kept as they were');
+    let headErr = ''; try { JMD.withHeader(paper, '---\nformat: jmd/3\nlayout: doc\n---\n# A chapter\n'); } catch (e) { headErr = e.message; }
     ok(/nothing after/.test(headErr), 'withHeader refuses a header followed by a chapter');
     // a slide taken out (1.40.0): the others byte for byte, a first slide written straight after the header included; never the last one
-    const deck3 = '---\nformat: jmd/2\nlayout: slide\ntitle: T\n---\n\n# One\n\nA.\n\n---\nbg: dark\n---\n## Two\n\nB.\n\n---\n\n## Three\n\nC.\n';
+    const deck3 = '---\nformat: jmd/3\nlayout: slide\ntitle: T\n---\n\n# One\n\nA.\n\n---\nbg: dark\n---\n## Two\n\nB.\n\n---\n\n## Three\n\nC.\n';
     const heads = s => JMD.parse(s).slides.map(x => x.lines.find(l => /^#/.test(l))).join(' | ');
     let lastErr = ''; try { JMD.withoutChapter('---\nlayout: slide\n---\n# Only\n', 1); } catch (e) { lastErr = e.message; }
     let noErr = ''; try { JMD.withoutChapter(deck3, 4); } catch (e) { noErr = e.message; }
     ok(heads(JMD.withoutChapter(deck3, 1)) === '## Two | ## Three' && JMD.parse(JMD.withoutChapter(deck3, 1)).slides[0].meta.bg === 'dark' && heads(JMD.withoutChapter(deck3, 2)) === '# One | ## Three' && JMD.withoutChapter(deck3, 3).endsWith('## Two\n\nB.\n')
       && /only part left/.test(lastErr) && /no part 4: there are 3/.test(noErr), 'withoutChapter takes one slide out, the others kept; refuses the last one and a number past the end');
-    const wrapped = JMD.render(JMD.parse('---\nformat: jmd/2\nlayout: doc\n---\n# T\nThe lead.\n\nOne sentence\nwritten on two lines.\n'), { brand: {} });
+    const wrapped = JMD.render(JMD.parse('---\nformat: jmd/3\nlayout: doc\n---\n# T\nThe lead.\n\nOne sentence\nwritten on two lines.\n'), { brand: {} });
     ok(/<p data-line="\d+" data-span="2">One sentence written on two lines\.<\/p>/.test(wrapped), 'doc prose: a paragraph written over several lines is one paragraph, its first line and its span kept for the editor');
     execSync('node tools/build.mjs decks/samples/white-paper.jmd', BUILD);
     p = await open('file://' + join(root, 'build/white-paper.james-jmd.html')); await p.settle(300);
@@ -1354,7 +1421,7 @@ try {
     // a chapter far longer than a page: forty paragraphs, a heading near every page break, a list longer than a page
     const many = Array.from({ length: 40 }, (_, i) => (i % 7 === 6 ? '## Section ' + i + '\n\n' : '') + 'Paragraph ' + i + ' — ' + 'the text runs on and on so that a page holds only a dozen of these. '.repeat(3)).join('\n\n');
     const steps = Array.from({ length: 45 }, (_, i) => (i + 1) + '. Step ' + (i + 1) + ' of a procedure that does not fit on one page.').join('\n');
-    await p.eval(`jamesJmd.load(${JSON.stringify('---\nformat: jmd/2\nlayout: doc\ntitle: Long\n---\n# A long chapter\n\n' + many + '\n\n' + steps + '\n')}, "long.jmd"); true`); await p.settle(400);
+    await p.eval(`jamesJmd.load(${JSON.stringify('---\nformat: jmd/3\nlayout: doc\ntitle: Long\n---\n# A long chapter\n\n' + many + '\n\n' + steps + '\n')}, "long.jmd"); true`); await p.settle(400);
     const flow = JSON.parse(await p.eval(`JSON.stringify((() => { const sh = [...document.querySelectorAll('.sheet:not(.sheet--front)')]; const k = sh[0].getBoundingClientRect().width / 1280;
       return { n: sh.length, last: sh.map(s => { const b = s.querySelector('.body-pad'); const prose = b.lastElementChild; const el = prose && (prose.lastElementChild || prose); return el ? el.tagName : ''; }),
         bottoms: sh.map(s => { const r0 = s.getBoundingClientRect(); return Math.max(0, ...[...s.querySelectorAll('.body-pad p, .body-pad li, .body-pad h3')].map(e => (e.getBoundingClientRect().bottom - r0.top) / k)); }),
@@ -1366,7 +1433,7 @@ try {
     ok(flow.lists >= 2 && flow.starts[1] !== '1', 'a numbered list longer than a page is cut between two items and its numbering goes on', JSON.stringify(flow.starts));
     // a paragraph longer than a page is cut between two lines, never lost, never orphaned; two columns fill and balance
     const runOn = 'This paragraph runs over several pages without a single break, as a dense report sometimes does. '.repeat(70).trim();
-    const colsDoc = '---\nformat: jmd/2\nlayout: doc\ntitle: Cut\ncontents: none\ncover: none\n---\n# One paragraph\nIts lead.\n\n' + runOn + '\n\n---\ncolumns: 2\n---\n# Two columns\nThe lead spans both.\n\n' + Array.from({ length: 14 }, (_, i) => 'Column paragraph ' + i + ' — ' + 'set in two columns, it reads like a journal and fills them one after the other. '.repeat(3)).join('\n\n') + '\n';
+    const colsDoc = '---\nformat: jmd/3\nlayout: doc\ntitle: Cut\ncontents: none\ncover: none\n---\n# One paragraph\nIts lead.\n\n' + runOn + '\n\n---\ncolumns: 2\n---\n# Two columns\nThe lead spans both.\n\n' + Array.from({ length: 14 }, (_, i) => 'Column paragraph ' + i + ' — ' + 'set in two columns, it reads like a journal and fills them one after the other. '.repeat(3)).join('\n\n') + '\n';
     await p.eval(`jamesJmd.load(${JSON.stringify(colsDoc)}, "cut.jmd"); true`); await p.settle(400);
     const cutOf = JSON.parse(await p.eval(`JSON.stringify((() => { const parts = [...document.querySelectorAll('.slide:first-child p[data-part]')]; const sh = [...document.querySelectorAll('.sheet')]; const k = sh[0].getBoundingClientRect().width / 1280;
       const lines = parts.map(p => new Set([...p.getClientRects()].length ? (() => { const r = document.createRange(); r.selectNodeContents(p); return [...r.getClientRects()].map(x => Math.round(x.top)); })() : []).size);
@@ -1385,7 +1452,7 @@ try {
     ok(ed.i === 0 && ed.text === runOn && ed.hidden === cutOf.n - 1, 'a click on the second part of a cut paragraph, from another chapter: that chapter becomes current, the whole paragraph opens in place in its first part', JSON.stringify({ i: ed.i, hidden: ed.hidden, len: ed.text && ed.text.length }));
     await p.eval('document.activeElement.textContent = "A short paragraph now."; document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); true'); await p.settle(200);
     ok((await p.eval('jamesJmd.state.src')).includes('Its lead.\n\nA short paragraph now.\n\n---\ncolumns: 2') && await p.eval('document.querySelectorAll(".slide:first-child p[data-part]").length') === 0, 'committed: the paragraph is written back on its line, its other parts gone with it');
-    const spread = '---\nformat: jmd/2\nlayout: doc\ntitle: S\n---\n# T\nThe lead.\n\nA paragraph written\nover three lines\nof source.\n\nAfter.\n';
+    const spread = '---\nformat: jmd/3\nlayout: doc\ntitle: S\n---\n# T\nThe lead.\n\nA paragraph written\nover three lines\nof source.\n\nAfter.\n';
     await p.eval(`jamesJmd.load(${JSON.stringify(spread)}, "spread.jmd"); jamesJmd.state.editing || jamesJmd.edit(); true`); await p.settle(200);
     await p.eval('document.querySelector("p[data-span]").click(); true'); await p.settle(60);
     const spreadText = await p.eval('document.activeElement.textContent');

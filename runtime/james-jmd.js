@@ -40,7 +40,7 @@
       kb: ' KB', mb: ' MB',
       row: { file: 'file', runtime: 'runtime', author: 'author', slides: 'slides', layout: 'layout', brand: 'brand', theme: 'theme', story: 'story', language: 'language', date: 'date', images: 'images', size: 'size', source: 'imported from', format: 'format' },
       built: ' · built ', withNotes: ' with notes', asks: function (b) { return ' (the deck asks for ' + b + ')'; }, noIntents: '— (no intents)',
-      layoutMemo: function (n) { return 'memo · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'chapter', 'chapters'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'screen', 'screens'); },
+      layoutMemo: function (n) { return 'memo · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutMemoFlow: 'memo · A4 portrait, the text flows', layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'chapter', 'chapters'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'screen', 'screens'); },
       layoutWeb: function (n) { return 'webpage · one page, ' + s_(n, 'section', 'sections'); }, embedded: function (n) { return n + ' embedded'; }, none: 'none', srcSize: ' · source ',
       info: 'Info', editHeader: 'edit the header', lintSays: 'the linter has something to say', lintHappy: 'the linter is happy',
       document: 'Document', slide: 'Slide', lines: function (a, b) { return ' · lines ' + a + '–' + b; }, noHeader: ' · no header yet', edited: ' · edited',
@@ -49,6 +49,8 @@
       pdfWaits: 'The PDF waits for the errors below — they would print as they look.',
       shareOrDl: 'Share or download', dl: 'Download', jp: 'Share in Jamespot', jpAbout: 'publish it in a group of your platform, as a link to this deck — never its edit link',
       page: 'Page · .html', pageAbout: function (v) { return 'the deck in one file — opens in any browser, offline, and keeps its source · runtime ' + v; },
+      pageAttached: function (jp) { return ' · attached in Jamespot or a mail, it has to be downloaded before it opens: to show the deck, share its link' + (jp ? ' — J' : ''); },
+      home: 'Online · link', homeAbout: function (h) { return 'this deck has its page on ' + h + ': open it there to share its link — in Jamespot or a mail, a link opens where an .html file has to be downloaded first'; },
       pdfServer: 'to send or print — every page, drawn by the server', pdfPrint: 'through the print dialog: choose Save as PDF — waits for the errors the check reports',
       pptxAbout: 'for PowerPoint, Keynote, OnlyOffice — the text stays editable, the motion stays here', images: 'Images · .zip', imagesAbout: 'one PNG per screen, in a zip',
       drawing: function (k, s) { return 'Drawing ' + { pptx: 'the PowerPoint', pdf: 'the PDF', png: 'the images' }[k] + ' · ' + s + ' s'; },
@@ -63,7 +65,7 @@
       kb: ' Ko', mb: ' Mo',
       row: { file: 'fichier', runtime: 'moteur', author: 'auteur', slides: 'slides', layout: 'layout', brand: 'marque', theme: 'thème', story: 'récit', language: 'langue', date: 'date', images: 'images', size: 'taille', source: 'importé de', format: 'format' },
       built: ' · construit le ', withNotes: ' avec notes', asks: function (b) { return ' (le deck demande ' + b + ')'; }, noIntents: '— (pas d’intents)',
-      layoutMemo: function (n) { return 'memo · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'chapitre', 'chapitres'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'écran', 'écrans'); },
+      layoutMemo: function (n) { return 'memo · A4 portrait, ' + s_(n, 'page', 'pages'); }, layoutMemoFlow: 'memo · A4 portrait, le texte coule', layoutDoc: function (n) { return 'doc · A4 portrait, ' + s_(n, 'chapitre', 'chapitres'); }, layoutStory: function (n) { return 'story · 9:16, ' + s_(n, 'écran', 'écrans'); },
       layoutWeb: function (n) { return 'webpage · une page, ' + s_(n, 'section', 'sections'); }, embedded: function (n) { return n + (n === 1 ? ' intégrée' : ' intégrées'); }, none: 'aucune', srcSize: ' · source ',
       info: 'Infos', editHeader: 'modifier l’en-tête', lintSays: 'le linter a quelque chose à dire', lintHappy: 'le linter est content',
       document: 'Document', slide: 'Slide', lines: function (a, b) { return ' · lignes ' + a + '–' + b; }, noHeader: ' · pas encore d’en-tête', edited: ' · modifié',
@@ -72,6 +74,8 @@
       pdfWaits: 'Le PDF attend que les erreurs ci-dessous soient corrigées : elles s’imprimeraient telles quelles.',
       shareOrDl: 'Partager ou télécharger', dl: 'Télécharger', jp: 'Partager dans Jamespot', jpAbout: 'la publier dans un groupe de votre plateforme, en lien vers ce deck — jamais son lien de modification',
       page: 'Page · .html', pageAbout: function (v) { return 'le deck en un fichier — s’ouvre dans tout navigateur, hors ligne, et garde sa source · moteur ' + v; },
+      pageAttached: function (jp) { return ' · joint dans Jamespot ou un mail, il faut le télécharger pour l’ouvrir : pour montrer le deck, partagez son lien' + (jp ? ' — J' : ''); },
+      home: 'En ligne · lien', homeAbout: function (h) { return 'ce deck a sa page sur ' + h + ' : ouvrez-la pour partager son lien — dans Jamespot ou un mail, un lien s’ouvre, un fichier .html doit d’abord être téléchargé'; },
       pdfServer: 'à envoyer ou imprimer — toutes les pages, dessinées par le serveur', pdfPrint: 'par la fenêtre d’impression : choisissez Enregistrer en PDF — attend que les erreurs signalées soient corrigées',
       pptxAbout: 'pour PowerPoint, Keynote, OnlyOffice — le texte reste modifiable, le mouvement reste ici', images: 'Images · .zip', imagesAbout: 'un PNG par écran, dans un zip',
       drawing: function (k, s) { return 'Dessin ' + { pptx: 'du PowerPoint', pdf: 'du PDF', png: 'des images' }[k] + ' · ' + s + ' s'; },
@@ -83,7 +87,7 @@
   /* The page's fixed words (runtime/index.html), in French: each element carries `data-ui`, and its English stays in the
      template — the default, and what an export starts from. Ours, so innerHTML is safe here; nothing of a deck goes in. */
   var STATIC_FR = {
-    'hud.nav': ' naviguer', 'hud.present': ' présenter', 'hud.edit': ' modifier', 'hud.dl': ' télécharger', 'hud.open': ' ouvrir', 'hud.keys': ' toutes les touches',
+    'hud.nav': ' naviguer', 'hud.present': ' présenter', 'hud.edit': ' modifier', 'hud.dl': ' télécharger', 'hud.open': ' ouvrir', 'hud.keys': ' toutes les touches', 'hud.home': ' en ligne',
     'notes': 'Notes de l’orateur', 'help.lbl': 'james-jmd — touches',
     'help.dl': '<dt><kbd>←</kbd> <kbd>→</kbd> <kbd>Espace</kbd></dt><dd>slide précédente / suivante · en mouvement <em>step</em>, l’élément suivant d’abord</dd>'
       + '<dt><kbd>Début</kbd> <kbd>Fin</kbd></dt><dd>première / dernière slide</dd>'
@@ -92,7 +96,7 @@
       + '<dt><kbd>M</kbd></dt><dd>mouvement : <em>none · soft · slide · zoom · step</em> — un seul mode pour tout le deck, retenu ici</dd>'
       + '<dt><kbd>I</kbd></dt><dd>infos : le fichier, sa marque, son auteur, sa taille — et ce qu’en dit le linter</dd>'
       + '<dt><kbd>E</kbd></dt><dd>modifier : la source de la slide à droite ; cliquez un texte de la slide pour le modifier sur place · <em>document</em> ouvre l’en-tête (layout, titre, marque…)</dd>'
-      + '<dt><kbd>D</kbd></dt><dd>partager ou télécharger : <kbd>J</kbd> dans Jamespot, sur un deck à vous en ligne · <kbd>S</kbd> le deck en une page, <kbd>P</kbd> un PDF — et sur sa page du serveur <kbd>X</kbd> PowerPoint, <kbd>I</kbd> images · <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Entrée</kbd> marchent aussi</dd>'
+      + '<dt><kbd>D</kbd></dt><dd>partager ou télécharger : <kbd>J</kbd> dans Jamespot, sur un deck à vous en ligne · <kbd>L</kbd> sa page en ligne, sur la copie d’un deck qui en a une · <kbd>S</kbd> le deck en une page, <kbd>P</kbd> un PDF — et sur sa page du serveur <kbd>X</kbd> PowerPoint, <kbd>I</kbd> images · <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Entrée</kbd> marchent aussi</dd>'
       + '<dt><kbd>⌘S</kbd></dt><dd>enregistrer le <code>.jmd</code> (en mode modification)</dd>'
       + '<dt><kbd>Q</kbd></dt><dd>le QR code de ce deck, que la salle scanne — sur un deck partagé (sa page <code>/deck/…</code>)</dd>'
       + '<dt><kbd>O</kbd></dt><dd>ouvrir un autre <code>.jmd</code> — ou en déposer un sur la fenêtre</dd>'
@@ -239,7 +243,7 @@
     var leaving = state.slides[from], arriving = state.slides[state.i];
     track.dataset.dir = state.i > from ? 'next' : state.i < from ? 'prev' : 'same';
     state.slides.forEach(function (s, k) { s.classList.toggle('is-active', k === state.i); });
-    if (isDoc() && !show.fromScroll) { var sec = state.slides[state.i]; stage.scrollTo({ top: sec.getBoundingClientRect().top - stage.getBoundingClientRect().top + stage.scrollTop - 24, behavior: 'auto' }); } // the page comes to the top of the window
+    if (isDoc() && !show.fromScroll) { var sec = topOf(state.i); stage.scrollTo({ top: sec.getBoundingClientRect().top - stage.getBoundingClientRect().top + stage.scrollTop - 24, behavior: 'auto' }); } // the page comes to the top of the window
     stepReset(state.slides[state.i]); follow(state.slides[state.i]);
     fly(leaving, arriving);
     counter.textContent = pad2(state.i + 1) + ' / ' + state.slides.length;
@@ -282,7 +286,7 @@
     var fileSize = new Blob([document.documentElement.outerHTML]).size, srcSize = new Blob([state.src]).size;
     var rows = [
       ['file', state.name], ['runtime', 'james-jmd ' + RUNTIME_VERSION + (BUILT ? UI.built + BUILT : '')], m.author ? ['author', m.author] : null, ['slides', n + (withNotes ? ' · ' + withNotes + UI.withNotes : '')],
-      ['layout', state.layout === 'memo' ? UI.layoutMemo(n) : state.layout === 'doc' ? UI.layoutDoc(n) : state.layout === 'story' ? UI.layoutStory(n) : state.layout === 'webpage' ? UI.layoutWeb(n) : 'slide · 16:9'], ['brand', (brand.name || '—') + (brand.id ? ' · ' + brand.id : '') + (m.brand && brand.id && m.brand !== brand.id ? UI.asks(m.brand) : '')], ['theme', m.theme || '—'],
+      ['layout', state.layout === 'memo' ? UI.layoutMemo(n) : JMD.memoFlows(state.doc) ? UI.layoutMemoFlow : state.layout === 'doc' ? UI.layoutDoc(n) : state.layout === 'story' ? UI.layoutStory(n) : state.layout === 'webpage' ? UI.layoutWeb(n) : 'slide · 16:9'], ['brand', (brand.name || '—') + (brand.id ? ' · ' + brand.id : '') + (m.brand && brand.id && m.brand !== brand.id ? UI.asks(m.brand) : '')], ['theme', m.theme || '—'],
       ['story', (function () { var arc = state.slides.map(function (sec) { return sec.getAttribute('data-intent') || '·'; }); return arc.some(function (a) { return a !== '·'; }) ? arc.join(' › ') : UI.noIntents; })()],
       ['language', m.lang || '—'], ['date', m.date || '—'], ['images', imgs ? UI.embedded(imgs) : UI.none],
       ['size', fmtSize(fileSize) + UI.srcSize + fmtSize(srcSize)],
@@ -336,6 +340,7 @@
       if (state.doc !== doc) return;
       document.body.classList.add('is-measuring'); // no animation while measuring: a rising item would read 10px low
       JMD.paginate(track, state.layout); // a long document: its chapters laid out on as many A4 sheets as they take
+      if (track.querySelector('[data-of]') && !inView(state.i)) stage.scrollTop += topOf(state.i).getBoundingClientRect().top - stage.getBoundingClientRect().top - 24; // a memo's sections have just moved up onto each other's sheets
       fitOverflow(track, state.lint, state.layout); // a slide a little over the limit is shown smaller (warning), then measured
       lintOverflow(track, state.lint, state.layout);
       JMD.placeGlyphs(track, state.layout); // the poses that hang on a measure (act, decide): after the fit, which moves things
@@ -472,7 +477,7 @@
   function currentBg() { var m = /(?:^|\n)bg:\s*(\S+)/i.exec(editSrc.value.split(/\n---\s*\n/)[0] || ''); return m ? m[1].toLowerCase() : 'white'; }
   // the header's `layout:` line, cycled: the deck re-renders on the next page — the same matter, read as slides, pages, screens or one page
   // read through the parser, so a jmd/1 header's `doc` shows as the `memo` it means (spec/jmd.md § Versioning)
-  function currentLayout() { return JMD.layout(JMD.parse(editSrc.value)); }
+  function currentLayout() { return JMD.layoutWord(JMD.parse(editSrc.value)); }
   function cycleLayout() {
     var lines = editSrc.value.split('\n'), at = -1, fmt = -1;
     for (var i = 0; i < lines.length; i++) { if (/^layout:/i.test(lines[i]) && at < 0) at = i; if (/^format:/i.test(lines[i]) && fmt < 0) fmt = i; }
@@ -562,7 +567,7 @@
   }
   var inline_ = null; // { el, line, col, srcBefore }
   function findPiece(line, col) {
-    var sel = '.slide.is-active [data-line="' + line + '"]' + (col == null ? ':not([data-col])' : '[data-col="' + col + '"]');
+    var sel = '[data-line="' + line + '"]' + (col == null ? ':not([data-col])' : '[data-col="' + col + '"]');
     return track.querySelector(sel);
   }
   // Rendered-text offset under the pointer (before the element's text is swapped for its source).
@@ -594,7 +599,7 @@
     /* A paragraph the long document cut across two sheets is one text: it opens in its first part, the others hidden for
        the time of the edit, the caret where the pointer was counted over the parts before it. */
     if (el.hasAttribute('data-part')) {
-      var parts = Array.prototype.slice.call(track.querySelectorAll('.slide.is-active [data-line="' + line + '"][data-part]:not([data-col])'));
+      var parts = Array.prototype.slice.call(track.querySelectorAll('[data-line="' + line + '"][data-part]:not([data-col])'));
       var before = parts.slice(0, parts.indexOf(el)).map(function (p) { return p.textContent; }).join('');
       if (at != null) at += before.length;
       rendered = parts.map(function (p) { return p.textContent; }).join('');
@@ -649,20 +654,26 @@
     editSrc.scrollTop = Math.max(0, heightBefore(start) - editSrc.clientHeight / 3);
     editorHint();
   }
+  /* A memo's section may start on the last one's sheet: a piece says whose it is (`data-of`, paginate), wherever it landed. A source
+     line belongs to one section, so a text is found by its line alone. */
+  function chapterOf(el) { var of = el.closest('[data-of]'); return of ? +of.dataset.of : state.slides.indexOf(el.closest('.slide')); }
+  function inActive(el) { return chapterOf(el) === state.i; }
+  function topOf(k) { return track.querySelector('[data-of="' + k + '"]') || state.slides[k]; }
+  function inView(k) { var r = topOf(k).getBoundingClientRect(), box = stage.getBoundingClientRect(); return !r.width || (r.top >= box.top - 1 && r.top < box.bottom); }
   // the pages of a doc scroll: a text on another chapter's page makes that chapter the current one, without moving the page
   function reach(el) {
-    if (!el || !isDoc() || el.closest('.slide.is-active')) return el;
-    var to = state.slides.indexOf(el.closest('.slide')), at = stage.scrollTop, line = el.dataset.line, part = el.dataset.part, col = el.dataset.col;
+    if (!el || !isDoc() || inActive(el)) return el;
+    var to = chapterOf(el), at = stage.scrollTop, line = el.dataset.line, part = el.dataset.part, col = el.dataset.col;
     if (inline_) endInline(true);
     show.fromScroll = true; show(to); show.fromScroll = false; stage.scrollTop = at;
-    return track.querySelector('.slide.is-active [data-line="' + line + '"]' + (part != null ? '[data-part="' + part + '"]' : '') + (col == null ? ':not([data-col])' : '[data-col="' + col + '"]')) || el;
+    return track.querySelector('[data-line="' + line + '"]' + (part != null ? '[data-part="' + part + '"]' : '') + (col == null ? ':not([data-col])' : '[data-col="' + col + '"]')) || el;
   }
   track.addEventListener('mousedown', function (e) {
     if (!state.editing || e.button !== 0) return;
     var dn = e.target.closest && e.target.closest('[data-node-line]');
-    if (dn && dn.closest('.slide.is-active')) { e.preventDefault(); focusSourceLine(+dn.dataset.nodeLine); return; }
+    if (dn && inActive(dn)) { e.preventDefault(); focusSourceLine(+dn.dataset.nodeLine); return; }
     var el = reach(e.target.closest('[data-line]')); // only text pieces carry data-line (the slide itself carries data-start)
-    if (!el || !el.closest('.slide.is-active')) { e.preventDefault(); if (inline_) endInline(true); return; } // off a text: no native selection or image drag, just commit
+    if (!el || !inActive(el)) { e.preventDefault(); if (inline_) endInline(true); return; } // off a text: no native selection or image drag, just commit
     if (inline_ && inline_.el === el) return;
     e.preventDefault(); inlinePressed = true;
     beginInline(el, e.clientX, e.clientY);
@@ -695,10 +706,11 @@
     } else { download(name, state.src, 'text/markdown'); done(); }
   }
 
-  // Self-contained export: the pristine template + the source inside <script type="text/jmd">
+  // Self-contained export: the pristine template + the source inside <script type="text/jmd">, and the deck's page when it has one
   function exportSelfContained() {
+    var url = homeUrl || (hostedDeck() ? location.origin + hostedDeck() : '');
     var html = template.replace(/<script type="text\/jmd" id="jmd"[^>]*>[\s\S]*?(<\/script>)/, function (_, b) {
-      return '<script type="text/jmd" id="jmd" data-name="' + esc(state.name) + '">\n' + state.src.replace(/<\/script/gi, '<\\/script') + '\n' + b;
+      return '<script type="text/jmd" id="jmd"' + (url ? ' data-url="' + esc(url) + '"' : '') + ' data-name="' + esc(state.name) + '">\n' + state.src.replace(/<\/script/gi, '<\\/script') + '\n' + b;
     }).replace(/<script type="application\/json" id="assets">[\s\S]*?<\/script>/, function () {
       return '<script type="application/json" id="assets">' + JSON.stringify(assets).replace(/</g, '\\u003c') + '<\/script>';
     });
@@ -742,9 +754,10 @@
          only for the deck's owner, signed in, where Jamespot answers — so a file, a stranger or a 24-hour link never sees it.
          The page may not post (its CSP), so it is a link, to a new tab: the round trip to Jamespot leaves the deck open. */
       var jp = document.getElementById('dl-jamespot'), jpHref = jp && /^\/home\/share\?id=[A-Za-z0-9_-]{16}$/.test(jp.getAttribute('href')) ? jp.getAttribute('href') : '';
-      document.getElementById('dl-lbl').textContent = jpHref ? UI.shareOrDl : UI.dl;
+      document.getElementById('dl-lbl').textContent = jpHref || (homeUrl && !at) ? UI.shareOrDl : UI.dl;
       dlList.innerHTML = (jpHref ? item('a', 'href="' + jpHref + '" target="_blank" rel="noopener" data-share-jamespot', UI.jp, UI.jpAbout, 'J') : '')
-        + item('button', 'type="button" data-dl="html"', UI.page, UI.pageAbout(RUNTIME_VERSION), 'S')
+        + (homeUrl && !at ? item('a', 'href="' + esc(homeUrl) + '" target="_blank" rel="noopener" data-home', UI.home, UI.homeAbout(esc(homeUrl.split('/')[2])), 'L') : '')
+        + item('button', 'type="button" data-dl="html"', UI.page, UI.pageAbout(RUNTIME_VERSION) + (at ? UI.pageAttached(!!jpHref) : ''), 'S')
         + (at ? item('a', 'href="' + at + '/deck.pdf" download', 'PDF · .pdf', UI.pdfServer, 'P')
               : item('button', 'type="button" data-dl="pdf"', 'PDF · .pdf', UI.pdfPrint, 'P'))
         + (at && state.layout !== 'webpage' && state.layout !== 'doc' ? item('a', 'href="' + at + '/deck.pptx" download', 'PowerPoint · .pptx', UI.pptxAbout, 'X') : '')
@@ -781,7 +794,7 @@
   }
   dlList.addEventListener('click', function (e) {
     var b = e.target.closest('[data-dl]'), a = e.target.closest('a');
-    if (a && a.hasAttribute('data-share-jamespot')) { setTimeout(closeDownload, 0); return; } // a page in a new tab, not a file
+    if (a && (a.hasAttribute('data-share-jamespot') || a.hasAttribute('data-home'))) { setTimeout(closeDownload, 0); return; } // a page in a new tab, not a file
     if (b) { closeDownload(); if (b.getAttribute('data-dl') === 'pdf') printPDF(); else exportSelfContained(); }
     else if (a) { watchDownload(a); setTimeout(closeDownload, 0); } // the href carries the token before the browser follows it
   });
@@ -807,11 +820,23 @@
   }
   document.getElementById('hud-dl').addEventListener('click', toggleDownload);
   if (hostedDeck()) document.body.classList.add('is-hosted'); // a deck the server keeps: opening a file from disk over it is not what this page is for (O still works)
+  /* Its page online (spec/export.md, a copy that travels): the server writes it on the tag of the source (`data-url`) as the deck goes out, so a copy
+     that travels — attached in Jamespot or a mail, where an .html is downloaded, never shown — still leads to the link that opens.
+     Opened anywhere but there, the bar says « online » and D offers it (L). A link, never a call: the file stays offline. */
+  var homeUrl = (function (el) {
+    var u = el && el.getAttribute('data-url') || '';
+    return /^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?\/deck\/[A-Za-z0-9_-]{16}(\/v\/\d{1,4})?$/.test(u) ? u : '';
+  })(document.getElementById('jmd'));
+  if (homeUrl && !hostedDeck()) { document.getElementById('hud-home').setAttribute('href', homeUrl); document.body.classList.add('has-home'); }
 
   // Open: file picker, drag & drop, ?src=
   function readFile(f) {
     var r = new FileReader();
-    r.onload = function () { load(String(r.result), f.name); };
+    r.onload = function () {
+      var t = String(r.result), m = /<script type="text\/jmd" id="jmd"[^>]*>([\s\S]*?)<\/script>/.exec(t); // a deck's own .html: its source, read, never run
+      if (m) t = m[1].replace(/<\\\/script/g, '<' + '/script').replace(/^\n/, '').replace(/\n$/, '');
+      load(t, m ? f.name.replace(/(\.james-jmd)?\.html$/i, '.jmd') : f.name);
+    };
     r.readAsText(f);
   }
   document.getElementById('open-file').addEventListener('change', function (e) { if (e.target.files[0]) readFile(e.target.files[0]); });
@@ -890,8 +915,9 @@
     if (!isDoc() || !state.slides.length || stage.scrollHeight - stage.clientHeight < 2) return; // everything fits: the current page is the one chosen, not the first
     clearTimeout(scrollT);
     scrollT = setTimeout(function () {
+      if (track.querySelector('[data-of]') && inView(state.i)) return; // a memo holds several sections on a sheet: the one chosen stays current while it can be seen
       var top = stage.getBoundingClientRect().top + 40, best = 0;
-      state.slides.forEach(function (sec, k) { if (sec.getBoundingClientRect().top <= top) best = k; });
+      state.slides.forEach(function (sec, k) { if (topOf(k).getBoundingClientRect().top <= top) best = k; });
       if (best !== state.i) { show.fromScroll = true; show(best); show.fromScroll = false; }
     }, 80);
   });

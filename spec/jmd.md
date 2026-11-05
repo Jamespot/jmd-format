@@ -10,7 +10,7 @@ Status: **J1 (V1 read-only)** — eleven blocks (nine, and `table` / `chart` sin
 
 ```markdown
 ---
-format: jmd/2              ← required
+format: jmd/3              ← required
 layout: slide              ← always written: slide | doc | story | webpage — see "Layouts"; one word to change to switch
 title: Deck title
 brand: mono                ← brand: an id (themes/brands/<brand>.yaml) or the https URL of a brand.yaml; `theme:` and `template:` are synonyms
@@ -45,12 +45,15 @@ The same source, the same blocks, the same intents — a different page. `layout
 | Layout | Page | One `---` is… | Reading | Print / render |
 |---|---|---|---|---|
 | `slide` (default) | 1280 × 720, landscape | one screen | one at a time, `←` `→`, motion | one 1280 × 720 px page per slide |
-| `memo` | **A4 portrait** (210 × 297 mm) | one page | the pages stack and scroll; no motion | one A4 page per `---`; 794 × 1122 PNGs |
+| `memo` | **A4 portrait**, as many pages as the text takes | one section, going on on the same page | the pages stack and scroll; no motion | one A4 page per sheet the engine laid out; 794 × 1122 PNGs; no PowerPoint |
+| `memo` + `pages: fixed` | **A4 portrait** (210 × 297 mm) | one page | the pages stack and scroll; no motion | one A4 page per `---`; 794 × 1122 PNGs |
 | `doc` | **A4 portrait**, as many pages as the text takes | one chapter | the pages stack and scroll; no motion | one A4 page per sheet the engine laid out; 794 × 1122 PNGs; no PowerPoint |
 | `story` | **9:16 vertical**, 1080 × 1920 px | one screen | one at a time, `←` `→`, motion | one 1080 × 1920 page per `---` (a carousel PDF); 1080 × 1920 PNGs |
 | `webpage` | one **continuous page**, 1280 wide | one section, as tall as its content | scrolls | flows onto A4 sheets; one PNG per section |
 
-**Memo** is the one-pager, the memo, the leaflet: what is sent or printed rather than presented. A page holds a title, a lead and two to four blocks; the blocks keep their grammar and adapt their density to the portrait (four `metrics` go 2 × 2, four or five `cards` two abreast, a `timeline` of five or six runs down the page, a `.right` image sits below the text at full width). The page chrome carries the brand and the `section:` at the top, the document title and `n / N` at the foot. The linter measures each page against the A4 height and, on overflow, says to shorten or to start a new page with `---`.
+**Memo** *(jmd/3)* is the note, the review, the brief, the report of a meeting or an incident: a few pages read to the end, sent or printed rather than presented. It is the long document's engine with no cover and no contents: the header gives the title, `subtitle:`, `author:` and date at the top of the first page; a `---` opens a section that goes on where the last one stopped, `##` its title; the pages are white, the blocks set at reading size (10 pt and up on the sheet), and a dark intent or a `bg:` is not drawn (`memo-intent`, `doc-bg`) unless the section is a page of its own (`page: yes`).
+
+**Memo with `pages: fixed`** is the one-pager, the leaflet: one designed page per `---`, the memo of `jmd/2`. A page holds a title, a lead and two to four blocks; the blocks keep their grammar and adapt their density to the portrait (four `metrics` go 2 × 2, four or five `cards` two abreast, a `timeline` of five or six runs down the page, a `.right` image sits below the text at full width). The page chrome carries the brand and the `section:` at the top, the document title and `n / N` at the foot. The linter measures each page against the A4 height and, on overflow, says to shorten or to start a new page with `---`.
 
 **Doc** is the long document — the white paper, the report, the study, 10 to 30 pages and more *(jmd/2, 1.38.0; spec/doc.md)*. A `---` opens a chapter, which starts on a new page: `#` is its title (never a cover), the first paragraph its lead, then `##` sections and `###` sub-sections, `1.` numbered lists, `>` quotes, and a paragraph may be written over several lines. The blocks keep the Memo's A4 density. The engine lays the chapter out on as many sheets as it takes, in the browser where the text is measured: a block is never cut, a list is cut between two items and keeps its numbering, a heading never stays alone at the foot of a page. The running head is the chapter (its `section:` if it has one), the foot the document title and `n / N` counted over the whole document. Set for reading: left-aligned, from the top of the page. The linter has no page to measure a chapter against; it reports a single block taller than a page.
 
@@ -71,7 +74,7 @@ A chapter may be set in **two columns** (`columns: 2` in its frontmatter): its t
 | Key | Values | Rendering |
 |---|---|---|
 | `intent` | `hook` `problem` `reveal` `prove` `explain` `decide` `recap` `celebrate` `fun` `act` | what the slide is for — the theme turns it into form (background, density, emphasis, alignment); see `intents.md`. No intent = the neutral form below |
-| `bg` | `white` (default) `indigo` `accent` `sky` `lavender` `wash` `butter` | background of the neutral form (ignored when an intent is set); `indigo`, `accent` and `sky` turn text white and the title into an `h1` (`sky` uses the brand's `secondary`) |
+| `bg` | `white` (default) `indigo` `accent` `sky` `lavender` `wash` `butter` | background of the neutral form (ignored when an intent is set); `indigo`, `accent` and `sky` turn text white and the title into an `h1` (`sky` uses the brand's `secondary`; where white cannot be read on it, under 4.5:1, the text stays dark) |
 | `section` | text | top-right chrome; **sticky**: holds until a later slide redefines it |
 | `eyebrow` | text | mono kicker above the title, 16 px between the two |
 | `notes` | text | speaker notes (`N` key) |
@@ -323,7 +326,7 @@ The runtime edits a slide by editing its source lines (`E`), in a panel or in pl
 
 ## Versioning
 
-`format: jmd/2` at the top. The runtime reads any version ≤ its own and refuses a higher one with a clear message.
+`format: jmd/3` at the top. The runtime reads any version ≤ its own and refuses a higher one with a clear message.
 
 **A word that changes meaning moves the format up; adding a word, a block or a modifier never does.** The runtime keeps what the words of each past format meant (`UPGRADES` in `runtime/jmd-core.js`): `parse()` brings a document written in an older format up to the current meaning, step after step, and every reader — the render, the linter, the exports, the store's measures — sees the current meaning. The source is never rewritten by reading it: a `jmd/1` deck edited in place stays `jmd/1` and reads as it always did; the linter says, as an info, what it read differently. Moving a deck up is an explicit act (the editor's layout chip writes today's format with today's word). Each step has a frozen fixture in `tools/test.mjs`, so a missing step breaks a test, not a deck. The runtime's version (`1.38.0`) says what draws; the format's (`jmd/2`) what the words mean — only the second is in the file, and the latest runtime reads every past format.
 
@@ -331,3 +334,4 @@ The runtime edits a slide by editing its source lines (`E`), in a panel or in pl
 |---|---|---|
 | `jmd/1` | 0.1 | — |
 | `jmd/2` | 1.38.0 | `layout: doc` is the long document; the A4 page per `---` of `jmd/1`'s `doc` is `memo` |
+| `jmd/3` | next | `layout: memo` flows over its pages, with no cover and no contents; the A4 page per `---` of `jmd/2`'s `memo` is `memo` with `pages: fixed` |

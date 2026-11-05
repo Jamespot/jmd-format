@@ -1,0 +1,61 @@
+---
+format: jmd/3
+layout: memo
+title: Northwind Ops — outage of 12 March
+subtitle: Review of the incident, for the operations committee
+author: Operations
+date: 2026-03-19
+lang: en
+---
+
+---
+notes: A memo opens on what the reader must know. The title, the subtitle, the author and the date come from the header.
+---
+## In short
+
+The ticketing service was down for two hours and ten minutes on 12 March, after a certificate expired on the gateway. No data was lost. The response was quick once the alert reached the on-call team; the alert itself took forty minutes to arrive, and that is what this review proposes to change.
+
+::: metrics
+- 2 h 10 | outage | From the first failed request to full service.
+- 40 min | before the alert | The longest part of the outage.
+- 0 | data lost | Checked against the backups on 13 March.
+:::
+
+---
+notes: A `---` opens a section. It goes on on the same page, and the engine turns the page when it has to.
+---
+## What happened
+
+::: timeline
+- 09:12 | The certificate expires and requests start to fail.
+- 09:52 | The alert reaches the on-call team.
+- 10:30 | A new certificate is issued and deployed.
+- 11:22 | Full service is confirmed.
+:::
+
+The gateway's certificate was renewed by hand once a year, and the reminder went to a mailbox nobody reads since the team moved. The monitoring watched the application behind the gateway, which was healthy, so it stayed silent until customers wrote in.
+
+---
+notes: A list of what was decided keeps the words of the source. Whole sentences are read better than fragments on a card.
+---
+## What we keep
+
+- The on-call team had the right access and needed no one's approval to deploy.
+- Customers were told within fifteen minutes of the alert, on the status page and by mail.
+- The standard deployment path was followed, with no manual change left behind.
+
+---
+notes: Rows of owners and dates are a table. The owners still open are said so, never invented.
+---
+## What we change
+
+::: table
+| Priority | Action | Owner |
+|---|---|---|
+| High | Renew the gateway's certificate automatically | Infrastructure |
+| High | Watch the gateway from outside, as a customer would | To be named |
+| Medium | Send every expiry reminder to the team's own channel | Operations |
+| Medium | Rehearse this incident once a year | To be named |
+:::
+
+> Two owners are still to be named: the committee is asked to decide them on 26 March.

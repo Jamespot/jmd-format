@@ -99,6 +99,10 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 .slide--indigo{background:var(--jp-indigo-800);color:#fff}
 .slide--accent{background:var(--brand-accent);color:#fff}
 .slide--sky{background:var(--brand-secondary);color:#fff}
+/* `bg: sky` on a pale secondary: white cannot be read there (2.2:1 on Jamespot's cyan), so the words stay in ink and this page reads as a white one */
+.slide--skylight{background:var(--brand-secondary);color:var(--jp-ink)}
+.slide--skylight :is(.chrome-meta,.slide-tag,.slide-eyebrow,.slide-lead,.prose,.prose p,.prose ul,.slide-foot){color:var(--jp-ink)}
+.slide--skylight .table-wrap{background:var(--jp-surface)}
 /* the three "dark" backgrounds share the white-on-color chrome and type */
 .slide--accent .lockup,.slide--sky .lockup,.slide--accent .lockup svg,.slide--sky .lockup svg{color:#fff}
 .slide--accent .chrome-meta,.slide--sky .chrome-meta{color:rgba(255,255,255,.7)}
@@ -678,9 +682,10 @@ body:not(.motion-none):not(.is-editing) .slide.is-active .table tbody tr{animati
    counter). It never wraps and stops before the counter; short of room, the deck's name gives way, never a button. */
 #hud{max-width:calc(100vw - 150px);white-space:nowrap}#hud>*{flex-shrink:0}#hud>span:empty{display:none}#hud>#deckname{flex-shrink:1;min-width:72px}
 body.is-hosted #hud-open{display:none}
+#hud-home{display:none;color:inherit;text-decoration:none}body.has-home #hud-home{display:inline}#hud-home:hover kbd,#hud-home:focus-visible kbd{background:rgba(255,255,255,.22);color:#fff} /* a copy's way to its page online (spec/export.md, a copy that travels) */
 @media (max-width:900px){#hud .w{display:none}#hud{gap:10px}}
 @media (pointer:coarse){#hud>span{display:none}} /* a phone has no keys to list: the pill keeps the menu, a tap or a swipe turns the page */
-@media (pointer:coarse){#hud kbd,#dl kbd{display:none}#hud #hud-dl .w{display:inline;padding:4px 2px}} /* and a button says its word, not its key: a lone D means nothing to a thumb */
+@media (pointer:coarse){#hud kbd,#dl kbd{display:none}#hud #hud-dl .w,#hud #hud-home .w{display:inline;padding:4px 2px}} /* and a button says its word, not its key: a lone D means nothing to a thumb */
 /* the story bar (james-jmd.js): a touch screen only, a deck one turns screen by screen only — a Doc scrolls, print has none */
 #progress{display:none}
 @media (pointer:coarse){body:not(:is(.layout-memo,.layout-doc)):not(.layout-webpage):not(.is-editing) #progress{display:flex;position:fixed;z-index:45;top:env(safe-area-inset-top,0px);left:10px;right:10px;gap:4px}}
@@ -1177,6 +1182,28 @@ body:not(.motion-none):not(.is-editing) .slide--celebrate.is-active .wm-bit{anim
 .layout-doc .prose--long ol>li{counter-increment:jmd-ol;position:relative;padding-left:44px}
 .layout-doc .prose--long ol>li:before{content:counter(jmd-ol) ".";position:absolute;left:0;top:0;width:auto;height:auto;margin:0;border-radius:0;background:none;font-weight:800;color:var(--brand-accent)}
 .layout-doc .prose--long blockquote{margin:6px 0;padding:6px 0 6px 32px;border-left:5px solid var(--brand-accent);font-style:italic;color:var(--jp-ink-muted)}
+/* a memo (jmd/3): the long document's flow, set for a few pages read to the end. No cover: its head opens the first sheet; a section goes on where the last one stopped; and the blocks are at reading size (a memo printed at 7 pt was the RETEX test's finding) */
+.layout-doc .sheet--memo .memo-title{font-size:64px;line-height:1.08}
+.layout-doc .sheet--memo .memo-section{font-size:42px;line-height:1.14}
+.layout-doc .sheet--memo .slide-head:has(.memo-section):not(:first-child){margin-top:30px}
+.layout-doc .sheet--memo .memo-sub{margin:-8px 0 0;font-size:28px;line-height:1.45;color:var(--jp-ink-muted);text-align:left}
+.layout-doc .sheet--memo .memo-by{margin:-14px 0 8px;padding-bottom:22px;border-bottom:3px solid var(--brand-accent);font-family:var(--font-mono);font-size:19px;letter-spacing:.05em;text-transform:uppercase;color:var(--jp-ink-muted)}
+.layout-doc .sheet--memo .card h3{font-size:27px}
+.layout-doc .sheet--memo .card p,.layout-doc .sheet--memo .card li{font-size:22px;line-height:1.42}
+.layout-doc .sheet--memo .cards[style*="--n:5"] .card h3{font-size:27px}
+.layout-doc .sheet--memo .cards[style*="--n:5"] .card p{font-size:22px}
+.layout-doc .sheet--memo .pills .slide-pill{height:48px;padding:0 22px;font-size:20px}
+.layout-doc .sheet--memo .statement.statement--in-page .q{font-size:32px;line-height:1.25}
+.layout-doc .sheet--memo .statement.statement--in-page .attr{font-size:16px}
+.layout-doc .sheet--memo .metric .v{font-size:72px}
+.layout-doc .sheet--memo .metric .l{font-size:25px}
+.layout-doc .sheet--memo .metric .s{font-size:21px}
+.layout-doc .sheet--memo .table{font-size:23px}
+.layout-doc .sheet--memo .tl-step h4{font-size:26px}
+.layout-doc .sheet--memo .tl-step p{font-size:22px;line-height:1.4}
+.layout-doc .sheet--memo .col h3{font-size:27px}
+.layout-doc .sheet--memo .col li{font-size:22px}
+.layout-doc .slide:not(:has(.sheet)){display:none} /* a memo's section wholly on the last one's sheet: nothing left of its own */
 /* the front of a long document: the cover in the brand's deep color, the contents with their page numbers, the notes of a chapter */
 .layout-doc .sheet--cover{background:var(--jp-indigo-800);color:#fff}
 .layout-doc .sheet--cover .lockup{color:#fff}

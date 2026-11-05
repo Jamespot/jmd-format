@@ -58,6 +58,14 @@ export function sweep() {
   }
 }
 
+/* A page that navigates while an eval waits on it kills that eval: Chrome answers with one of these two messages, the suite
+   stops on a line that says nothing (cdp.mjs itself), and the next run passes. For the test suites only, which ask for it:
+   such an eval runs once more on the page that replaced it, and says so, and any eval that fails names what it was running.
+   Everything else keeps the plain behaviour: the service renders hostile decks, and a deck's source has no place in an error. */
+const LOST = /Execution context was destroyed|Inspected target navigated or closed/;
+let steady = false;
+export const steadyEval = (on = true) => { steady = on; };
+
 export class Browser {
   /* `lang` (1.34.0): the language the browser says it reads — what a deck page now follows for its own words (navigator)
      and what our pages read from Accept-Language. English by default, whatever the machine's own, so a check of a page's
@@ -123,8 +131,26 @@ export class Page {
       this.ws.send(JSON.stringify({ id, method, params }));
     });
   }
+  /** reload this tab and wait for its load event — an eval sent before that may die with the page it started on */
+  async reload() {
+    const loaded = new Promise(r => this.on('Page.loadEventFired', r));
+    await this.send('Page.reload'); await loaded;
+  }
+  /** wait until the page in this tab has loaded, whichever page that now is */
+  async loaded(ms = 10000) {
+    for (const end = Date.now() + ms; Date.now() < end && this.ws.readyState === 1; await new Promise(r => setTimeout(r, 50))) {
+      try { if ((await this.send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true })).result.value === 'complete') return; } catch { }
+    }
+  }
   async eval(expression) {
-    const r = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+    const run = () => this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+    const named = e => { e.message += ` — in: ${expression.slice(0, 160)}`; throw e; };
+    const r = !steady ? await run() : await run().catch(async e => {
+      if (!LOST.test(e.message)) named(e);
+      console.log(`  · the page changed under an eval, running it once more: ${expression.slice(0, 80)}`);
+      await this.loaded();
+      return run().catch(named);
+    });
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || 'evaluation error');
     return r.result.value;
   }

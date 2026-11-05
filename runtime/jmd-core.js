@@ -4,15 +4,17 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.45.0';
-  var FORMAT_MAX = 2;
+  var VERSION = '1.46.0';
+  var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
      format reads exactly as it did — on disk the source is never rewritten. Adding a word never moves the format.
      Each step returns what it changed, in words the linter shows; tools/test.mjs keeps a frozen fixture per past version. */
   var UPGRADES = {
     // jmd/2 (1.38.0): `doc` became the long document; the A4 page per `---` of jmd/1 is `memo`
-    1: function (doc) { if (doc.meta.layout === 'doc') { doc.meta.layout = 'memo'; return ['`layout: doc` read as `memo` (the A4 page per `---`); in jmd/2 `doc` is the long document']; } return []; }
+    1: function (doc) { if (doc.meta.layout === 'doc') { doc.meta.layout = 'memo'; return ['`layout: doc` read as `memo` (the A4 page per `---`); in jmd/2 `doc` is the long document']; } return []; },
+    // jmd/3 (RETEX test, 2026-11-05): a `memo` flows over its A4 pages; the A4 page per `---` of jmd/2 is `memo` with `pages: fixed`
+    2: function (doc) { if (doc.meta.layout === 'memo' && !doc.meta.pages) { doc.meta.pages = 'fixed'; return ['`layout: memo` read with `pages: fixed` (one A4 page per `---`); in jmd/3 a memo flows over its pages']; } return []; }
   };
   function formatOf(doc) { var m = /^jmd\/(\d+)$/.exec((doc && doc.meta && doc.meta.format) || ''); return m ? +m[1] : null; }
   function upgrade(doc) {
@@ -46,7 +48,12 @@ globalThis.JMD = (function () {
     return stem + (opts.version ? ' (v' + opts.version + ')' : '') + (suffix || '');
   }
 
-  function layout(doc) { var l = doc && doc.meta && doc.meta.layout; return PAGES[l] ? l : 'slide'; }
+  /* A memo flows (jmd/3): the long document's engine, its pages laid out for it, with no cover and no contents, and a `---` that
+     opens a section on the same sheet. So it draws as `doc`; only the word it was written with stays `memo` (the store, the
+     labels). `pages: fixed` keeps one designed A4 page per `---`: the leaflet, the one-pager. */
+  function memoFlows(doc) { return !!(doc && doc.meta) && doc.meta.layout === 'memo' && String(doc.meta.pages || '').toLowerCase() !== 'fixed'; }
+  function layout(doc) { if (memoFlows(doc)) return 'doc'; var l = doc && doc.meta && doc.meta.layout; return PAGES[l] ? l : 'slide'; }
+  function layoutWord(doc) { return memoFlows(doc) ? 'memo' : layout(doc); }
 
   /* Renaming a deck is **an edit of its source**, because that is where its name lives — `title:` in the document header,
      and `meta.title` is only what the store measured from it. One function, so the editor's Rename and `/me`'s make the
@@ -1414,7 +1421,7 @@ globalThis.JMD = (function () {
       max: 5,
       count: function (b) { return hasHeadings(b) ? sections(b).length : items(b).length; },
       render: function (b, ctx) {
-        var brand = (ctx && ctx.brand) || {}, marker = brand['card-marker'] || 'glyphs', glyphs = +brand.glyphs || 0, alt = brand['card-fill'] === 'alternate';
+        var brand = (ctx && ctx.brand) || {}, marker = brand['card-marker'] || 'glyphs', glyphs = +brand.glyphs || 0, alt = brand['card-fill'] === 'alternate' && !(ctx && ctx.layout === 'doc' && ctx.memoFlow); // a memo is read at text size: no white words on the vivid fill
         var start = ctx ? (ctx.cardBlocks = (ctx.cardBlocks || 0) + 1) - 1 : 0; // each cards block starts one shape further: no two slides look alike
         var cards = hasHeadings(b)
           ? sections(b).map(function (c) { return { title: c.title, text: c.text, items: c.items, attrs: c.attrs, line: c.line, textLines: c.textLines, itemLines: c.itemLines, order: c.order, col: null }; })
@@ -1652,6 +1659,12 @@ globalThis.JMD = (function () {
     return null;
   }
   var ctx_lines_cache = null;
+  // a color white cannot be read on (under 4.5:1); not a hex color (a brand that names none): unknown, the words stay as they were
+  function isLight(c) {
+    var m = /^#([0-9a-f]{6})$/i.exec(String(c || '').trim()); if (!m) return false;
+    var L = [0, 2, 4].reduce(function (sum, at, i) { var v = parseInt(m[1].substr(at, 2), 16) / 255; return sum + [0.2126, 0.7152, 0.0722][i] * (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); }, 0);
+    return 1.05 / (L + 0.05) < 4.5;
+  }
   function renderSlide(slide, idx, ctx) {
     var m = slide.meta, intent = INTENTS.indexOf(m.intent) >= 0 ? m.intent : null;
     if (ctx.layout === 'doc' && isPage(m)) return renderDocPage(slide, idx, ctx);
@@ -1662,11 +1675,14 @@ globalThis.JMD = (function () {
        A chapter's own pages are white: `bg:` belongs to a page. */
     var opener = ctx.layout === 'doc' && intent && DOC_INTENTS.indexOf(intent) < 0 ? intent : null;
     if (opener) intent = null;
+    var memoFlow = ctx.layout === 'doc' && !!ctx.memoFlow;
+    if (memoFlow) opener = null; // a memo has no cover: a dark intent opens no page there (`memo-intent`), `page: yes` is the way to one
     var bg = ctx.layout === 'doc' ? 'white' : intent ? INTENT_BG[intent] : (m.bg || 'white'); // an intent sets the background itself
+    if (bg === 'sky' && isLight(ctx.brand.secondary || ctx.brand.accent)) bg = 'skylight'; // white on a pale secondary cannot be read: the words go dark
     if (m.section) ctx.section = m.section;
     var dark = bg === 'indigo' || bg === 'accent' || bg === 'sky';
     // a long document's running head is its chapter: the `section:` written on it, else its title
-    var chapter = ctx.layout === 'doc' ? (m.section || (slide.nodes.find(function (n) { return n.type === 'title'; }) || {}).text || ctx.section || '') : '';
+    var chapter = memoFlow ? '' : ctx.layout === 'doc' ? (m.section || (slide.nodes.find(function (n) { return n.type === 'title'; }) || {}).text || ctx.section || '') : '';
     LONG = ctx.layout === 'doc' ? { anchor: 'ch-' + (idx + 1), heads: [], defs: chapterNotes(slide), order: [] } : null;
     var chrome = '<div class="slide-chrome"><div class="lockup"><svg><use href="#brand-mark"/></svg>' + esc(ctx.brand.name || '') + '</div>' +
       '<div class="chrome-meta">' + (ctx.layout === 'doc' ? inline(chapter).replace(/<[^>]*>/g, '') : esc(ctx.section || '')) + '</div></div>';
@@ -1696,22 +1712,28 @@ globalThis.JMD = (function () {
        a text or another block (1.37.1: Circuit's cover — a title, its lead, its cards and a closing quote), it is drawn
        small inside the page — the page never loses what was written on it to make room for one block (until 1.37.1 it
        did, silently), and the linter says so (`full-alone`). */
-    var full = slide.nodes.length === 1 && slide.nodes.find(function (n) { return n.type === 'block' && BLOCKS[n.name] && BLOCKS[n.name].full; });
-    var crowded = slide.nodes.filter(function (n) { return n.type !== 'title'; }).length > 1;
+    var full = !memoFlow && slide.nodes.length === 1 && slide.nodes.find(function (n) { return n.type === 'block' && BLOCKS[n.name] && BLOCKS[n.name].full; });
+    var crowded = memoFlow || slide.nodes.filter(function (n) { return n.type !== 'title'; }).length > 1; // in a memo nothing fills a page alone: the text goes on around it
     var inner;
     if (full) {
       inner = BLOCKS[full.name].render(full, ctx);
     } else {
       var head = '';
       if (m.eyebrow || title) {
-        var h = title && title.level === 1 && ctx.layout !== 'doc' ? 'h1' : 'h2', hc = ctx.layout === 'doc' ? 'slide-h2 doc-title' : title && title.level === 1 ? 'slide-h1' : 'slide-h2';
+        var h = title && title.level === 1 && ctx.layout !== 'doc' ? 'h1' : 'h2', hc = memoFlow ? 'slide-h2 doc-title ' + (idx === 0 && title && title.level === 1 ? 'memo-title' : 'memo-section') : ctx.layout === 'doc' ? 'slide-h2 doc-title' : title && title.level === 1 ? 'slide-h1' : 'slide-h2';
         head = '<div class="slide-head">' +
           (m.eyebrow ? '<div class="slide-eyebrow"' + src(metaLine(slide, 'eyebrow')) + '>' + inline(m.eyebrow) + '</div>' : '') +
           (title ? '<' + h + ' class="' + hc + '"' + (LONG ? ' id="' + LONG.anchor + '"' : '') + src(title.map[0]) + '>' + inline(title.text) + '</' + h + '>' : '') +
           '</div>';
       }
+      if (memoFlow && idx === 0) { // the head of a memo: its title, then what the header says of it. A `#` on the first section is that title
+        var own = title && title.level === 1, named = own ? '' : (ctx.memo.title ? '<div class="slide-head"><h1 class="slide-h2 doc-title memo-title">' + inline(ctx.memo.title) + '</h1></div>' : '');
+        var memoSub = (ctx.memo.subtitle ? '<p class="memo-sub">' + inline(ctx.memo.subtitle) + '</p>' : '') + (ctx.memo.by ? '<p class="memo-by">' + ctx.memo.by + '</p>' : '');
+        head = own ? head + memoSub : named + memoSub + head;
+      }
       var body = slide.nodes.map(function (n) {
         if (n.type === 'title') return '';
+        if (n.type === 'lead' && memoFlow && n.text.length > 200) return '<div class="prose prose--long"><p' + src(n.map[1] - n.map[0] === 1 ? n.map[0] : null) + '>' + inline(n.text) + '</p></div>'; // a memo keeps its source's sentences: a whole paragraph is read as one, not blown up
         if (n.type === 'lead') return '<p class="slide-lead"' + src(n.map[1] - n.map[0] === 1 ? n.map[0] : null) + '>' + inline(n.text) + '</p>';
         if (n.type === 'prose') return ctx.layout === 'doc' ? renderLongProse(n) : renderProse(n);
         if (n.type === 'image') {
@@ -1751,7 +1773,7 @@ globalThis.JMD = (function () {
       : '<div class="wm wm--' + esc(wm) + ' wm--' + (idx % 2 ? 'b' : 'a') + '" aria-hidden="true">' + (wm === 'mark' ? '<svg class="wm-g">' + glyph + '</svg>' + (intent === 'celebrate' ? new Array(7).join('<svg class="wm-bit">' + glyph + '</svg>') : '') : '') + '</div>';
     var page = watermark + chrome + inner + tag;
     if (ctx.layout === 'doc') {
-      page = '<div class="sheet">' + page + '</div>'; // paginate() adds the sheets the chapter needs
+      page = '<div class="sheet' + (memoFlow ? ' sheet--memo' : '') + '">' + page + '</div>'; // paginate() adds the sheets the chapter needs
       if (opener) page = '<div class="sheet sheet--opener slide--' + INTENT_BG[opener.intent] + ' slide--' + opener.intent + ' slide--intent" data-intent="' + opener.intent + '">' +
         '<div class="wm wm--' + esc(wm === 'none' ? 'none' : wm) + ' wm--a" aria-hidden="true">' + (wm === 'mark' ? '<svg class="wm-g">' + glyph + '</svg>' : '') + '</div>' + chrome +
         '<div class="body-pad">' + opener.head + '</div>' + tag + '</div>' + page;
@@ -1794,8 +1816,9 @@ globalThis.JMD = (function () {
   function render(doc, ctx) {
     ctx_lines_cache = doc.lines || null;
     var c = { brand: withWatermark((ctx && ctx.brand) || {}, doc.meta.watermark), assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', lang: doc.meta.lang || '', chapters: [] };
+    if (memoFlows(doc)) { c.memoFlow = true; c.memo = { title: doc.meta.title || '', subtitle: doc.meta.subtitle || '', by: [doc.meta.author, doc.meta.date].filter(Boolean).map(function (x) { return inline(x); }).join(' · ') }; }
     var html = doc.slides.map(function (s, i) { return renderSlide(s, i, c); });
-    if (c.layout === 'doc' && html.length) html[0] = html[0].replace(/^(<section[^>]*>)/, function (open) { return open + frontMatter(doc, c); });
+    if (c.layout === 'doc' && !c.memoFlow && html.length) html[0] = html[0].replace(/^(<section[^>]*>)/, function (open) { return open + frontMatter(doc, c); });
     return html.join('\n');
   }
 
@@ -1883,6 +1906,7 @@ globalThis.JMD = (function () {
     if (!fv) err(0, null, 'format', 'missing or invalid `format: jmd/' + FORMAT_MAX + '` header');
     else if (+fv[1] > FORMAT_MAX) err(0, null, 'format', 'format jmd/' + fv[1] + ': this runtime reads up to jmd/' + FORMAT_MAX);
     (doc.upgraded || []).forEach(function (m) { info(0, null, 'format', 'format jmd/' + fv[1] + ': ' + m + ' — write `format: jmd/' + FORMAT_MAX + '` and the word of today to change it'); });
+    if (doc.meta.pages && String(doc.meta.pages).toLowerCase() !== 'fixed') err(0, null, 'pages', '`pages: ' + doc.meta.pages + '`: the one value is `fixed`, one A4 page per `---` on a memo; a memo without it flows');
     if (doc.meta.layout && !PAGES[doc.meta.layout]) err(0, null, 'layout', 'unknown layout `' + doc.meta.layout + '`: ' + LAYOUTS.join(', ') + ' (no layout = slide)');
     else if (!doc.meta.layout && fv) info(0, null, 'layout', 'no `layout:` in the header — write `layout: slide`: one word the user changes to make it a doc, a story or a webpage');
     if (doc.meta.watermark && WATERMARKS.indexOf(doc.meta.watermark) < 0) err(0, null, 'watermark', 'unknown watermark `' + doc.meta.watermark + '`: ' + WATERMARKS.join(', ') + ' (no watermark: = the brand\'s)');
@@ -1905,7 +1929,9 @@ globalThis.JMD = (function () {
       var fullHere = blocks.find(function (b) { return BLOCKS[b.name] && BLOCKS[b.name].full; });
       // in a doc a chapter is running text: a statement there is a pull quote, drawn in the flow on purpose
       if (fullHere && layout(doc) !== 'doc' && s.nodes.filter(function (x) { return x.type !== 'title'; }).length > 1) warn(n, fullHere.name, 'full-alone', '`::: ' + fullHere.name + '` fills a page alone, or under its title; beside a text or another block it is drawn small inside the page — to give it the whole page, put it on a page of its own after a `---`');
-      if (layout(doc) === 'doc' && !isPage(m) && m.bg && m.bg !== 'white') warn(n, null, 'doc-bg', '`bg: ' + m.bg + '` on a chapter is not drawn: its reading pages are white — a colored page is a page of its own (`page: yes`), or the opening page a dark intent gives the chapter');
+      if (memoFlows(doc) && !isPage(m) && m.intent && INTENTS.indexOf(m.intent) >= 0 && DOC_INTENTS.indexOf(m.intent) < 0) warn(n, null, 'memo-intent', '`intent: ' + m.intent + '`: a memo has no opening page, this intent is not drawn — leave it out, or set `page: yes` to give this section a page of its own');
+      if (doc.meta.layout === 'memo' && !memoFlows(doc) && ['accent', 'indigo'].indexOf(m.intent ? INTENT_BG[m.intent] : m.bg) >= 0 && s.nodes.some(function (x) { return x.type === 'prose' || (x.type === 'block' && ['metrics', 'statement', 'section'].indexOf(x.name) < 0); })) warn(n, null, 'memo-dark', 'a colored background on a page of small text is hard to read on paper: keep it for a page of large words (a title, a figure, a sentence), leave the others white');
+      if (layout(doc) === 'doc' && !isPage(m) && m.bg && m.bg !== 'white') warn(n, null, 'doc-bg', memoFlows(doc) ? '`bg: ' + m.bg + '` on a section is not drawn: a memo\'s pages are white — a colored page is a page of its own (`page: yes`)' : '`bg: ' + m.bg + '` on a chapter is not drawn: its reading pages are white — a colored page is a page of its own (`page: yes`), or the opening page a dark intent gives the chapter');
       if (layout(doc) === 'doc' && m.columns != null && ['1', '2'].indexOf(String(m.columns)) < 0) err(n, null, 'columns', '`columns: ' + m.columns + '`: a chapter has 1 or 2 columns');
       if (layout(doc) === 'doc') { // notes: a call with no text is an error, a text never called a warning
         var defs = chapterNotes(s), called = {};
@@ -1919,7 +1945,7 @@ globalThis.JMD = (function () {
       }
       if (title && title.text.length > 60) warn(n, null, 'title-length', 'title is ' + title.text.length + ' characters, 60 recommended');
       var lead = s.nodes.find(function (x) { return x.type === 'lead'; });
-      if (lead && lead.text.length > 200) warn(n, null, 'lead-length', 'lead is ' + lead.text.length + ' characters, 200 recommended');
+      if (lead && lead.text.length > 200 && !memoFlows(doc)) warn(n, null, 'lead-length', 'lead is ' + lead.text.length + ' characters, 200 recommended');
       var rights = s.nodes.filter(function (x) { return x.type === 'image' && has(x.attrs, 'right'); });
       if (rights.length > 1) err(n, null, 'one-right-image', 'only one image can sit on the right of a slide');
       if (['doc', 'webpage'].indexOf(layout(doc)) < 0 && !isShot(s, layout(doc)) && s.nodes.some(function (x) { return x.type === 'image' && has(x.attrs, 'wide'); }))
@@ -2151,8 +2177,10 @@ globalThis.JMD = (function () {
     var page = PAGES[lay]; if (!page || !page.sheets) return 0;
     var slice = function (x) { return Array.prototype.slice.call(x); };
     var isHead = function (el) { return /^H[34]$/.test(el.tagName); };
+    var carry = null; // a memo: the sheet its next section goes on, where the last one stopped
     slice(track.querySelectorAll('.sheet')).forEach(function (first) {
-      var body = first.querySelector('.body-pad'); if (!body || first.classList.contains('sheet--page')) return; // a page of its own is one page, as written
+      var body = first.querySelector('.body-pad'); if (!body || first.classList.contains('sheet--page')) { carry = null; return; } // a page of its own is one page, as written
+      var memo = first.classList.contains('sheet--memo'), section = first.parentNode;
       // the pieces, in order: a prose opened into its paragraphs, headings, lists and quotes, each keeping the class of its
       // box (the contents' `toc`) and whether it lives in the columns
       var pieces = [];
@@ -2163,10 +2191,12 @@ globalThis.JMD = (function () {
           else pieces.push({ el: el, prose: '', cols: cols });
         });
       })(body, false);
+      if (memo) { var of = String(slice(track.querySelectorAll('.slide')).indexOf(section)); pieces.forEach(function (pc) { pc.el.setAttribute('data-of', of); }); } // it may land in another section's sheet: the editor reads whose it is
       body.textContent = '';
       var shell = first.cloneNode(true); // an empty sheet: the chrome, the watermark, the foot — the body to fill, on white
       shell.className = shell.className.split(' ').filter(function (c) { return !/^slide--|^sheet--opener$/.test(c); }).join(' '); shell.removeAttribute('data-intent');
       var sheet = first, cur = body, here = []; // `here`: the pieces on the current sheet
+      if (memo && carry) { first.remove(); sheet = carry.sheet; cur = carry.cur; here = carry.here; }
       var frame = function () { var r = sheet.getBoundingClientRect(); return { top: r.top, k: r.width / page.w }; };
       var colsOf = function (pc) { return pc.cols ? pc.el.closest('.doc-cols') : null; };
       var outRect = function (r, f, box) { return (r.bottom - f.top) / f.k > page.limit + 0.5 || (box && r.left > box.right - 1); };
@@ -2194,7 +2224,8 @@ globalThis.JMD = (function () {
       };
       var tidy = function () { slice(cur.querySelectorAll('.prose--long, .doc-cols')).reverse().forEach(function (p) { if (!p.children.length) p.remove(); }); };
       var newSheet = function () {
-        var next = shell.cloneNode(true); sheet.parentNode.insertBefore(next, sheet.nextSibling);
+        var next = shell.cloneNode(true);
+        if (sheet.parentNode === section) section.insertBefore(next, sheet.nextSibling); else section.appendChild(next); // a section that began on the last one's sheet holds what goes past it
         sheet = next; cur = next.querySelector('.body-pad'); here = [];
       };
       /* A paragraph that crosses the foot is cut between two lines: its words are read off the page, the first one out
@@ -2240,13 +2271,15 @@ globalThis.JMD = (function () {
         pc.el.remove(); here.pop();
         // a heading goes with what it heads — unless it would leave the sheet empty
         var moved = [pc];
-        while (here.length > 1 && here[here.length - 1].prose && isHead(here[here.length - 1].el)) { var h = here.pop(); h.el.remove(); moved.unshift(h); }
+        // and in a memo, where a section can start low on a sheet, its title and its lead go with what they open
+        while (here.length > 1 && ((here[here.length - 1].prose && isHead(here[here.length - 1].el)) || (memo && /(^| )(slide-head|slide-lead)( |$)/.test(here[here.length - 1].el.className)))) { var h = here.pop(); h.el.remove(); moved.unshift(h); }
         tidy(); newSheet();
         moved.slice(0, -1).forEach(place); // the headings that go with it
         k--; // and the piece itself is laid out again on the new sheet, where a long list or paragraph is cut again
       }
       tidy();
       var last = cur.querySelector('.doc-cols'); if (last) { last.style.height = ''; last.classList.add('doc-cols--end'); } // the last sheet of a chapter in columns: balanced
+      carry = memo ? { sheet: sheet, cur: cur, here: here } : null;
     });
     var sheets = Array.prototype.slice.call(track.querySelectorAll('.sheet')), n = sheets.length, pad = function (x) { return x < 10 ? '0' + x : String(x); };
     sheets.forEach(function (sh, i) { var t = sh.querySelector('.slide-tag'); if (t) t.textContent = pad(i + 1) + ' / ' + pad(n); });
@@ -2304,6 +2337,8 @@ globalThis.JMD = (function () {
       var scale = r0.width / page.w;
       var bottom = (r1.bottom - r0.top) / scale;
       if (page.limit && bottom > page.limit) out.push({ level: 'error', slide: i + 1, block: null, rule: 'overflow', message: 'content reaches ' + Math.round(bottom) + 'px, limit ' + page.limit + ': shorten a text or remove an item' + (page.flow === 'scroll' ? ', or start a new page with `---`' : lay === 'story' ? ', or split the screen in two with `---`' : '') });
+      // a designed page that stops halfway reads as a page left unfinished: the text may flow (take `pages: fixed` off) or two pages may be one
+      if (lay === 'memo' && bottom < page.h * 0.5 && !sec.classList.contains('slide--cover') && !sec.classList.contains('slide--intent') && sec.querySelector('.body-pad')) out.push({ level: 'warning', slide: i + 1, block: null, rule: 'page-empty', message: 'the page stops at ' + Math.round(bottom / page.h * 100) + ' % of its height: join it with the next page, or let the memo flow (remove `pages: fixed`)' });
       Array.prototype.forEach.call(sec.querySelectorAll('.metric, .card, .col, .tl-step'), function (el) {
         if (el.scrollHeight > el.clientHeight + 1) out.push({ level: 'error', slide: i + 1, block: el.className.split(' ')[0], rule: 'overflow', message: 'text overflows its box (' + el.className + ')' });
       });
@@ -2314,5 +2349,5 @@ globalThis.JMD = (function () {
     return out;
   }
 
-  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withoutChapter: withoutChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
+  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, layoutWord: layoutWord, memoFlows: memoFlows, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withoutChapter: withoutChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
 })();
