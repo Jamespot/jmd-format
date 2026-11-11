@@ -95,6 +95,7 @@ export class Browser {
     const p = new Page(ws, t.id, this.port);
     await p.send('Page.enable'); await p.send('Runtime.enable');
     if (!network) { await p.send('Network.enable'); await p.send('Network.setBlockedURLs', { urls: BLOCKED_URLS }); await p.navigate(url); }
+    else if (url !== 'about:blank') await p.arrived(); // /json/new answers before the tab has left about:blank (2026-11-11)
     return p;
   }
   /** End Chrome and remove its profile — once Chrome has left it (it writes there while it shuts down); when the process is
@@ -140,6 +141,15 @@ export class Page {
   async loaded(ms = 10000) {
     for (const end = Date.now() + ms; Date.now() < end && this.ws.readyState === 1; await new Promise(r => setTimeout(r, 50))) {
       try { if ((await this.send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true })).result.value === 'complete') return; } catch { }
+    }
+  }
+  /** wait until the tab has left the about:blank it was opened on and its page has loaded. `/json/new?<url>` answers while the
+      tab still holds about:blank, itself "complete": an eval sent then read an empty document — `getElementById(…)` null on a
+      cold CI runner, a red main that a rerun turned green (2026-11-11). */
+  async arrived(ms = 10000) {
+    const expression = `location.href !== 'about:blank' && document.readyState === 'complete'`;
+    for (const end = Date.now() + ms; Date.now() < end && this.ws.readyState === 1; await new Promise(r => setTimeout(r, 50))) {
+      try { if ((await this.send('Runtime.evaluate', { expression, returnByValue: true })).result.value === true) return; } catch { }
     }
   }
   async eval(expression) {
