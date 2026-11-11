@@ -1,0 +1,61 @@
+---
+format: jmd/3
+layout: slide
+title: A charter is more than colours
+lang: en
+date: 2026-11-09
+---
+
+---
+intent: hook
+section: Brand decor
+notes: Build it with --brand decks/samples/decor/decor.yaml to see the charter's own elements.
+---
+# A charter is more than colours.
+A background, a band, a corner, a pattern: what comes back on every page.
+
+---
+intent: problem
+eyebrow: What designers see
+notes: The dark pages get the curves, in the brand's colour.
+---
+## Every deck looked like the same template, recoloured.
+
+::: cards
+- Colours | Already there, with the typeface and the logo.
+- Computed decor | Glyphs and watermark come from the logo's shape.
+- Own elements | A curve, a corner, a glow: now the brand brings them.
+:::
+
+---
+intent: explain
+eyebrow: Where they go
+notes: Cover, light and dark pages: the words a charter uses.
+---
+## One element, one place, the pages it goes on.
+
+::: timeline
+- Cover | The large glow, the curves.
+- Light pages | A discreet corner, a rule along the foot.
+- Dark pages | Thin lines in the brand's colour, faint. {.now}
+- The end | The same cover, to close the deck.
+:::
+
+---
+intent: prove
+eyebrow: How it stays safe
+notes: Data, never code: the same allowlist as the logo.
+---
+## A drawing, never a picture.
+
+::: metrics
+- SVG | only | Rebuilt by the logo's allowlist, painted in the brand's colours.
+- 0 | requests when opened | Everything is embedded at build. {.hero}
+- 6 | elements at most | Each with a place, a size and its pages.
+:::
+
+---
+intent: act
+notes: Last slide.
+---
+## Set it once in the brand, find it in every deck.

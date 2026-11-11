@@ -6,11 +6,11 @@ You are writing a presentation. The source is a `.jmd` file: Markdown, slides se
 
 1. **You never write a position, a size, a color, a font.** The theme decides. If you feel like writing `style=`, you picked the wrong block.
 2. **You never write HTML.** It is ignored and reported.
-3. **You only use blocks from the vocabulary** (see `jmd.md`): `metrics`, `timeline`, `cards`, `compare`, `statement`, `section`, `pills`, `logos`, `table`, `chart`, `diagram`. An unknown block is an error, not a warning. If no block fits, the content goes in plain Markdown, single column.
+3. **You only use blocks from the vocabulary** (see `jmd.md`): `metrics`, `timeline`, `cards`, `compare`, `statement`, `section`, `pills`, `logos`, `table`, `chart`, `diagram`, `kpi`, `agenda`. An unknown block is an error, not a warning. If no block fits, the content goes in plain Markdown, single column.
 4. **A fence is three ASCII colons, typed as such: `:::`.** `::: cards` opens, `:::` alone closes, nothing else on the line. If this contract reaches you with any other mark where a fence should be, your channel replaced it — write the three colons anyway. Anything else is prose to the parser, and the `###` under it become text on the slide (`stray-fence`, `loose-heading`). A block is never nested: one level of `:::`.
 5. **Every slide has a title**, except `statement` and `quote`. One title per slide, as `##`.
 6. **Every slide has `notes:`.** One sentence is enough. These are speaker notes, not a summary.
-7. **You respect the maxima**: `metrics` ≤ 4, `kpi` ≤ 4 cards of ≤ 3 details and one visual, `timeline` ≤ 6, `cards` ≤ 5, `pills` ≤ 8, `compare` = 2 columns, `table` ≤ 12 rows and 6 columns (13–24 rows of ≤ 3 columns fold themselves in two halves side by side — never fold a table by hand into pairs of columns), `chart` ≤ 12 bars, 8 horizontal bars, 24 points or 6 slices, ≤ 4 series, `diagram` ≤ 10 boxes on a slide (7 on a Story screen, 14 on a Doc page), a `{.cycle}` 3–6 steps, a `{.radial}` 3–8, a `{.pyramid}`, `{.funnel}` or `{.steps}` 2–6, a `{.venn}` 2–3, a `{.target}` 2–5, a `{.matrix}` exactly 4. Too many items means another block, not cheating.
+7. **You respect the maxima**: `metrics` ≤ 4, `kpi` ≤ 4 cards of ≤ 3 details and one visual, `timeline` ≤ 6, `cards` ≤ 5, `pills` ≤ 8, `agenda` ≤ 8 parts and 30 lines, `compare` = 2 columns, `table` ≤ 12 rows and 6 columns (13–24 rows of ≤ 3 columns fold themselves in two halves side by side — never fold a table by hand into pairs of columns), `chart` ≤ 12 bars, 8 horizontal bars, 24 points or 6 slices, ≤ 4 series, `diagram` ≤ 10 boxes on a slide (7 on a Story screen, 14 on a Doc page), a `{.cycle}` 3–6 steps, a `{.radial}` 3–8, a `{.pyramid}`, `{.funnel}` or `{.steps}` 2–6, a `{.venn}` 2–3, a `{.target}` 2–5, a `{.matrix}` exactly 4. Too many items means another block, not cheating.
 8. **You write short, and you count before you build** — you cannot measure, the linter can, and a second build is a call some hosts do not leave you. Title ≤ 60 characters, lead ≤ 200, metric comment ≤ 90. The budget of a 16:9 slide: **a title, a lead of two lines at most, and one block** — `cards`: with a lead **3 cards**, without **4** (5 only as one-liners), each a one-line text or **≤ 3 bullets of ≤ 8 words**; `compare`: **≤ 4 bullets a column**, one line each; `timeline`: ≤ 5 steps, a text of one line — in phases (`###`), 3–4 phases, ≤ 9 short details in the fullest; `metrics`: 3 or 4, comments under 60; `table`: with a lead ≤ 6 rows, without ≤ 8 — or a long list of `name | figure` up to 24, which folds in two; `chart` and `diagram`: one per slide, alone under its title, a box's words ≤ 4 (a role or a text ≤ 5 more); a `.right` image halves the width — one block of ≤ 3 items beside it, bullets of ≤ 5 words. A dark intent (`hook`, `problem`, `celebrate`, `act`) and `reveal` use bigger type: one size under that. The linter measures real overflow in the DOM: a slide a little over the limit is **shown smaller** (a `fit` suggestion: the file is made, the type is up to 15 % smaller, you may shorten to keep it full size); past that, `overflow` is an error and you shorten.
 9. **You alternate backgrounds.** Two consecutive slides on the same colored background is a warning.
 10. **You start with `format: jmd/3`** and never change that number; **`layout:` comes next, always** — `slide` when it is a deck — so the user can switch layouts by changing one word.
@@ -79,6 +79,7 @@ You are not filling slides, you are choosing the shape that says what the conten
 | two sides: before/after, us/them, with/without | `compare` |
 | one sentence to remember | `statement` |
 | a change of part | `section` |
+| a contents page, an agenda, « sommaire », « ordre du jour »: the parts of the deck and what each holds | `agenda` — **empty** (`::: agenda` then `:::`), it lists the deck's own parts (its `::: section` dividers, or its `section:` labels) numbered 1., 2., with the slide titles under each as a., b., and stays right when a slide moves; **written** (`- Part \| sub-part ; sub-part`) only when the contents are not the deck's — a meeting's agenda, a programme. `{.parts}` keeps the parts alone. Under its title, alone on its slide |
 | tags, tools, values, a short vocabulary | `pills` |
 | customers, partners, integrations | `logos` |
 | a feature with its screenshot | title + lead + `[Label →](url){.cta}` + `![](shot.png){.right}` |
@@ -210,11 +211,11 @@ Four rules around that table — they are for a brand *you* chose, and none of t
 3. **Never guess a company's own colors.** If the deck belongs to an organisation with a brand, the hex codes, the `brand.yaml` URL or the file come from the user. A look invented from a logo you remember is a wrong look, delivered with confidence.
 4. **In doubt, `mono`.** A neutral deck is never wrong. A confidently mis-colored one is.
 
-### A brand's forms, and its watermark
+### A brand's forms, and its decor
 
 **A brand may come in several forms** — ids that share its name, its logo and its typeface and change only the palette: `jmd_spec` lists them beside it (`jamespot` has `jamespot-tech`, `jamespot-sobre`, `jamespot-chaud`). Each form **is** the brand's charter, not a departure from it: when the user wants their own deck in another mood — more technical, more formal, warmer, less of a color — move to the form that says it, write `brand: <form>` and say so in one line. Refusing because a color "belongs to the charter" leaves them with no way out; a neutral brand (`slate`, `ocean`…) would take their logo away, so it comes only when they ask for another look than their brand's.
 
-**The watermark is one header key**, `watermark: none | mark | circles`, for the whole deck: `none` takes the large decorative shape off every slide (the brand's mark blown up, which some readers take for a flower), `mark` puts it back. Left out, the brand decides. It is never removed slide by slide, and a slide's `bg:` does not touch it.
+**The decor belongs to the brand** — its corner shapes, bands, curves and the large shape drawn from its mark (`decor:` in the brand.yaml, spec/jmd.md). A deck takes it off with one header key, `decor: none`, for the whole deck; `watermark: none | mark | circles`, the old key, still sets the large shape alone. Left out, the brand decides. It is never removed slide by slide, and a slide's `bg:` does not touch it. A user who wants an element of their own charter gives an **SVG** — never a PNG or a JPEG: a drawing takes the brand's colours and stays sharp at every size, a picture can do neither.
 
 ## Importing a presentation (a .pptx becomes a deck)
 
@@ -230,7 +231,7 @@ Two stages. Stage 1 is mechanical and not yours to do: `jmd_import` turns the `.
 
 - **Same words.** Every sentence of the draft ends up on a slide — as a card, a step, a column, a pill, a lead, a note — shortened only where the linter asks. Nothing new, nothing dropped (a duplicate may go).
 - **Same images.** Every picture keeps its reference exactly as the draft names it (`up:<box>/<name>` through the box, `media/…` locally); the biggest screenshot of a slide goes `.right`, a wall of logos becomes `logos`.
-- **The report guides the shape.** `feature` → title + lead + `.right` image; `text` with many short lines → `cards` / `pills`; numbers with labels → `metrics`; a bare title → `section`. A slide with 20 lines holds two ideas: split it. Three slides with two lines each are one `cards` block.
+- **The report guides the shape.** `agenda` → a contents page the importer already wrote as `::: agenda`: when its parts are the deck's own sections, empty it (`::: agenda` then `:::`) so it follows the deck; `feature` → title + lead + `.right` image; `text` with many short lines → `cards` / `pills`; numbers with labels → `metrics`; a bare title → `section`. A slide with 20 lines holds two ideas: split it. Three slides with two lines each are one `cards` block.
 - **Zero errors** before the build, like any deck: `jmd_build`, then hand the user every link it returns.
 
 ## Process
@@ -301,6 +302,7 @@ Through the MCP connector, `jmd_spec { layout }` returns this contract with the 
 
 - `decks/samples/four-blocks.jmd` — the four J0 blocks (timeline, metrics, statement, compare) on a fictional company.
 - `decks/samples/hello-jmd.jmd` — a five-slide deck about the format itself, with a cover and an attributed statement.
+- `decks/samples/agenda.jmd` — a contents page two ways: an empty `agenda` that lists the deck's own parts, and one written for a meeting.
 - `decks/samples/product-tour.jmd` — a 12-slide sales deck: cover, section, cards (both forms, numbered, on the right), feature slides with `.right` images and `.cta` links, pills, logos, `bg: accent` / `bg: sky`.
 
 An LLM that has read these files writes the next one on the first try. If you're unsure about a block, copy its shape from the example.

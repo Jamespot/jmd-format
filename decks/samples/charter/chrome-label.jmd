@@ -1,0 +1,25 @@
+---
+format: jmd/3
+layout: slide
+title: Chrome label — the section name in the body font
+lang: fr
+date: 9 novembre 2026
+---
+
+---
+section: Contexte et enjeux
+notes: With `chrome-label: body` the section's name, top right, is written as it is, in the body font, not in mono capitals.
+---
+## Pourquoi maintenant
+- Les usagers attendent des démarches simples et rapides.
+- Les équipes veulent des outils partagés.
+
+---
+section: Plan d'action
+---
+## Trois étapes
+::: timeline
+- Janvier — Cadrage | Les besoins des services.
+- Mars — Pilote | Deux directions volontaires. {.now}
+- Juin — Déploiement | Toutes les directions.
+:::

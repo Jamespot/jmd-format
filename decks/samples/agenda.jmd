@@ -1,0 +1,101 @@
+---
+format: jmd/3
+layout: slide
+title: Northwind Ops — the 2027 plan
+lang: en
+date: 2026-11-09
+author: Northwind leadership
+---
+
+---
+intent: hook
+notes: Open on the year ahead, then show the road before taking it.
+---
+# The 2027 plan
+Where we stand, what we offer, how we get there.
+
+---
+notes: An empty agenda block is the deck's own contents — the dividers are its parts, the slide titles under them its sub-parts. Move a slide and it follows.
+---
+## Contents
+
+::: agenda
+:::
+
+---
+notes: First part: where we stand.
+---
+::: section
+Where we stand
+:::
+
+---
+notes: The incidents of the year, in one sentence.
+---
+## Incidents don't wait for office hours
+Outages, security events, supplier failures: every team has a plan on paper, few can run it at 3 am.
+
+---
+notes: What the teams told us.
+---
+## What the teams asked for
+
+::: cards
+- One place | Plans, contacts and the board, together.
+- On the phone | Every action reachable away from the desk.
+- Proof | A record of who did what, and when.
+:::
+
+---
+notes: Second part: the offer.
+---
+::: section
+What we offer
+:::
+
+---
+notes: The three moments of a crisis, one product.
+---
+## Prepare, react, continue
+
+::: timeline
+- Prepare | Plans tested on a schedule.
+- React | The cell gathered in minutes. {.now}
+- Continue | The business kept running.
+:::
+
+---
+notes: Price stays simple.
+---
+## One price per team
+
+::: metrics
+- 3 | plans | Starter, Team, Enterprise.
+- 1 | invoice | Per team, per year. {.hero}
+:::
+
+---
+notes: Third part: the road.
+---
+::: section
+How we get there
+:::
+
+---
+notes: The same agenda, written by hand this time: a contents page that is not the deck's, for the board meeting.
+---
+## Board meeting, January 14
+
+::: agenda
+- Results of the year | Revenue ; Customers ; Incidents handled
+- The 2027 plan | Offer ; Hiring ; Budget
+- Decisions to take | Pricing ; Partners
+- Annex {.plain}
+:::
+
+---
+intent: act
+notes: Close on the next step.
+---
+## Next step: the pilot in March
+Three teams, six weeks, one review.

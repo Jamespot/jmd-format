@@ -1,0 +1,35 @@
+---
+format: jmd/3
+layout: slide
+title: Align — the cover, a divider and a statement on the left
+lang: fr
+date: 9 novembre 2026
+---
+
+---
+notes: With `align: left` in the brand, the cover starts on the left like every other page.
+---
+# Feuille de route numérique 2027
+Les priorités de l'année, présentées au comité de direction.
+
+---
+section: Priorités
+---
+::: section {.numbered}
+Trois chantiers pour 2027
+:::
+
+---
+section: Priorités
+---
+::: statement
+Un service public numérique se juge à ce qu'il épargne à l'usager.
+— Comité de direction
+:::
+
+---
+intent: act
+section: Suite
+---
+## Ce que nous décidons aujourd'hui
+Valider les trois chantiers et nommer leurs responsables.

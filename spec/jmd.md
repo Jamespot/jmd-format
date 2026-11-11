@@ -4,7 +4,7 @@
 >
 > **What the format doesn't say, the theme decides.** No position, no size, no color in the source.
 
-Status: **J1 (V1 read-only)** — eleven blocks (nine, and `table` / `chart` since 1.15.0), images, links, four layouts (Slide, Doc, Story, Webpage); validated on the reference deck (pixel test) and on a 26-slide sales deck (zero linter error).
+Status: **J1 (V1 read-only)** — the blocks below (nine, `table` / `chart` since 1.15.0, `diagram` since 1.25.0, `kpi` since 1.39.0, `agenda` next), images, links, four layouts (Slide, Doc, Story, Webpage); validated on the reference deck (pixel test) and on a 26-slide sales deck (zero linter error).
 
 ## File structure
 
@@ -17,7 +17,8 @@ brand: mono                ← brand: an id (themes/brands/<brand>.yaml) or the 
 lang: en
 date: 2026-08-25
 author: Jane Doe            ← optional; `source:` too, set by the importer
-watermark: none            ← optional: none | mark | circles — the brand's large background shape, for the whole deck; left out, the brand decides (1.35.0)
+decor: none                ← optional: `none` takes the brand's graphic elements off this deck (1.49.0); left out, the brand decides
+watermark: none            ← optional, its old name for the engine's shape: none | mark | circles (1.35.0)
 ---
 
 ---                        ← new slide
@@ -305,14 +306,70 @@ A form's words are HTML (inline Markdown, edited in place like a card's); a tree
 
 Errors: `diagram-center` — a radial without its hub; `diagram-empty`; `diagram-type` — another Mermaid family, with the block that draws it (`pie` → `chart {.pie}`, `timeline`/`journey` → `timeline`, `mindmap` → `cards`…) or none; `diagram-syntax` — a line not read; `diagram-click` — `click`/`call`/`href` bind code to a node, and a deck is data; `diagram-form` — a list without a form; `max-items` — more than 10 nodes on a slide (7 on a Story screen, 14 on a Doc page or a webpage), or a form's count; `diagram-dense` — the drawing would need type under 14 px to fit. Warnings: `diagram-style` — `style`, `classDef`, `linkStyle`, `class`, `%%{init}%%` ignored, the brand colors the diagram; `diagram-subgraph` — an arrow to a frame's id (not drawn: an arrow goes to a box), or a frame that covers a box it does not hold or another frame; `diagram-form` — Mermaid lines under a form, an unknown form.
 
-### Not yet: `principles`, `quote`, `agenda`
+## Blocks — the contents page (next, #75)
+
+### `agenda` — numbered parts and their sub-parts, built from the deck or written
+
+```markdown
+## Contents
+
+::: agenda
+:::
+```
+
+**Empty, it is the deck's own contents**, read again at every render — it never goes out of date when a slide moves, is added or renamed. The parts are the deck's `::: section` dividers (their first line); in a deck that has none, its `section:` labels (a part opens where the label changes). The sub-parts are the titles of the slides under each part. Never listed: the slide that holds an agenda, a divider, a `#` cover, or a title that repeats the one before it. A deck with neither dividers nor labels lists its slide titles as parts. An agenda that sits inside a part (repeated before each part, « where we are ») lights that part and quiets the others.
+
+```markdown
+::: agenda
+- Results of the year | Revenue ; Customers ; Incidents handled
+- The 2027 plan | Offer ; Hiring ; Budget
+- Decisions to take {.hero}
+- Annex {.plain}
+:::
+```
+
+**Written, it says what the author wrote** — a contents page that is not the deck's (a meeting's agenda, a programme): one item per part, **part | sub-part ; sub-part**, the sub-parts optional. `{.hero}` on an item lights that part, `{.plain}` leaves it unnumbered (an annex). As soon as one item is written, the deck is not read.
+
+Parts are numbered `1.` `2.`, sub-parts lettered `a.` `b.` — the numbers are the block's, never written. One to three columns by length (up to 8 lines one, up to 18 two, more three; one on a Story screen or beside a text with `{.right}`, two on an A4 page); a part never splits across two columns. `{.parts}` on the block keeps the parts alone, without their sub-parts. The look is the brand's: numbers and letters in its primary, words in its ink, a rule above each part; on a dark slide, white words and highlight numbers. The numbers are text, so the PowerPoint export has them as native text.
+
+Warnings: `agenda-long` — more than 8 parts or 30 lines, a page nobody reads (keep the parts with `{.parts}`, group the slides into fewer parts, or write a shorter one); `agenda-empty` — an empty agenda in a deck with nothing to list; `agenda-line` — a line in the block that is not `- Part | sub-part ; sub-part`, not drawn. A part without sub-parts is fine. An agenda past the page is the measured `overflow`, as for any block.
+
+In a long document (`layout: doc`) the contents come by themselves from the chapters (above); `agenda` is for slides, a memo, a story or a webpage.
+
+### Not yet: `principles`, `quote`
 Reserved names; a block outside the vocabulary is **a linter error**, not a warning. See the PRD for the V2 families (data, rhythm) and V3 (Jamespot graph, interaction).
+
+## Brand decor (1.49.0)
+
+A charter is more than colours: a corner shape, a band along an edge, curves on the dark pages, a glow. The brand brings them once, under `decor:`, and every deck in that brand wears them. The deck never names one; `decor: none` in its header takes them all off.
+
+```yaml
+decor: quarter waves          # ready elements, by name: quarter glow waves band dots — and mark circles, the engine's shape (the old watermark)
+```
+
+```yaml
+decor:                        # or named elements of the charter's own, 6 at most
+  halo:
+    svg: halo.svg             # an SVG beside the brand.yaml (or its https URL), or a ready element's name
+    place: corner-br          # corner-tl corner-tr corner-bl corner-br | edge-top edge-bottom edge-left edge-right | full
+    size: 40                  # % — of the page's short side for a corner, the thickness of an edge; `full` covers the page
+    tint: accent              # a colour of the brand: primary accent highlight secondary ink lavender wash butter card white
+    on: light cover           # the pages: all | cover | dark | light | an intent (hook, act…), several with spaces
+    layouts: slide memo       # optional; all of them by default, except that `full` leaves story out (a 16:9 drawing cropped to a phone)
+    opacity: .5               # 0.05 to 1
+```
+
+- **An element is an SVG file — never a PNG, never a JPEG**: a drawing takes the brand's colours and stays sharp at every size, a picture can do neither. It is rebuilt by the logo's allowlist (no script, no handler, no link out, no picture inside) and **every colour it carries is replaced by its `tint`** — a charter element is always drawn in the brand's colours. Its gradients and opacities stay.
+- **A corner element is drawn for the bottom-right corner**; the engine mirrors it for the other three.
+- **Where it goes.** `cover` is the opening `#`, `hook`, `celebrate` and a `section`; `dark` is a page on `indigo`, `accent` or `sky`; `light` every other page. Never on a slide whose photo is its `.cover`. On a memo, a long document and a web page — one flow — the corners and the page-sized drawings go on the first page only, half the size a slide gives a corner; the edges go on every page.
+- **Exports.** PDF and images are the page as drawn; in a PowerPoint the decor is the slide's background picture, behind the native text; a story screen is a phone page like any other.
+- **`watermark:` is the old name.** A brand that says `watermark: mark | circles | none` keeps its look: it reads as `decor: mark | circles | none`. When both are written, `decor:` wins.
 
 ## The linter
 
 Errors (block the PDF export): unknown or higher `format`; unknown `layout`; unknown `bg`; block outside the vocabulary; nested block; slide without a title except `statement`/`quote`/`section`; too many items for the block; `compare` without two columns; **`code-debris`** — syntax that would be printed as words: a code fence, a modifier alone on a line, an image that does not close, a slide's setting under its title (only with a value the format knows), a line of HTML; **`stray-fence`** — a fence written with anything but three ASCII colons (`:: cards`, `:[x] cards`), or a `:::` that closes nothing; **`loose-heading`** — a `#` heading outside a block, printed as text; more than one `.right` image; **`missing-asset`** — a referenced file that does not exist next to the `.jmd` (CLI and MCP, which see the disk); **overflow measured in the DOM** (content reaches below 660 px on a slide, below 1730 of the 1810 units of a Doc page, or text overflows its box) — once the auto-fit has given up: a body that would fit at 85 % or more is shown at that zoom (its rendered width kept) and the finding is the **`fit` warning** instead, with the zoom in its message.
 
-Warnings: title > 60 characters; lead > 200; three consecutive slides on the same colored background; slide without notes; `fit` — the body shown smaller so that it fits (in edit mode, a dotted line at the limit with the zoom); `asset-not-embedded` — in the browser, a dropped deck that references files it cannot read.
+Warnings: title > 60 characters; lead > 200; an agenda too long, empty, or with a line it does not read (`agenda-long`, `agenda-empty`, `agenda-line`); three consecutive slides on the same colored background; slide without notes; **`decor-crowds`** — a brand element (other than a page-sized drawing) lies under more than a tenth of a page's words, measured line by line in the DOM; `fit` — the body shown smaller so that it fits (in edit mode, a dotted line at the limit with the zoom); `asset-not-embedded` — in the browser, a dropped deck that references files it cannot read.
 
 The linter speaks the format an agent reads:
 

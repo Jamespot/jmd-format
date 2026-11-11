@@ -7,7 +7,14 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 ---
 
-This repository redistributes no third-party code. Two deliberate absences:
+This repository redistributes no third-party code. It redistributes third-party
+fonts: the typefaces of themes/brands/fonts/catalogue/ (Inter, Roboto, Playfair
+Display and the others listed in catalogue.json), each under the SIL Open Font
+License 1.1, whose text sits in each face's folder (LICENSE). They were taken
+unmodified from the @fontsource npm packages named in catalogue.json, each file
+with its sha256; tools/fontcatalogue.mjs fetches them again.
+
+Two deliberate absences:
 
 * Yjs and @hocuspocus/provider (MIT) are the room — the shared edit page of the
   hosted service. They are bundled only into that page, which is built by the

@@ -1,0 +1,28 @@
+---
+format: jmd/3
+layout: slide
+title: Footer band — the organisation, the date and the page number
+lang: fr
+date: 9 novembre 2026
+---
+
+---
+notes: With `footer-band: line` the brand's footer, the deck's date and the page number sit on a thin rule at the foot.
+---
+# Bilan du premier semestre
+Direction des usages numériques
+
+---
+section: Bilan
+---
+## Ce qui a avancé
+- **Démarches en ligne** : douze nouvelles démarches ouvertes.
+- **Accessibilité** : audit terminé sur les cinq services les plus utilisés.
+- **Données** : le catalogue publié, mis à jour chaque mois.
+
+---
+intent: problem
+section: Bilan
+---
+## Ce qui bloque encore
+Les délais de signature des conventions, deux mois en moyenne.

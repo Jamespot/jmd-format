@@ -12,7 +12,7 @@ font-fallback: "Century Gothic", "Segoe UI", system-ui, sans-serif
 type-scale: 0.9          # Futura runs wide
 fonts: fonts/system.css   # system fonts only — nothing embedded
 glyphs: 4
-watermark: mark
+decor: mark               # none | ready elements (mark circles quarter glow waves band dots) | a map of named elements (spec/jmd.md, Brand decor) — `watermark:` is its old name
 card-marker: glyphs
 card-fill: plain
 card-shadow: offset

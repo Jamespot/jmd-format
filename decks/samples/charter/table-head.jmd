@@ -1,0 +1,21 @@
+---
+format: jmd/3
+layout: slide
+title: Table head — a light header with dark words
+lang: fr
+date: 9 novembre 2026
+---
+
+---
+section: Indicateurs
+notes: With `table-head: light` the header is a pale tint of the deep colour, its words in ink — contrast computed.
+---
+## Les indicateurs du semestre
+
+::: table
+| Indicateur | S1 2025 | S1 2026 | Évolution |
+|---|--:|--:|--:|
+| Démarches en ligne | 48 | 60 | +25 % |
+| Délai moyen (jours) | 21 | 14 | −33 % |
+| Satisfaction | 3,8 / 5 | 4,2 / 5 | +0,4 | {.hero}
+:::

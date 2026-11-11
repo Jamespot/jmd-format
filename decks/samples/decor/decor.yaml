@@ -1,0 +1,36 @@
+# Decor — a neutral sample of a brand that brings graphic elements of its own (decor:, spec/jmd.md Brand decor): two halos, a rule along
+# the foot, curves on the dark pages. Build a deck in it: jmd render decks/samples/decor/decor.jmd --brand decks/samples/decor/decor.yaml
+name: Decor
+logo: dot
+primary: "#212741"
+accent: "#466BF0"
+highlight: "#1AC874"
+ink: "#212741"
+secondary: "#1AC874"
+card-marker: letter
+decor:
+  halo-green:
+    svg: halo.svg             # an SVG of the charter's own, beside this file: rebuilt by the logo's allowlist, painted in the brand's colours
+    place: corner-tl
+    size: 55
+    tint: secondary
+    on: cover
+    opacity: .6
+  halo-blue:
+    svg: halo.svg
+    place: corner-br
+    size: 40
+    tint: accent
+    on: light
+    opacity: .35
+  rule:
+    svg: band                 # a ready element, placed by hand
+    place: edge-bottom
+    size: 2
+    tint: secondary
+    on: light
+  lines:
+    svg: waves
+    tint: secondary
+    on: dark
+    opacity: .5

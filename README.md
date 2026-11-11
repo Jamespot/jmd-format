@@ -63,7 +63,7 @@ The format has a version, `format: jmd/3`. When a word changes meaning the versi
 
 ## Form follows meaning
 
-Nine blocks, one level, never nested. You pick by what the content *is*, not by how it should look: numbers → `metrics`, steps → `timeline`, peers → `cards`, two sides → `compare`, one sentence → `statement`, tags → `pills`, customers → `logos`, a divider → `section`. A plain bullet list is the last resort, and the linter says so.
+Nine blocks, one level, never nested. You pick by what the content *is*, not by how it should look: numbers → `metrics`, steps → `timeline`, peers → `cards`, two sides → `compare`, one sentence → `statement`, tags → `pills`, customers → `logos`, a divider → `section`, a contents page → `agenda` (left empty, it lists the deck's own parts). A plain bullet list is the last resort, and the linter says so.
 
 A slide may also declare what it is *for* — `intent: hook | problem | reveal | prove | explain | decide | recap | celebrate | fun | act` — and the theme gives that intent a form of its own.
 

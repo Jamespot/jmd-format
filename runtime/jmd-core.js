@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.48.1';
+  var VERSION = '1.49.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -175,7 +175,7 @@ globalThis.JMD = (function () {
   // Case: what the format names — keys, the values it enumerates, a brand id, a block, a modifier — is read in lowercase
   // (`Layout: Memo`, `Intent: Hook`, `::: Cards`, `{.Hero}` all work). What the author writes — a title, notes, a section
   // label, a URL — keeps its case; a brand URL is not an id, it is left alone.
-  var ENUM_KEYS = ['format', 'layout', 'intent', 'bg', 'brand', 'theme', 'template', 'watermark'];
+  var ENUM_KEYS = ['format', 'layout', 'intent', 'bg', 'brand', 'theme', 'template', 'watermark', 'decor'];
   function parseKV(lines) {
     var o = {};
     lines.forEach(function (l) {
@@ -1373,6 +1373,89 @@ globalThis.JMD = (function () {
     }).join('') + '</div>';
   }
 
+  /* ───────────────────────── agenda: the contents page (issue #75) ─────────────────────────
+     Two ways, one block. Written — `- Part | sub-part ; sub-part` — it says what the author wrote. Empty, it is the deck's own
+     contents, read at every render so it never goes out of date when a slide moves: the parts are the `::: section` dividers
+     (or, in a deck that has none, its `section:` labels), each with the titles of the slides under it as sub-parts. A deck with
+     neither has its slide titles as parts. Slides that hold an agenda, a divider or a `#` cover are never listed. Parts are
+     numbered 1., 2., sub-parts a., b.; one to three columns by length; a part never splits across two columns. */
+  var AGENDA_PARTS = 8, AGENDA_LINES = 30;
+  function agendaWritten(b) {
+    return items(b).map(function (it) {
+      var subs = it.cols.slice(1).join(' ; ').split(/\s*;\s*/).map(function (x) { return x.trim(); }).filter(Boolean);
+      return { text: it.cols[0] || '', subs: subs, line: it.line, hero: has(it.attrs, 'hero'), plain: has(it.attrs, 'plain'), oneSub: it.cols.length === 2 && subs.length === 1 };
+    }).filter(function (p) { return p.text; });
+  }
+  function agendaAuto(doc, here) {
+    var slides = (doc && doc.slides) || [];
+    var holds = function (s, name) { return s.nodes.some(function (n) { return n.type === 'block' && n.name === name; }); };
+    var dividers = slides.some(function (s) { return holds(s, 'section'); });
+    var parts = [], cur = null, lit = null;
+    slides.forEach(function (s, i) {
+      var title = s.nodes.find(function (n) { return n.type === 'title'; }), opened = null;
+      if (dividers && holds(s, 'section')) {
+        var d = s.nodes.find(function (n) { return n.type === 'block' && n.name === 'section'; });
+        opened = (d.lines.find(function (l) { return l.trim(); }) || '').trim();
+      } else if (!dividers && s.meta.section && (!cur || cur.text !== s.meta.section)) opened = s.meta.section;
+      if (opened) { cur = { text: opened, subs: [], from: i }; parts.push(cur); }
+      if (i === here && cur) lit = cur;
+      if (!title || title.level === 1 || holds(s, 'agenda') || holds(s, 'section')) return;
+      if (!cur) return;
+      if (cur.subs[cur.subs.length - 1] !== title.text) cur.subs.push(title.text);
+    });
+    // a part the agenda's own slide opened, with nothing under it (`section: Contents` on the agenda), is not a part of the deck
+    parts = parts.filter(function (p) { return p.subs.length || !(p.from === here || slides[p.from] && holds(slides[p.from], 'agenda')); });
+    if (!parts.length) { // no part at all: the slide titles are the parts
+      lit = null;
+      slides.forEach(function (s) {
+        var title = s.nodes.find(function (n) { return n.type === 'title'; });
+        if (title && title.level > 1 && !holds(s, 'agenda') && !holds(s, 'section')) parts.push({ text: title.text, subs: [] });
+      });
+    }
+    return parts.map(function (p) { return { text: p.text, subs: p.subs, hero: p === lit && parts.length > 1 }; });
+  }
+  // the parts an agenda block lists: written ones first; `{.parts}` keeps the parts alone
+  function agendaParts(b, doc, here) {
+    var written = agendaWritten(b), auto = !written.length, parts = auto ? agendaAuto(doc, here) : written;
+    if (has(b.attrs, 'parts')) parts = parts.map(function (p) { var q = {}; for (var k in p) q[k] = p[k]; q.subs = []; return q; });
+    return { parts: parts, auto: auto, lines: parts.reduce(function (n, p) { return n + 1 + p.subs.length; }, 0) };
+  }
+  // contiguous parts into `cols` columns, the longest column as short as it can be (a few parts: an exhaustive split is cheap)
+  function agendaColumns(parts, cols) {
+    var w = parts.map(function (p) { return 1.4 + p.subs.length; }), n = w.length, best = null;
+    (function split(from, left, acc, max) {
+      if (best && max >= best.max) return;
+      if (left === 1) { var last = 0; for (var i = from; i < n; i++) last += w[i]; var m = Math.max(max, last); if (!best || m < best.max) best = { max: m, cuts: acc.concat([n]) }; return; }
+      var sum = 0;
+      for (var j = from; j < n - left + 1; j++) { sum += w[j]; split(j + 1, left - 1, acc.concat([j + 1]), Math.max(max, sum)); }
+    })(0, Math.min(cols, n), [], 0);
+    var out = [], at = 0;
+    (best ? best.cuts : [n]).forEach(function (c) { out.push(parts.slice(at, c)); at = c; });
+    return out;
+  }
+  function agendaHtml(b, ctx) {
+    var a = agendaParts(b, ctx && ctx.doc, ctx ? ctx.here : -1), parts = a.parts;
+    var lay = (ctx && ctx.layout) || 'slide', narrow = lay === 'story' || has(b.attrs, 'right');
+    var cols = narrow ? 1 : a.lines <= 8 ? 1 : a.lines <= 18 ? 2 : 3;
+    if (lay === 'doc' || lay === 'memo') cols = Math.min(cols, 2);
+    cols = Math.max(1, Math.min(cols, parts.length));
+    var columns = agendaColumns(parts, cols), k = 0, tallest = 0;
+    columns.forEach(function (c) { tallest = Math.max(tallest, c.reduce(function (s, p) { return s + 1 + p.subs.length; }, 0)); });
+    var LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+    var body = columns.map(function (col) {
+      return '<div class="agenda-col">' + col.map(function (p) {
+        var num = p.plain ? '' : (++k) + '.';
+        return '<div class="agenda-part' + (p.hero ? ' is-hero' : '') + '">' +
+          '<p class="agenda-h"><span class="agenda-n">' + num + '</span><span class="agenda-t"' + src(p.line, p.line == null ? null : 0) + '>' + inline(p.text) + '</span></p>' +
+          (p.subs.length ? '<ul class="agenda-subs">' + p.subs.map(function (s, j) {
+            return '<li><span class="agenda-k">' + (j < 26 ? LETTERS[j] : j + 1) + '.</span><span class="agenda-s"' + (p.oneSub ? src(p.line, 1) : '') + '>' + inline(s) + '</span></li>';
+          }).join('') + '</ul>' : '') + '</div>';
+      }).join('') + '</div>';
+    }).join('');
+    var lit = parts.some(function (p) { return p.hero; });
+    return '<div class="agenda agenda--c' + columns.length + (tallest > 11 ? ' agenda--dense' : '') + (lit ? ' agenda--lit' : '') + (a.auto ? ' agenda--auto' : '') + '" style="--cols:' + columns.length + '">' + body + '</div>';
+  }
+
   /* ───────────────────────── blocks ───────────────────────── */
   var BLOCKS = {
     metrics: {
@@ -1564,6 +1647,11 @@ globalThis.JMD = (function () {
           (attr ? '<div class="attr"' + src(attrLine) + '>' + inline(attr) + '</div>' : '') + '</div>';
       }
     },
+    // the contents page: written `- Part | a ; b`, or empty and built from the deck's parts (agendaHtml)
+    agenda: {
+      count: function (b) { return agendaWritten(b).length; },
+      render: function (b, ctx) { return agendaHtml(b, ctx); }
+    },
     // a divider slide: the part title, centered; `{.numbered}` adds the part number
     section: {
       full: true,
@@ -1680,6 +1768,7 @@ globalThis.JMD = (function () {
     var bg = ctx.layout === 'doc' ? 'white' : intent ? INTENT_BG[intent] : (m.bg || 'white'); // an intent sets the background itself
     if (bg === 'sky' && isLight(ctx.brand.secondary || ctx.brand.accent)) bg = 'skylight'; // white on a pale secondary cannot be read: the words go dark
     if (m.section) ctx.section = m.section;
+    ctx.here = idx; // an agenda built from the deck lights the part it sits in
     var dark = bg === 'indigo' || bg === 'accent' || bg === 'sky';
     // a long document's running head is its chapter: the `section:` written on it, else its title
     var chapter = memoFlow ? '' : ctx.layout === 'doc' ? (m.section || (slide.nodes.find(function (n) { return n.type === 'title'; }) || {}).text || ctx.section || '') : '';
@@ -1692,6 +1781,7 @@ globalThis.JMD = (function () {
       : ctx.layout === 'story' ? '<div class="slide-tag">' + pad2(idx + 1) + ' / ' + pad2(ctx.total) + '</div>'
       : ctx.layout === 'webpage' ? ''
       : '<div class="slide-tag">' + pad2(idx + 1) + '</div>';
+    if (hasBand(ctx)) tag += band(idx, ctx);
     var notes = m.notes ? ' data-notes="' + esc(inline(m.notes)) + '"' : '';
 
     var title = slide.nodes.find(function (n) { return n.type === 'title'; });
@@ -1701,7 +1791,7 @@ globalThis.JMD = (function () {
     var right = flow ? null : images.find(function (n) { return has(n.attrs, 'right'); });
     var cover = flow ? null : images.find(function (n) { return has(n.attrs, 'cover'); });
     var rightBlock = flow ? null : slide.nodes.find(function (n) { return n.type === 'block' && has(n.attrs, 'right') && BLOCKS[n.name] && !BLOCKS[n.name].full; });
-    var classes = ['slide', 'slide--' + bg];
+    var classes = ['slide', 'slide--' + bg].concat(pageLayout(ctx));
     if (intent) classes.push('slide--' + intent, 'slide--intent');
     if (right) classes.push('slide--split');
     if (rightBlock) classes.push('slide--split-block');
@@ -1771,7 +1861,11 @@ globalThis.JMD = (function () {
     var glyph = '<use href="#' + (+ctx.brand.glyphs ? 'brand-glyph-1' : 'brand-mark') + '"/>';
     var watermark = wm === 'none' || decorated ? ''
       : '<div class="wm wm--' + esc(wm) + ' wm--' + (idx % 2 ? 'b' : 'a') + '" aria-hidden="true">' + (wm === 'mark' ? '<svg class="wm-g">' + glyph + '</svg>' + (intent === 'celebrate' ? new Array(7).join('<svg class="wm-bit">' + glyph + '</svg>') : '') : '') + '</div>';
-    var page = watermark + chrome + inner + tag;
+    // the brand's own elements (decor:, 1.49.0): data the build validated, posed behind everything like the watermark, never on a
+    // slide whose photo is its cover. A memo, a long document and a web page are one flow: their corners and page-sized drawings
+    // go on the first page only (paginate() keeps the edges on the sheets it adds); the pages a charter names are cover, dark, light
+    var decor = cover ? '' : decorLayer(ctx, bg, intent, idx, classes.indexOf('slide--cover') >= 0 || intent === 'hook' || intent === 'celebrate' || !!(full && full.name === 'section'));
+    var page = decor + watermark + chrome + inner + tag;
     if (ctx.layout === 'doc') {
       page = '<div class="sheet' + (memoFlow ? ' sheet--memo' : '') + '">' + page + '</div>'; // paginate() adds the sheets the chapter needs
       if (opener) page = '<div class="sheet sheet--opener slide--' + INTENT_BG[opener.intent] + ' slide--' + opener.intent + ' slide--intent" data-intent="' + opener.intent + '">' +
@@ -1782,6 +1876,28 @@ globalThis.JMD = (function () {
       LONG = null;
     }
     return '<section class="' + classes.join(' ') + '"' + notes + (intent ? ' data-intent="' + intent + '"' : '') + ' data-start="' + slide.map[0] + '">' + page + '</section>';
+  }
+
+  /* The page layout a charter decides once for every page (#73, the brand's `align`, `footer-band`, `cover-logo`, `table-head`,
+     `chrome-label`): never in the .jmd, so every deck in that brand wears it without the writer doing anything. Each one is a
+     class on the page that engine.css turns into form; a brand that says none of them gets the very same page as before.
+     The footer band is a Slide's and a Story's: a Memo and a Doc have their own footer, a webpage has no pages. */
+  function pageLayout(ctx) {
+    var b = ctx.brand || {}, out = [];
+    if (b.align === 'left') out.push('brand-align-left');
+    if (hasBand(ctx)) out.push('brand-band');
+    if (b['cover-logo'] === 'large') out.push('brand-logo-large');
+    if (b['table-head'] === 'light') out.push('brand-thead-light');
+    if (b['chrome-label'] === 'body') out.push('brand-label-body');
+    return out;
+  }
+  function hasBand(ctx) { return (ctx.brand || {})['footer-band'] === 'line' && (ctx.layout === 'slide' || ctx.layout === 'story'); }
+  /* A thin rule at the foot of the page: the brand's `footer:` on the left (the organisation's full name), the deck's `date:`
+     and the page number on the right, in the body font. The number is marked so that the PowerPoint export writes it as the
+     slide-number field of the layout the band becomes there (lib/pptx.mjs). */
+  function band(idx, ctx) {
+    var right = (ctx.date ? '<span class="band-date">' + esc(ctx.date) + '</span><span class="band-sep" aria-hidden="true"> · </span>' : '') + '<span class="band-n" data-px-field="slidenum">' + (idx + 1) + '</span>';
+    return '<div class="slide-band"><span class="band-l">' + esc(ctx.brand.footer || '') + '</span><span class="band-r">' + right + '</span></div>';
   }
 
   /* A page of its own in a long document (`page: yes`): a memo page set in the flow — any of the ten intents, its `bg:`, one
@@ -1804,6 +1920,29 @@ globalThis.JMD = (function () {
     return '<section class="' + ['slide', 'slide--page'].join(' ') + '"' + m[2] + '><div class="sheet sheet--page ' + m[1] + '">' + m[3] + '</div></section>';
   }
 
+  var DECOR_PLACES = ['corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'edge-top', 'edge-bottom', 'edge-left', 'edge-right', 'full'];
+  var DECOR_TINTS = ['primary', 'accent', 'highlight', 'secondary', 'ink', 'lavender', 'wash', 'butter', 'card', 'white'];
+  var DARK_BGS = { indigo: 1, accent: 1, sky: 1 };
+  function decorLayer(ctx, bg, intent, idx, isCover) {
+    var flow = ctx.layout === 'memo' || ctx.layout === 'doc' || ctx.layout === 'webpage';
+    var html = (ctx.brand.decorItems || []).filter(function (d) {
+      if (!d || DECOR_PLACES.indexOf(d.place) < 0 || DECOR_TINTS.indexOf(d.tint) < 0 || !/^[a-z][a-z0-9-]{0,23}$/.test(d.name)) return false;
+      if ((d.layouts || []).indexOf(ctx.layout) < 0) return false;
+      if (flow && idx > 0 && !/^edge-/.test(d.place)) return false;
+      return (d.on || ['all']).some(function (o) { return o === 'all' || (o === 'dark' && DARK_BGS[bg]) || (o === 'light' && !DARK_BGS[bg]) || (o === 'cover' && isCover) || o === intent; });
+    }).map(function (d) {
+      var size = Math.max(1, Math.min(100, +d.size || 0)), op = Math.max(0.05, Math.min(1, +d.opacity || 1));
+      return '<svg class="decor decor--' + d.place + ' decor-tint--' + d.tint + '" style="--ds:' + size + ';opacity:' + op + '" aria-hidden="true"><use href="#brand-decor-' + d.name + '" width="100%" height="100%"/></svg>';
+    }).join('');
+    return html ? '<div class="decor-layer" aria-hidden="true">' + html + '</div>' : '';
+  }
+  // `decor: none` in the header takes the brand's elements off this deck — the watermark included, which is one of them (1.49.0)
+  function withDeckDecor(brand, d) {
+    if (d !== 'none') return brand;
+    var b = {}; for (var k in brand) b[k] = brand[k];
+    b.decorItems = []; b.watermark = 'none';
+    return b;
+  }
   // `watermark:` in the header overrules the brand's, for this deck only (R3, 2026-10-20: the agent could not take the shape off a
   // deck shared outside). `mark` on a PNG logo is `circles`, as the brand's own would be (1.31.0): a picture is not a shape
   var WATERMARKS = ['mark', 'circles', 'none'];
@@ -1815,7 +1954,7 @@ globalThis.JMD = (function () {
   }
   function render(doc, ctx) {
     ctx_lines_cache = doc.lines || null;
-    var c = { brand: withWatermark((ctx && ctx.brand) || {}, doc.meta.watermark), assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', lang: doc.meta.lang || '', chapters: [] };
+    var c = { doc: doc, here: -1, brand: withWatermark(withDeckDecor((ctx && ctx.brand) || {}, doc.meta.decor), doc.meta.decor === 'none' ? null : doc.meta.watermark), assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', date: doc.meta.date ? String(doc.meta.date) : '', lang: doc.meta.lang || '', chapters: [] };
     if (memoFlows(doc)) { c.memoFlow = true; c.memo = { title: doc.meta.title || '', subtitle: doc.meta.subtitle || '', by: [doc.meta.author, doc.meta.date].filter(Boolean).map(function (x) { return inline(x); }).join(' · ') }; }
     var html = doc.slides.map(function (s, i) { return renderSlide(s, i, c); });
     if (c.layout === 'doc' && !c.memoFlow && html.length) html[0] = html[0].replace(/^(<section[^>]*>)/, function (open) { return open + frontMatter(doc, c); });
@@ -1878,6 +2017,7 @@ globalThis.JMD = (function () {
     { name: 'cards', hint: '- title | text, or ### Title + bullets · 5 max (3 with a lead, ≤ 3 short bullets each) · {.numbered} {.plain} {.right} on the block · {.wide} on a card', snippet: '::: cards\n- Title | One line of text.\n- Title | One line of text.\n- Title | One line of text.\n:::' },
     { name: 'compare', hint: '### Left + bullets, ### Right + bullets · 2 columns, ≤ 4 one-line bullets each · {.light}', snippet: '::: compare\n### Before\n- One point.\n- Another.\n\n### After\n- One point.\n- Another.\n:::' },
     { name: 'statement', hint: 'one sentence, alone on the slide · optional — attribution line', snippet: '::: statement\nOne sentence that carries the slide.\n— Who said it\n:::' },
+    { name: 'agenda', hint: 'empty: the contents built from the deck (its ::: section dividers or section: labels, the slide titles under them) · or - Part | sub-part ; sub-part · {.parts} parts only · {.hero} on a part', snippet: '::: agenda\n:::' },
     { name: 'section', hint: 'a divider: the part title · {.numbered}', snippet: '::: section\nPart title\n:::' },
     { name: 'pills', hint: '- word · 8 max', snippet: '::: pills\n- One\n- Two\n- Three\n:::' },
     { name: 'logos', hint: '- ![Name](file) · 40 max', snippet: '::: logos\n- ![Acme](assets/logo-acme.svg)\n- ![Globex](assets/logo-globex.svg)\n:::' },
@@ -1909,6 +2049,7 @@ globalThis.JMD = (function () {
     if (doc.meta.pages && String(doc.meta.pages).toLowerCase() !== 'fixed') err(0, null, 'pages', '`pages: ' + doc.meta.pages + '`: the one value is `fixed`, one A4 page per `---` on a memo; a memo without it flows');
     if (doc.meta.layout && !PAGES[doc.meta.layout]) err(0, null, 'layout', 'unknown layout `' + doc.meta.layout + '`: ' + LAYOUTS.join(', ') + ' (no layout = slide)');
     else if (!doc.meta.layout && fv) info(0, null, 'layout', 'no `layout:` in the header — write `layout: slide`: one word the user changes to make it a doc, a story or a webpage');
+    if (doc.meta.decor && doc.meta.decor !== 'none') err(0, null, 'decor', 'unknown decor `' + doc.meta.decor + '` in the header: `decor: none` takes the brand\'s elements off this deck; left out, the brand decides (its elements are set in the brand, not in the deck)');
     if (doc.meta.watermark && WATERMARKS.indexOf(doc.meta.watermark) < 0) err(0, null, 'watermark', 'unknown watermark `' + doc.meta.watermark + '`: ' + WATERMARKS.join(', ') + ' (no watermark: = the brand\'s)');
 
     var run = 0, prevBg = null;
@@ -1979,6 +2120,13 @@ globalThis.JMD = (function () {
         var count = def.count ? def.count(b) : items(b).length;
         if (def.max && count > def.max) err(n, b.name, 'max-items', count + ' items, maximum ' + def.max + ': remove an item or use another block');
         if (b.name === 'compare' && count < 2) err(n, b.name, 'two-columns', 'compare needs exactly two `###` columns');
+        if (b.name === 'agenda') { // the contents page (#75): a part without sub-parts is fine; too many parts is a page nobody reads
+          var ag = agendaParts(b, doc, i);
+          var stray = b.lines.filter(function (l) { return l.trim() && !/^\s*[-*]\s+/.test(l); })[0];
+          if (stray) warn(n, b.name, 'agenda-line', '`' + cut(stray.trim(), 40) + '`: an agenda line is `- Part | sub-part ; sub-part` — anything else is not drawn; leave the block empty to list the deck\'s own parts');
+          if (!ag.parts.length) warn(n, b.name, 'agenda-empty', 'nothing to list: the deck has no part yet — give its parts a `::: section` divider (or a `section:` label), or write them, `- Part | sub-part ; sub-part`');
+          else if (ag.parts.length > AGENDA_PARTS || ag.lines > AGENDA_LINES) warn(n, b.name, 'agenda-long', ag.parts.length + ' parts and ' + (ag.lines - ag.parts.length) + ' sub-parts' + (ag.auto ? ' found in the deck' : '') + ': more than ' + AGENDA_PARTS + ' parts or ' + AGENDA_LINES + ' lines overflow a page — ' + (has(b.attrs, 'parts') ? 'group the slides into fewer parts' : 'keep the parts alone with `::: agenda {.parts}`, group the slides into fewer parts') + ', or write a shorter one, `- Part | sub-part ; sub-part`');
+        }
         if (b.name === 'table') {
           var t = table(b);
           if (!t.rows.length) err(n, b.name, 'table-rows', 'a table without rows: write `| a | b |` lines, the header above a `|---|---|` line');
@@ -2220,6 +2368,7 @@ globalThis.JMD = (function () {
       if (memo) { var of = String(slice(track.querySelectorAll('.slide')).indexOf(section)); pieces.forEach(function (pc) { pc.el.setAttribute('data-of', of); }); } // it may land in another section's sheet: the editor reads whose it is
       body.textContent = '';
       var shell = first.cloneNode(true); // an empty sheet: the chrome, the watermark, the foot — the body to fill, on white
+      slice(shell.querySelectorAll('.decor:not(.decor--edge-top):not(.decor--edge-bottom):not(.decor--edge-left):not(.decor--edge-right)')).forEach(function (d) { d.remove(); }); // the next sheets keep the brand's edges, not its corners
       shell.className = shell.className.split(' ').filter(function (c) { return !/^slide--|^sheet--opener$/.test(c); }).join(' '); shell.removeAttribute('data-intent');
       var sheet = first, cur = body, here = []; // `here`: the pieces on the current sheet
       if (memo && carry) { first.remove(); sheet = carry.sheet; cur = carry.cur; here = carry.here; }
@@ -2342,6 +2491,22 @@ globalThis.JMD = (function () {
   // Overflow measured in the DOM: the last body element must stay above the bottom margin of the page (the rects are read at
   // screen scale, so the zoom that makes a Memo page A4 is already in them). A webpage has no bottom: only the boxes are checked.
   function lintOverflow(track, out, lay) {
+    // `decor-crowds` (1.49.0): a brand element, other than a page-sized drawing, that lies under the words — the lines of text measured
+    // against the element's box; past a tenth of the page's words it is said, once per element and page
+    Array.prototype.forEach.call(track.querySelectorAll('.slide'), function (sec, i) {
+      Array.prototype.forEach.call(sec.querySelectorAll('.decor:not(.decor--full)'), function (d) {
+        var r = d.getBoundingClientRect(), words = 0, hit = 0; if (!r.width || !r.height) return;
+        // the words themselves, line by line (a centred title is not as wide as its box), wherever they sit on the page
+        var walk = document.createTreeWalker(sec, NodeFilter.SHOW_TEXT, null), t, range = document.createRange();
+        while ((t = walk.nextNode())) {
+          if (!/\S/.test(t.nodeValue) || !t.parentElement || t.parentElement.closest('.decor-layer, .wm, .slide-chrome, .slide-tag, .slide-foot')) continue;
+          range.selectNodeContents(t);
+          Array.prototype.forEach.call(range.getClientRects(), function (q) { var x = Math.max(0, Math.min(r.right, q.right) - Math.max(r.left, q.left)), y = Math.max(0, Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top)); hit += x * y; words += q.width * q.height; });
+        }
+        var name = ((d.querySelector('use') || { getAttribute: function () { return ''; } }).getAttribute('href') || '').replace('#brand-decor-', '');
+        if (words && hit / words > 0.1) out.push({ level: 'warning', slide: i + 1, block: null, rule: 'decor-crowds', message: 'the brand element `' + name + '` lies under ' + Math.round(hit / words * 100) + ' % of the words of this page: in the brand, a smaller size, another corner, or `layouts:` without ' + lay });
+      });
+    });
     var page = PAGES[lay] || PAGES.slide, slides = track.querySelectorAll('.slide');
     if (page.sheets) { // a long document: only a piece taller than a whole sheet can still cross its foot
       Array.prototype.forEach.call(slides, function (sec, i) {

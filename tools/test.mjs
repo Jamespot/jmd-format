@@ -540,6 +540,46 @@ try {
     }
   }
 
+  console.log('\n7d. The contents page: agenda, built from the deck or written (#75)');
+  {
+    const H = '---\nformat: jmd/3\nlayout: slide\ntitle: Plan\n---\n';
+    const sl = (body, meta = '') => '\n---\nnotes: n\n' + meta + '---\n' + body + '\n';
+    const div = t => sl('::: section\n' + t + '\n:::');
+    const deck = (agenda, rest) => H + sl('# Cover') + sl('## Contents\n\n' + agenda) + rest;
+    const parts = div('Context') + sl('## Why now') + sl('## The market') + sl('## The market') + div('Offer') + sl('## Product');
+    const agendaOf = html => (/<div class="agenda[^"]*"[\s\S]*?(?=<div class="slide-tag">)/.exec(html) || [''])[0];
+    const words = html => [...agendaOf(html).matchAll(/<span class="agenda-(n|t|k|s)"[^>]*>([^<]*)<\/span>/g)].map(m => m[2]).join(' ').replace(/\s+/g, ' ').trim();
+    const auto = deck('::: agenda\n:::', parts), ah = JMD.render(JMD.parse(auto), {});
+    ok(words(ah) === '1. Context a. Why now b. The market 2. Offer a. Product', 'agenda, empty: the dividers are the parts, the slide titles under them the sub-parts, numbered 1. 2. and a. b. — the cover, the agenda\'s own slide, the dividers and a title repeated never listed', words(ah));
+    ok(/agenda--auto/.test(ah) && !/data-line/.test(agendaOf(ah)) && !JMD.lint(JMD.parse(auto)).some(f => f.level !== 'info'), 'agenda, empty: built, not written — no source line to edit in place; the deck lints clean');
+    const moved = deck('::: agenda\n:::', div('Context') + sl('## The market') + div('Offer') + sl('## Product') + sl('## Why now, renamed'));
+    ok(words(JMD.render(JMD.parse(moved), {})) === '1. Context a. The market 2. Offer a. Product b. Why now, renamed', 'agenda, empty: a slide moved to another part and renamed — the contents follow at the next render, never out of date');
+    const labels = H + sl('# Cover') + sl('## Contents\n\n::: agenda\n:::', 'section: Contents\n') + sl('## Why now', 'section: Context\n') + sl('## The market') + sl('## Product', 'section: Offer\n') + sl('## Pricing', 'section: Offer\n');
+    ok(words(JMD.render(JMD.parse(labels), {})) === '1. Context a. Why now b. The market 2. Offer a. Product b. Pricing', 'agenda, empty, no divider: the `section:` labels are the parts (a part opens where the label changes); the label the agenda\'s own slide carries is no part');
+    const flat = H + sl('# Cover') + sl('## Contents\n\n::: agenda\n:::') + sl('## One') + sl('## Two');
+    ok(words(JMD.render(JMD.parse(flat), {})) === '1. One 2. Two', 'agenda, empty, a deck without parts: its slide titles are the parts');
+    const inside = deck('::: agenda\n:::', div('Context') + sl('## Why now') + sl('## Where we are\n\n::: agenda {.parts}\n:::') + div('Offer') + sl('## Product'));
+    const ih = JMD.render(JMD.parse(inside), {}), second = ih.split('<section').filter(x => /agenda--/.test(x))[1];
+    ok(/agenda--lit/.test(second) && /agenda-part is-hero"><p class="agenda-h"><span class="agenda-n">1\.<\/span><span class="agenda-t">Context/.test(second) && !/agenda-subs/.test(second) && !/agenda--lit/.test(ih.split('<section').filter(x => /agenda--/.test(x))[0]) && words(ih).indexOf('Where we are') < 0, 'agenda inside a part lights that part, the one before the first part lights none; `{.parts}` keeps the parts alone; an agenda slide is never a sub-part', second && second.slice(0, 300));
+    const written = deck('::: agenda\n- Results | Revenue ; Customers\n- Plan | Budget {.hero}\n- Decisions\n- Annex {.plain}\n:::', parts);
+    const wh = JMD.render(JMD.parse(written), {});
+    ok(words(wh) === '1. Results a. Revenue b. Customers 2. Plan a. Budget 3. Decisions Annex' && /is-hero"><p class="agenda-h"><span class="agenda-n">2\./.test(wh) && !/agenda--auto/.test(wh), 'agenda, written: `- Part | sub-part ; sub-part` says what the author wrote, not the deck; `{.hero}` lights a part, `{.plain}` leaves it unnumbered, a part without sub-parts is fine', words(wh));
+    ok(/<span class="agenda-t" data-line="\d+" data-col="0">Results<\/span>/.test(wh) && /<span class="agenda-s" data-line="\d+" data-col="1">Budget<\/span>/.test(wh) && /<span class="agenda-s">Revenue<\/span>/.test(wh), 'agenda, written: a part is edited in place; a lone sub-part too, never one of several sharing a column');
+    const cols = n => { const its = Array.from({ length: n }, (_, k) => '- Part ' + k + ' | a ; b').join('\n'); return (/agenda--c(\d)/.exec(JMD.render(JMD.parse(deck('::: agenda\n' + its + '\n:::', '')), {})) || [])[1]; };
+    const story = /agenda--c(\d)/.exec(JMD.render(JMD.parse(deck('::: agenda\n' + Array.from({ length: 7 }, (_, k) => '- P' + k + ' | a ; b').join('\n') + '\n:::', '').replace('layout: slide', 'layout: story')), {}))[1];
+    ok(cols(2) === '1' && cols(4) === '2' && cols(7) === '3' && story === '1', 'agenda: one to three columns by length (6, 12 and 21 lines), one on a Story screen', [cols(2), cols(4), cols(7), story].join(' '));
+    const balanced = JMD.render(JMD.parse(deck('::: agenda\n- A | 1 ; 2 ; 3 ; 4 ; 5 ; 6 ; 7\n- B | 1\n- C | 1\n- D | 1\n:::', '')), {});
+    ok(balanced.split('<div class="agenda-col">').slice(1).map(c => (c.match(/agenda-part/g) || []).length).join(',') === '1,3', 'agenda: a part never splits across columns, the columns balanced on their lines');
+    const lintOf = src => JMD.lint(JMD.parse(src)).filter(f => f.block === 'agenda').map(f => f.level + ':' + f.rule);
+    const nine = Array.from({ length: 9 }, (_, k) => '- Part ' + k).join('\n');
+    ok(lintOf(deck('::: agenda\n' + nine + '\n:::', '')).join() === 'warning:agenda-long' && lintOf(deck('::: agenda {.parts}\n:::', Array.from({ length: 9 }, (_, k) => div('P' + k) + sl('## S' + k)).join(''))).join() === 'warning:agenda-long', 'lint: nine parts is `agenda-long`, a warning — written or found in the deck');
+    ok(lintOf(H + sl('# Cover') + sl('## Contents\n\n::: agenda\n:::')).join() === 'warning:agenda-empty' && lintOf(deck('::: agenda\n- A | b\nnot an item\n:::', '')).join() === 'warning:agenda-line' && !lintOf(written).length, 'lint: an empty agenda with nothing to list is `agenda-empty`, a line that is no item `agenda-line`; a written agenda with a part without sub-parts is clean');
+    const hostile = JMD.render(JMD.parse(deck('::: agenda\n:::', sl('## <img src=x onerror=alert(1)>', 'section: <script>alert(1)</script>\n'))), {});
+    ok(!/<script>alert|<img src=x/.test(agendaOf(hostile)) && /&lt;script&gt;alert\(1\)&lt;\/script&gt;/.test(agendaOf(hostile)), 'agenda, empty: a label or a title it takes from another slide is text, escaped like every word of the deck (spec/security.md §1)');
+    const dark = JMD.render(JMD.parse(deck('::: agenda\n:::', parts).replace('---\n## Contents', 'intent: problem\n---\n## Contents')), {});
+    ok(/slide--indigo[^"]*"[\s\S]*agenda agenda--c1/.test(dark), 'agenda: on a dark intent the block is the same, its colors the slide\'s (engine.css)');
+  }
+
   console.log('\n7b. Case: what the format names is read in lowercase');
   {
     const mixed = '---\nFORMAT: JMD/1\nLayout: Doc\nTitle: Case Does Not Matter\nBrand: Jamespot-Basic\n---\n\n---\nIntent: Hook\nSection: Mixed Case\nNotes: Notes Keep Their Case.\n---\n## A Title\nLead.\n\n::: Metrics\n- 1 | one | first {.Hero}\n- 2 | two | second\n:::\n\n---\nBG: Lavender\nnotes: n\n---\n::: Statement\nCase is not a rule.\n:::\n';
@@ -960,6 +1000,26 @@ try {
       const [, , s2, s3] = lb.draft.split(/\n---\nbg: \w+\n---\n/);
       ok(/^## Attendees\n\n- Ada Lovelace - CTO\n- Alan Turing - DevOps\n- Grace Hopper - CISO\n/.test(s2) && /^::: section\nNext steps\n:::/.test(s3), 'import: one text box holding a list is a title and its bullets, never a section of one long line; one short box is still a section', JSON.stringify([s2, s3]));
     }
+    /* A contents page (#75): a slide titled « Sommaire » whose paragraphs are parts and, indented under them, sub-parts — the
+       public-sector template of the issue — comes back as `::: agenda`, its numbers dropped (the block numbers by itself). */
+    {
+      const para = (t, lvl = 0, sz = 2400) => `<a:p>${lvl ? `<a:pPr lvl="${lvl}"/>` : ''}<a:r><a:rPr sz="${sz}"/><a:t>${t}</a:t></a:r></a:p>`;
+      const box = (ps, x = 457200, ph = '') => `<p:sp><p:nvSpPr>${ph}</p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="1457200"/><a:ext cx="3000000" cy="4000000"/></a:xfrm></p:spPr><p:txBody>${ps.join('')}</p:txBody></p:sp>`;
+      const titled = (t, boxes) => `<p:sld><p:cSld><p:spTree>${box([para(t, 0, 4000)], 457200, '<p:ph type="title"/>').replace('1457200', '200000')}${boxes.join('')}</p:spTree></p:cSld></p:sld>`;
+      writeFileSync(join(tmp, 'contents.pptx'), writeZip({
+        'ppt/slides/slide1.xml': titled('Le plan 2027', [box([para('Une année de pilotes')])]),
+        'ppt/slides/slide2.xml': titled('Sommaire', [box([para('1. Le contexte'), para('a. Le marché', 1, 1800), para('b. Nos clients', 1, 1800), para('2. L’offre')]), box([para('3. La feuille de route'), para('a) Le pilote', 1, 1800), para('Annexe')], 5000000)]),
+        'ppt/slides/slide3.xml': titled('Sommaire des risques', [box([para('Un'), para('Deux'), para('Trois')])]),
+        'ppt/slides/slide4.xml': titled('Plan', [box([para('1. Cadrage'), para('2. Pilote'), para('3. Déploiement')])]),
+      }, { paths: true }));
+      const { importPptx } = await import('../lib/import-pptx.mjs');
+      const ct = await importPptx(join(tmp, 'contents.pptx'), join(tmp, 'contents'));
+      ok(/## Sommaire\n\n::: agenda\n- Le contexte \| Le marché ; Nos clients\n- L’offre\n- La feuille de route \| Le pilote\n- Annexe\n:::/.test(ct.draft) && /\| agenda \| Sommaire \|/.test(ct.report), 'import: a « Sommaire » slide becomes `::: agenda` — the parts and, indented under them, the sub-parts, column by column, their numbers dropped', ct.draft.slice(0, 900));
+      ok(!/::: agenda[\s\S]*Un\n/.test(ct.draft.split('Sommaire des risques')[1] || '') && ct.draft.includes('## Sommaire des risques'), 'import: a slide that only starts like a contents page stays a title and its text');
+      ok(!JMD.lint(JMD.parse(ct.draft)).some(f => f.level === 'error' && f.block === 'agenda'), 'import: the drafted agenda lints');
+      const planSlide = ct.draft.split('## Plan\n')[1] || '';
+      ok(ct.draft.includes('## Plan\n') && !/::: agenda/.test(planSlide) && /1\. Cadrage/.test(planSlide) && (ct.draft.match(/::: agenda/g) || []).length === 1, 'import: a slide titled « Plan » (a project plan as often as a contents page) stays an ordinary slide, never an agenda', planSlide.slice(0, 200));
+    }
     if (process.env.JMD_TEST_PPTX && existsSync(process.env.JMD_TEST_PPTX)) {
       const out = execSync(`node bin/jmd.mjs import "${process.env.JMD_TEST_PPTX}" -o ${join(tmp, 'imp')}`, { cwd: root }).toString();
       ok(/\d+ slides, \d+ images/.test(out) && existsSync(join(tmp, 'imp/import-report.md')) && existsSync(join(tmp, 'imp/brand-draft.yaml')), 'jmd import: draft, media, brand draft and report written');
@@ -996,6 +1056,13 @@ try {
     const back = await importPptx(join(tmp, 'export.pptx'), join(tmp, 'export-back'), { brand: ANY_BRAND });
     const backSrc = readFileSync(back.jmd, 'utf8');
     ok(back.slides === 2 && backSrc.includes('Second screen') && backSrc.includes('42'), 'pptx: our own importer opens the export and finds its screens and words', `${back.slides} slides`);
+    // #75: a contents page leaves as native text, its numbers real characters — and our importer reads it back as an agenda
+    const agendaBuf = await jmdLib.pptx(readFileSync(join(root, 'decks/samples/agenda.jmd'), 'utf8'), { brand: ANY_BRAND });
+    const agendaTexts = [...readZip(agendaBuf).text('ppt/slides/slide2.xml').matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m => m[1]);
+    ok(['1.', 'Where we stand', 'a.', 'Incidents don\'t wait for office hours', '3.', 'How we get there'].every(t => agendaTexts.includes(t.replace(/'/g, '&apos;')) || agendaTexts.includes(t)), 'pptx: the agenda is native text, its numbers and letters included', agendaTexts.join(' | '));
+    writeFileSync(join(tmp, 'agenda.pptx'), agendaBuf);
+    const agendaBack = readFileSync((await importPptx(join(tmp, 'agenda.pptx'), join(tmp, 'agenda-back'), { brand: ANY_BRAND })).jmd, 'utf8');
+    ok(/::: agenda\n- Where we stand \| Incidents don.t wait for office hours ; What the teams asked for\n- What we offer \| Prepare, react, continue ; One price per team\n/.test(agendaBack), 'pptx: our importer reads the exported contents page back as an agenda, parts and sub-parts', (/::: agenda[\s\S]*?:::/.exec(agendaBack) || [agendaBack.slice(0, 400)])[0]);
     let refusedWeb = null; try { await jmdLib.pptx('---\nformat: jmd/1\nlayout: webpage\n---\n\n# One page\n'); } catch (e) { refusedWeb = e; }
     ok(refusedWeb && refusedWeb.code === 'JMD_NO_SCREEN', 'pptx: a webpage has no screens to give PowerPoint — refused in words', String(refusedWeb));
     /* The face (spec/export.md "Fonts"): the brand's own is embedded in a deck, never in an Office file — the brand names the
@@ -1055,6 +1122,129 @@ try {
   try { loadBrand('primary: "#000"\nlogo: nope'); } catch (e) { err = e.message; } ok(err.includes('not one of the marks'), 'an unknown mark is refused, the list given');
   const sym = markSymbol('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" onload="x()"><script>evil()</script><circle cx="5" cy="5" r="4"/></svg>');
   ok(sym.startsWith('<symbol id="brand-mark" viewBox="0 0 10 10">') && sym.includes('<circle') && !sym.includes('script') && !sym.includes('onload'), 'a customer SVG becomes the brand-mark symbol, scripts and handlers dropped');
+
+  console.log('\n10c. Brands: the page layout a charter decides (#73) — align, footer-band, cover-logo, table-head, chrome-label');
+  {
+    const { validateBrand } = await import('./safe.mjs');
+    const { customBrand, parseBrand, buildHtml, tableHead, chromeLabel, logoRatio, contrast } = await import('../tools/build.mjs');
+    const jmdLib = await import('../lib/jmd.mjs');
+    const { readZip } = await import('./zip.mjs');
+    const KEYS = { align: ['center', 'left'], 'footer-band': ['none', 'line'], 'cover-logo': ['small', 'large'], 'table-head': ['strong', 'light'], 'chrome-label': ['mono', 'body'] };
+    // every value by shape: the two words of each key pass, anything else is refused with the key named — a CSS fragment, markup, another case
+    const refusedAll = Object.keys(KEYS).every(k => ['right', 'LEFT', 'left;}body{display:none', '</style><script>alert(1)</script>', 'line"'].every(v => { try { validateBrand({ primary: '#000', [k]: v }); return false; } catch (e) { return e.message.startsWith('brand ' + k + ':'); } }));
+    ok(Object.entries(KEYS).every(([k, vs]) => vs.every(v => validateBrand({ primary: '#000', [k]: v }))) && refusedAll, 'brand layout keys: the two words of each pass, a value out of the list (a CSS fragment, markup, LEFT) is refused naming the key');
+    let yamlErr = ''; try { customBrand(parseBrand('primary: "#123456"\nfooter-band: </style>'), 'x'); } catch (e) { yamlErr = e.message; }
+    ok(/^brand footer-band: .* is not one of none, line$/.test(yamlErr), 'a brand.yaml with a footer-band out of the list is refused, nothing built', yamlErr);
+    // defaults: a brand that says none of them draws the very same page, and its CSS has no new variable
+    const four = readFileSync(join(root, 'decks/samples/four-blocks.jmd'), 'utf8');
+    const same = ['ocean', 'slate', ANY_BRAND].every(id => { const b = loadBrand(id), d = { ...b, align: 'center', 'footer-band': 'none', 'cover-logo': 'small', 'table-head': 'strong', 'chrome-label': 'mono' }; const a = JMD.render(JMD.parse(four), { brand: b }); return a === JMD.render(JMD.parse(four), { brand: d }) && !/brand-(align|band|logo|thead|label)|slide-band/.test(a); });
+    ok(same && !/--brand-thead-(bg|ink):|--brand-logo-ratio:/.test(buildHtml({ jmd: four, brand: 'ocean' })), 'brand layout keys: left out or at their default, the page is the very same as before — no class, no band, no new CSS variable');
+    // the sample charter (decks/samples/charter): a fictional public body, every key on, its logo beside its brand.yaml
+    const cdir = join(root, 'decks/samples/charter');
+    const charter = () => { const b = jmdLib.withSvgLogo(customBrand(parseBrand(readFileSync(join(cdir, 'charter.yaml'), 'utf8')), 'charter'), readFileSync(join(cdir, 'logo.svg'), 'utf8')); b.logo = 'custom'; return b; };
+    const sample = n => readFileSync(join(cdir, n + '.jmd'), 'utf8');
+    for (const n of Object.keys(KEYS)) {
+      const r = await jmdLib.lintDom(sample(n), { brand: charter() });
+      ok(r.ok === true && !r.findings.some(f => f.rule === 'overflow' || f.rule === 'fit'), `charter/${n}.jmd lints clean in the charter brand, nothing pushed over the band`, JSON.stringify(r.findings.filter(f => f.level !== 'info')));
+    }
+    const cb = charter(), html = JMD.render(JMD.parse(sample('footer-band')), { brand: cb });
+    ok((html.match(/<div class="slide-band">/g) || []).length === 3 && html.includes('<span class="band-l">Office national de l\'exemple · Direction des usages numériques</span>') && html.includes('<span class="band-date">9 novembre 2026</span>') && html.includes('data-px-field="slidenum">3</span>'),
+      'footer-band: line — every slide gets the band: the brand\'s footer on the left, the deck\'s date and the page number on the right');
+    const hostile = JMD.render(JMD.parse('---\nformat: jmd/3\nlayout: slide\ntitle: t\ndate: <img src=x onerror=alert(1)>\n---\n---\n## A\n'), { brand: { ...cb, footer: '</div><script>alert(2)</script>' } });
+    ok(!/<script|<img/.test(hostile) && hostile.includes('&lt;/div&gt;&lt;script&gt;') && hostile.includes('&lt;img'), 'footer-band: the footer and the date are text in the band, never markup');
+    const lay = l => JMD.render(JMD.parse(sample('footer-band').replace('layout: slide', 'layout: ' + l)), { brand: cb });
+    ok(lay('story').includes('slide-band') && !lay('memo').includes('slide-band') && !lay('doc').includes('slide-band') && !lay('webpage').includes('slide-band'), 'footer-band: on a Slide and a Story; a Memo and a Doc keep their own footer, a webpage has no pages');
+    // contrast, computed: the light head's words read on its tint (4.5:1), the brand's ink when it can, black otherwise
+    const th = tableHead(cb), pale = tableHead({ primary: '#1F3A68', ink: '#BBBBBB' });
+    const shipped = brands().map(b => tableHead(loadBrand(b.id)));
+    ok(th.ink === '#161616' && th.ratio >= 4.5 && pale.ink === '#000000' && pale.ratio >= 4.5 && shipped.every(t => t.ratio >= 4.5) && Math.abs(contrast('#000000', '#FFFFFF') - 21) < 0.01,
+      `table-head: light — the header's words read on its tint (charter ${th.ratio.toFixed(1)}:1; a pale ink gives way to black; every shipped brand ≥ 4.5:1)`, shipped.map(t => t.ratio.toFixed(1)).join(' '));
+    ok(logoRatio(cb.markSvg) === 3 && logoRatio('<symbol id="brand-mark">') === 1 && logoRatio('<symbol id="brand-mark" viewBox="0 0 100000 1">') === 8, 'cover-logo: the logo\'s proportions come from its viewBox, bounded (a wide institutional block is 3:1 here)');
+    const built = buildHtml({ jmd: sample('cover-logo'), brand: cb });
+    ok(built.includes(`--brand-thead-bg:${th.bg};`) && built.includes('--brand-thead-ink:#161616;') && built.includes('--brand-logo-ratio:3;'), 'the charter\'s :root carries the computed head colours and the logo ratio, nothing of its words');
+    // in the page: what each key does, read from the computed styles
+    const cfile = join(tmp, 'charter.html'); writeFileSync(cfile, buildHtml({ jmd: sample('align') + '\n---\nsection: Données\n---\n## Un tableau\n\n::: table\n| a | b |\n|---|---|\n| 1 | 2 |\n:::\n', brand: cb }));
+    const cp = await open('file://' + cfile); await cp.settle(300);
+    const got = JSON.parse(await cp.eval(`(() => { const s = jamesJmd.state.slides, cs = (el, k) => el ? getComputedStyle(el)[k] : null;
+      return JSON.stringify({ cover: cs(s[0].querySelector('.body-pad'), 'textAlign'), coverItems: cs(s[0].querySelector('.body-pad'), 'alignItems'), divider: cs(s[1].querySelector('.divider'), 'textAlign'),
+        act: cs(s[3].querySelector('.body-pad'), 'textAlign'), logoW: s[0].querySelector('.lockup svg').getBoundingClientRect().width, logoH: s[0].querySelector('.lockup svg').getBoundingClientRect().height, smallH: s[1].querySelector('.lockup svg').getBoundingClientRect().height,
+        tag: cs(s[0].querySelector('.slide-tag'), 'display'), band: cs(s[0].querySelector('.slide-band'), 'fontFamily') === cs(s[0], 'fontFamily'), bandBottom: s[0].querySelector('.slide-band').getBoundingClientRect().bottom - s[0].getBoundingClientRect().bottom,
+        label: cs(s[1].querySelector('.chrome-meta'), 'textTransform'), labelInk: cs(s[1].querySelector('.chrome-meta'), 'color'), labelDark: cs(s[3].querySelector('.chrome-meta'), 'color'), labelFont: cs(s[1].querySelector('.chrome-meta'), 'fontFamily') === cs(s[0], 'fontFamily'),
+        thBg: cs(s[4].querySelector('.table thead th'), 'backgroundColor'), thInk: cs(s[4].querySelector('.table thead th'), 'color') }); })()`));
+    await cp.close();
+    const rgbHex = h => 'rgb(' + [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)).join(', ') + ')';
+    ok(got.cover === 'left' && got.coverItems === 'flex-start' && got.divider === 'left' && got.act === 'left', 'align: left — the cover, a divider and a centred intent (act) start on the left', JSON.stringify(got));
+    ok(got.tag === 'none' && got.band && got.bandBottom < 0, 'footer-band: line — the band is in the body font, inside the page, and the corner number gives way to it', JSON.stringify(got));
+    ok(Math.abs(got.logoW / got.logoH - 3) < 0.05 && Math.abs(got.logoH / got.smallH - 76 / 30) < 0.1, 'cover-logo: large — the block is 76 against 30 px high on the cover (the page is scaled to the window), at its own proportions, small in the other pages\' header', JSON.stringify(got));
+    ok(got.thBg === rgbHex(th.bg) && got.thInk === rgbHex(th.ink), 'table-head: light — the header in the tint, its words in ink', JSON.stringify(got));
+    const lab = chromeLabel(cb);
+    ok(got.label === 'none' && got.labelFont && got.labelInk === rgbHex(lab.ink) && got.labelDark === rgbHex(lab.primary), 'chrome-label: body — the section name in the body font, as written, in the computed colour on a white and on a dark page', JSON.stringify(got));
+    // its contrast, computed: 4.5:1 on every page it can sit on, for the charter and every shipped brand — ink or black on the light pages, white or black on the dark ones
+    const labs = [['charter', lab], ...brands().map(b => [b.id, chromeLabel(loadBrand(b.id))])];
+    ok(labs.every(([, l]) => Object.values(l.ratios).every(r => r >= 4.5)) && chromeLabel({ primary: '#1F3A68', accent: '#FFE14D', ink: '#AAAAAA' }).ink === '#000000' && chromeLabel({ primary: '#1F3A68', accent: '#FFE14D' }).accent === '#000000',
+      'chrome-label: body — the label reads at 4.5:1 on the light pages and on the deep, accent and secondary ones; a pale ink gives way to black, a pale accent takes black words', labs.map(([id, l]) => id + ' ' + Object.values(l.ratios).map(r => r.toFixed(1)).join('/')).join(' · '));
+    ok(!/--brand-label-/.test(buildHtml({ jmd: four, brand: { ...loadBrand('ocean'), 'chrome-label': 'mono' } }).split('</style>')[1]), 'chrome-label: mono — the default look gets no label colour of its own');
+    // the exports: the PDF carries the band's words, the PNG is drawn, the PowerPoint writes the band once as a layout
+    const pdfBuf = await jmdLib.pdf(sample('footer-band'), { brand: charter() }); writeFileSync(join(tmp, 'charter.pdf'), pdfBuf);
+    const pdfTxt = execSync(`pdftotext -layout ${JSON.stringify(join(tmp, 'charter.pdf'))} -`).toString();
+    ok(/Office national de l.exemple/.test(pdfTxt) && pdfTxt.includes('9 novembre 2026 · 3'), 'PDF: the band\'s words are there, page number included');
+    const pngs = await jmdLib.render(sample('table-head'), { brand: charter() });
+    ok(pngs.length === 1 && pngs[0].subarray(1, 4).toString() === 'PNG', 'PNG: the charter draws');
+    const z = readZip(await jmdLib.pptx(sample('footer-band'), { brand: charter() }));
+    const l2 = z.text('ppt/slideLayouts/slideLayout2.xml'), s1 = z.text('ppt/slides/slide1.xml');
+    const layoutOf = n => /slideLayout(\d+)\.xml/.exec(z.text(`ppt/slides/_rels/slide${n}.xml.rels`))[1];
+    ok(/Office national de l'exemple · Direction des usages numériques/.test(l2) && /<a:fld [^>]*type="slidenum"/.test(l2) && l2.includes('9 novembre 2026') && !s1.includes('Office national') && !s1.includes('9 novembre 2026'),
+      'PPTX: the band is the slide layout\'s — the organisation, the date and PowerPoint\'s slide-number field — never repeated on each slide');
+    ok(layoutOf(1) === '2' && layoutOf(2) === '2' && layoutOf(3) === '3' && z.has('ppt/slideLayouts/slideLayout3.xml') && (z.text('ppt/slideMasters/slideMaster1.xml').match(/<p:sldLayoutId /g) || []).length === 3,
+      'PPTX: the white pages share one band layout, the dark page has its own in white words; the master lists the three');
+    ok(/algn="l"/.test(z.text('ppt/slides/slide1.xml')) && !/algn="ctr"/.test(z.text('ppt/slides/slide1.xml')), 'PPTX: the cover keeps its left alignment');
+    const plain = readZip(await jmdLib.pptx(four, { brand: 'ocean' }));
+    ok(!plain.has('ppt/slideLayouts/slideLayout2.xml'), 'PPTX: a brand without a band keeps the one blank layout');
+  }
+
+  console.log('\n10d. The typeface catalogue (#83): open-licence faces a brand names, carried by the deck');
+  {
+    const F = await import('./fonts.mjs'), { buildHtml, contentSecurityPolicy } = await import('./build.mjs');
+    const cat = F.catalogue(), cdir = join(root, 'themes/brands/fonts/catalogue');
+    let bytes = 0; const broken = [];
+    for (const f of cat) {
+      const lic = existsSync(join(cdir, f.id, 'LICENSE')) ? readFileSync(join(cdir, f.id, 'LICENSE'), 'utf8') : '';
+      if (!/SIL Open Font License|Apache License/.test(lic) || !['OFL-1.1', 'Apache-2.0'].includes(f.licence)) broken.push(f.id + ': licence');
+      if (!/^npm:@fontsource\/[a-z0-9-]+@\d+\.\d+\.\d+$/.test(f.source) || !/^sha512-/.test(f.integrity)) broken.push(f.id + ': source not pinned');
+      if (!F.FONT_GROUPS.includes(f.group) || !['Arial', 'Georgia', 'Courier New'].includes(f.office) || !f.sample || !/^[MLQCZ0-9 .-]+$/.test(f.sample.d)) broken.push(f.id + ': group, office face or sample');
+      if (!f.files.some(x => x.subset === 'latin') || !f.files.some(x => x.subset === 'latin-ext')) broken.push(f.id + ': subsets');
+      for (const x of f.files) {
+        const p = join(cdir, f.id, x.file), b = existsSync(p) ? readFileSync(p) : Buffer.alloc(0); bytes += b.length;
+        if (b.subarray(0, 4).toString('latin1') !== 'wOF2' || createHash('sha256').update(b).digest('hex') !== x.sha256) broken.push(x.file + ': not the file the manifest names');
+        if (!/^[\w.-]+\.woff2$/.test(x.file) || !/^\d{3} \d{3}$/.test(x.weight) || !/^U\+[0-9A-F?,U+-]+$/i.test(x.range)) broken.push(x.file + ': shape');
+      }
+    }
+    ok(cat.length >= 20 && cat.length <= 30 && !broken.length && F.FONT_GROUPS.every(g => cat.some(f => f.group === g)),
+      `the catalogue: ${cat.length} faces in four groups, each with its licence text, a pinned source, and every file the very bytes its sha256 names (${(bytes / 1048576).toFixed(2)} MB)`, broken.slice(0, 8).join(' · '));
+    const deckOf = brand => buildHtml({ jmd: '---\nformat: jmd/1\nlayout: slide\ntitle: T\n---\n# Title\n', brand });
+    const families = h => [...new Set([...h.matchAll(/@font-face\{font-family:'([^']+)'/g)].map(m => m[1]))];
+    const bad = [];
+    for (const f of cat) {
+      let h = ''; try { h = deckOf(`primary: "#123456"\nfont-display: ${f.family}\nfont-body: ${f.family}\n`); } catch (e) { bad.push(f.family + ': ' + e.message); continue; }
+      const fam = families(h);
+      if (fam.length !== 1 || fam[0] !== f.family || (h.match(/@font-face\{/g) || []).length !== f.files.length || !h.includes(`--brand-font-display:"${f.family}"`)) bad.push(f.family + ': ' + fam.join(','));
+    }
+    ok(!bad.length, 'every face validates as a brand\'s typeface, and a deck in it carries that face — each of its files — and no other', bad.slice(0, 5).join(' · '));
+    const two = deckOf('primary: "#123456"\nfont-display: playfair display\nfont-body: "Inter"\n');
+    ok(families(two).sort().join() === 'Inter,Playfair Display' && two.includes('--brand-font-display:"Playfair Display"') && !/url\((?!data:font\/woff2;base64,)/.test(two.match(/@font-face[^}]*\}/g).join(''))
+      && two.includes(contentSecurityPolicy('x').replace(/'sha256-x'/, '').split('; ').find(d => d.startsWith('font-src'))),
+      'a title face and a text face: both carried, named in any case, as data URIs alone — the deck\'s policy is unchanged (font-src data:)');
+    const unknown = deckOf('primary: "#123456"\nfont-display: Comic Neue\n');
+    ok(families(unknown).length === 0 && unknown.includes('--brand-font-display:"Comic Neue"'), 'a face out of the catalogue embeds nothing: it shows only where it happens to be installed');
+    ok(F.officeFor({ 'font-display': 'Lora' }) === 'Georgia' && F.officeFor({ 'font-display': 'JetBrains Mono' }) === 'Courier New' && F.officeFor({ 'font-display': 'Inter' }) === 'Arial' && F.officeFor({ 'font-display': 'Georgia' }) === null,
+      'a PowerPoint names, for a catalogue face, a face every office suite has: Georgia for a serif, Courier New for a mono, Arial otherwise');
+    writeFileSync(join(root, 'build/catalogue-lora.html'), deckOf('primary: "#123456"\nfont-display: Lora\nfont-body: Lora\n'));
+    const lp = await open('file://' + join(root, 'build/catalogue-lora.html'));
+    await lp.eval('Promise.all([document.fonts.load(\'400 20px "Lora"\', "Aé"), document.fonts.load(\'700 20px "Lora"\', "Aé")]).then(() => true)');
+    ok(await lp.eval('document.fonts.check(\'400 20px "Lora"\') && document.fonts.check(\'700 20px "Lora"\') && [...document.fonts].some(f => f.family.replace(/"/g, "") === "Lora" && f.status === "loaded")'),
+      'opened in Chrome, the deck in Lora has Lora loaded — from inside the file, Regular and Bold');
+    await lp.close();
+  }
 
   console.log('\n12. Security: the deck is data, never code (spec/security.md §1–§2)');
   {
@@ -1240,6 +1430,97 @@ try {
     ok(editOpen && /\.james-jmd\.html$/.test(await p.eval('window.__dl')) && await p.eval('window.__printed') === 1 && await p.eval('window.__printedAs') === (await p.eval('window.__dl')).replace(/\.james-jmd\.html$/, '') && /james-jmd$/.test(await p.eval('document.title')), 'under the CSP: the editor opens, D S exports, P prints — the PDF named like the page, the tab\'s title back after', JSON.stringify([await p.eval('window.__dl'), await p.eval('window.__printedAs')]));
     ok(/<meta http-equiv="Content-Security-Policy" content="[^"]*sha256-/.test(reExported) && new RegExp("sha256-" + runtimeHash[1].replace(/[+/=]/g, '\\$&')).test(reExported), 'the re-exported file keeps the CSP and the same runtime hash: it stays valid offline');
     await p.close();
+  }
+
+  console.log('\n12b. Brand decor: the charter\'s own elements, data never code (1.49.0, spec/jmd.md Brand decor)');
+  {
+    const { decorOf, decorSymbol, DECOR_SVG_ONLY } = await import('./safe.mjs');
+    const { buildHtml: bh, setBrandPaths: sbp } = await import('./build.mjs');
+    const jmdLib = await import('../lib/jmd.mjs');
+    const lb = y => loadBrand('primary: "#112233"\n' + y);
+    const refused = y => { try { lb(y); return null; } catch (e) { return e.message; } };
+    // the old name: a brand that only says `watermark:` keeps its look, and every shipped brand keeps the one it had
+    ok(lb('watermark: none').watermark === 'none' && lb('watermark: circles').watermark === 'circles' && lb('').watermark === 'mark' && lb('decor: none').watermark === 'none' && lb('decor: none').decorItems.length === 0,
+      'decor: `watermark:` is its old name (none, mark, circles read as before), and a custom brand that says neither still gets the mark');
+    const was = { mono: 'mark', ocean: 'mark', slate: 'mark', plum: 'mark', terracotta: 'mark', forest: 'mark', ...(HOUSE ? { jamespot: 'none', 'jamespot-tech': 'none', 'jamespot-sobre': 'none', 'jamespot-chaud': 'none' } : {}) };
+    ok(Object.entries(was).every(([id, wm]) => loadBrand(id).watermark === wm && loadBrand(id).decorItems.length === 0), 'decor: every shipped brand, now written with `decor:`, draws exactly what its `watermark:` drew');
+    const both = lb('watermark: mark\ndecor: quarter');
+    ok(both.watermark === 'none' && both.decorItems.length === 1 && both.decorItems[0].place === 'corner-br' && both.decorItems[0].tint === 'lavender', 'decor: when both are written decor wins; a ready element comes with its designer\'s place and colour');
+    const nested = lb('decor:\n  rule:\n    svg: band\n    place: edge-top\n    size: 3\n    tint: highlight\n    on: dark hook\n  mark:\n  glow-two:\n    svg: glow\n    place: full');
+    ok(nested.watermark === 'mark' && nested.decorItems.length === 2 && nested.decorItems[0].place === 'edge-top' && nested.decorItems[0].on.join() === 'dark,hook' && nested.decorItems[1].layouts.indexOf('story') < 0 && nested.decorItems[0].layouts.indexOf('story') >= 0,
+      'decor: named elements read from the brand.yaml, the engine\'s mark among them; a page-sized drawing leaves story out unless asked', JSON.stringify(nested.decorItems));
+    // what is not an SVG, and what tries to be more than data — each refused with the field named
+    const png = refused('decor:\n  photo:\n    svg: photo.png'), jpg = refused('decor: cover.jpg');
+    ok(png && png.includes(DECOR_SVG_ONLY) && jpg && jpg.includes(DECOR_SVG_ONLY) && /must be an SVG file \(no PNG, no JPEG\): a drawing takes the brand's colours/.test(png), 'decor: a PNG or a JPEG is refused with the sentence that says why', png);
+    const own = refused('decor:\n  x:\n    svg: band\n    tint: own'), hex = refused('decor:\n  x:\n    svg: band\n    tint: "#ff0000"');
+    ok(own && /always drawn in the brand's colours/.test(own) && hex && /tint/.test(hex), 'decor: no `tint: own` and no colour of its own — an element is always drawn in a colour of the brand', own);
+    ok(['place: corner-br" onload="alert(1)', 'size: 1e3', 'size: 0', 'opacity: 2', 'on: hook" x="', 'layouts: slide,print', 'svg: ../secret.svg', 'svg: javascript:alert(1).svg', 'svg: http://example.com/x.svg', 'svg: //evil.example/x.svg', 'colour: red']
+      .every(f => /^brand decor x/.test(refused('decor:\n  x:\n    svg: band\n    ' + f) || '')), 'decor: a place, a size, an opacity, pages, layouts, a path or a field out of shape is refused, the element named');
+    let named = null; try { decorOf({ decor: { 'a" onload="x': { svg: 'band' } } }); } catch (e) { named = e.message; }
+    let seven = null; try { decorOf({ decor: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(i => ['e' + i, { svg: 'band' }])) }); } catch (e) { seven = e.message; }
+    ok(named && /is not a name/.test(named) && seven && /6 at most/.test(seven), 'decor: a name that tries to leave its attribute is refused, and so is a seventh element');
+    // the SVG: the logo's allowlist, then repainted in the brand's colours
+    const hostile = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10" onload="alert(1)"><script>alert(2)</script><foreignObject><div>x</div></foreignObject><image href="https://evil.example/t.png"/><use xlink:href="https://evil.example/x.svg#a"/><defs><linearGradient id="g"><stop offset="0" stop-color="#ff0000" style="stop-opacity:.5"/><stop offset="1" style="stop-color:#00ff00"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)" onclick="alert(3)"/><path d="M0 0L10 10" stroke="blue" style="fill:red;stroke-width:2"/><circle r="1" fill="none"/></svg>';
+    const ds = decorSymbol('halo', hostile, 'corner-tl', 'secondary');
+    ok(!/script|foreignobject|<image|evil|on\w+=|https?:|#ff0000|#00ff00|blue|red/i.test(ds.symbol) && ds.symbol.startsWith('<symbol id="brand-decor-halo" preserveAspectRatio="xMinYMin meet"') && ds.dropped.includes('<script>') && ds.dropped.includes('onload'),
+      'decor SVG: script, handlers, foreign content, pictures and links out are gone, as for a logo', ds.symbol.slice(0, 200));
+    ok(ds.symbol.includes('fill="url(#dc-halo-g)"') && ds.symbol.includes('<linearGradient id="dc-halo-g">') && ds.symbol.includes('stroke="currentColor"') && /style="fill:currentColor;stroke-width:2"/.test(ds.symbol) && ds.symbol.includes('fill="none"')
+      && (ds.symbol.match(/stop-color:var\(--decor-secondary\)/g) || []).length === 2 && ds.symbol.includes('stop-opacity:.5'),
+      'decor SVG: every colour becomes the brand\'s — fills and strokes currentColor, gradient stops the tint\'s custom property — its ids prefixed per element, `none` and opacities kept', ds.symbol);
+    let big = null; try { decorSymbol('x', '<svg viewBox="0 0 1 1">' + '<rect width="1" height="1"/>'.repeat(5000) + '</svg>', 'full'); } catch (e) { big = e.message; }
+    ok(big && /100 KB at most/.test(big), 'decor SVG: more than 100 KB is refused');
+    // a file beside a local brand.yaml: under that folder's real path, nowhere else
+    const bdir = join(tmp, 'decor-brand'); mkdirSync(bdir, { recursive: true });
+    writeFileSync(join(tmp, 'outside.svg'), '<svg viewBox="0 0 1 1"><rect width="1" height="1" fill="#abcdef"/></svg>');
+    writeFileSync(join(bdir, 'mine.svg'), '<svg viewBox="0 0 10 10"><circle cx="10" cy="10" r="10" fill="#abcdef"/></svg>');
+    try { symlinkSync(join(tmp, 'outside.svg'), join(bdir, 'link.svg')); } catch { }
+    writeFileSync(join(bdir, 'brand.yaml'), 'primary: "#112233"\ndecor:\n  mine:\n    svg: mine.svg\n    place: corner-br\n');
+    writeFileSync(join(bdir, 'leak.yaml'), 'primary: "#112233"\ndecor:\n  link:\n    svg: link.svg\n');
+    const withMine = bh({ jmd: fixed, brand: join(bdir, 'brand.yaml') });
+    let leak = null; try { bh({ jmd: fixed, brand: join(bdir, 'leak.yaml') }); } catch (e) { leak = e.message; }
+    ok(withMine.includes('<symbol id="brand-decor-mine" preserveAspectRatio="xMaxYMax meet" viewBox="0 0 10 10"><circle cx="10" cy="10" r="10" fill="currentColor"/></symbol>') && leak && /outside the deck folder/.test(leak),
+      'decor: an SVG beside a local brand.yaml is read and rebuilt; a symlink out of that folder is refused', leak || '');
+    let noFolder = null; try { await jmdLib.resolveBrand('primary: "#112233"\ndecor:\n  mine:\n    svg: mine.svg'); } catch (e) { noFolder = e.message; }
+    ok(noFolder && /no folder here/.test(noFolder), 'decor: YAML text naming a file beside it has no folder to read it from, and says so', noFolder || '');
+    ok(/<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-[^']+'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">/.test(withMine),
+      'decor: the page\'s policy is the one every deck has — nothing new is allowed for it');
+    // where the elements go: cover, dark, light; every layout's rule; the deck's `decor: none`
+    const DD = (lay, extra = '') => `---\nformat: jmd/3\nlayout: ${lay}\ntitle: t\n${extra}---\n\n---\nintent: hook\n---\n# Cover\n\n---\nintent: problem\n---\n## Dark page\n\nWords.\n\n---\n---\n## Light page\n\nWords.\n`;
+    const qb = lb('decor: quarter waves band');
+    const parts = (lay, extra, brand = qb) => JMD.render(JMD.parse(DD(lay, extra)), { brand }).split('<section').slice(1).map(x => (x.match(/decor--[a-z-]+/g) || []).join(' '));
+    const sl = parts('slide');
+    ok(sl[0] === 'decor--full' && sl[1] === 'decor--full' && sl[2] === 'decor--corner-br decor--edge-bottom', 'decor: on a slide, the dark pages (the hook on accent, the problem on indigo) get the curves, the light page the corner and the band', JSON.stringify(sl));
+    const st = parts('story');
+    ok(st[0] === '' && st[1] === '' && st[2] === 'decor--corner-br decor--edge-bottom' && parts('story', '', lb('decor:\n  waves:\n    layouts: story'))[1] === 'decor--full', 'decor: a story leaves out a page-sized drawing (a 16:9 drawing cropped to a phone) unless the brand asks for it', JSON.stringify(st));
+    const mm = parts('memo', '', lb('decor:\n  quarter:\n    on: all\n  band:\n    on: all'));
+    ok(mm[0] === 'decor--corner-br decor--edge-bottom' && mm[1] === 'decor--edge-bottom' && mm[2] === 'decor--edge-bottom', 'decor: a memo — one flow — has its corner on the first page only, its edges on every page', JSON.stringify(mm));
+    ok(parts('slide', 'decor: none\n').every(x => x === '') && !JMD.render(JMD.parse(DD('slide', 'decor: None\n')), { brand: lb('decor: mark quarter') }).includes('class="wm') && JMD.lint(JMD.parse(DD('slide', 'decor: flowers\n'))).some(f => f.level === 'error' && f.rule === 'decor'),
+      'decor: `decor: none` in a deck\'s header takes every element off, the mark included; any other value there is an error');
+    const cov = JMD.render(JMD.parse('---\nformat: jmd/3\nlayout: slide\n---\n\n---\n---\n## A photo\n\n![x](a.png){.cover}\n'), { brand: lb('decor:\n  quarter:\n    on: all') });
+    ok(!cov.includes('decor-layer'), 'decor: never on a slide whose photo is its cover');
+    const forged = JMD.render(JMD.parse(DD('slide')), { brand: { decorItems: [{ name: 'x', place: 'corner-br" onload="alert(1)', tint: 'accent', on: ['all'], layouts: ['slide'], size: 10, opacity: 1 }, { name: 'y"><script>', place: 'full', tint: 'accent', on: ['all'], layouts: ['slide'], size: 1, opacity: 1 }, { name: 'z', place: 'full', tint: 'accent', on: ['all'], layouts: ['slide'], size: '9;background:url(https://evil)', opacity: 1 }] } });
+    ok(!/onload|<script>|evil/.test(forged) && /--ds:1;opacity:1/.test(forged), 'decor: the runtime draws only what the build validated — a forged place, name or size never reaches an attribute');
+    // in the browser: the layer behind the words, the linter's `decor-crowds`, the PowerPoint's background picture
+    const crowdBrand = lb('decor:\n  big:\n    svg: quarter\n    place: corner-tl\n    size: 90\n    on: all');
+    const crowd = await jmdLib.lintDom(DD('slide'), { brand: crowdBrand }), calm = await jmdLib.lintDom(DD('slide'), { brand: qb });
+    ok(crowd.findings.some(f => f.rule === 'decor-crowds' && f.level === 'warning' && /`big` lies under \d+ % of the words/.test(f.message)) && !calm.findings.some(f => f.rule === 'decor-crowds'),
+      'decor-crowds: an element under more than a tenth of a page\'s words is a warning naming it; one in its corner says nothing', JSON.stringify(crowd.findings.filter(f => f.rule === 'decor-crowds')));
+    const { readZip: rz } = await import('./zip.mjs');
+    const deckPptx = rz(await jmdLib.pptx(DD('slide'), { brand: lb('decor: quarter') })), s3 = deckPptx.text('ppt/slides/slide3.xml');
+    ok(/name="Watermark"/.test(s3) && /<a:t>Light page<\/a:t>/.test(s3) && !/name="Watermark"/.test(deckPptx.text('ppt/slides/slide1.xml')), 'pptx: the decor is the slide\'s background picture, behind the native text — only where it is drawn');
+  }
+  { // a logo drawn with a gradient was blank: the sprite was display:none, and Chrome paints no gradient defined in a hidden <svg>
+    const gb = loadBrand('primary: "#222244"\nname: Grad');
+    const { markSymbol: ms } = await import('./build.mjs');
+    gb.markSvg = ms('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#ff0000"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/></svg>');
+    const gHtml = (await import('./build.mjs')).buildHtml({ jmd: fixed, brand: gb }), gPath = join(tmp, 'gradient-logo.html'); writeFileSync(gPath, gHtml);
+    p = await open('file://' + gPath); await p.settle(200);
+    const box = JSON.parse(await p.eval('JSON.stringify(document.querySelector(".slide.is-active .lockup svg, .lockup svg").getBoundingClientRect())'));
+    const shot = await p.screenshot({ x: box.x + box.width / 4, y: box.y + box.height / 4, width: box.width / 2, height: box.height / 2 }); await p.close();
+    const q = await open('about:blank');
+    const rgb = await q.eval(`new Promise(r => { const i = new Image(); i.onload = () => { const c = document.createElement('canvas'); c.width = i.width; c.height = i.height; const x = c.getContext('2d'); x.drawImage(i, 0, 0); r([...x.getImageData(i.width >> 1, i.height >> 1, 1, 1).data].slice(0, 3)); }; i.src = 'data:image/png;base64,${shot.toString('base64')}'; })`);
+    await q.close();
+    ok(!/<svg style="display:none"/.test(gHtml) && rgb[0] > 200 && rgb[1] < 80 && rgb[2] < 80, 'a logo drawn with a gradient is painted (the sprite is hidden by its size, not display:none)', JSON.stringify(rgb));
   }
 
   console.log('\n13. Layouts: Memo (A4 pages), Story (9:16 screens), Webpage (one page) — the same blocks (spec/jmd.md)');
@@ -1641,8 +1922,8 @@ try {
     // lint: every kind of refusal is a missing-asset error that says why; a draft is a warning; a good one passes
     const l = jmdLib.lint(deck(['img:test/hero-team', 'img:test/nope', 'img:test/old-logo', 'img:test/sketch', 'img:other/x', 'img:test/not-an-image']), { images: await jmdLib.bankImages(deck(['img:test/hero-team', 'img:test/nope', 'img:test/old-logo', 'img:test/sketch', 'img:other/x', 'img:test/not-an-image']), brand) });
     const msg = rule => l.findings.filter(f => f.rule === rule).map(f => f.message);
-    ok(l.errors === 4 && msg('missing-asset').some(m => /no image "nope"/.test(m)) && msg('missing-asset').some(m => /retired/.test(m)) && msg('missing-asset').some(m => /unknown bank "other"/.test(m)) && msg('missing-asset').some(m => /not an image/.test(m)), 'lint: an unknown slug, a retired image, an unknown bank, a file that is not an image — four missing-asset errors that say why', JSON.stringify(msg('missing-asset')));
-    ok(l.warnings === 1 && msg('image-draft')[0].includes('draft'), 'lint: a draft image passes with a warning');
+    ok(l.errors === 3 && msg('missing-asset').some(m => /no image "nope"/.test(m)) && msg('missing-asset').some(m => /unknown bank "other"/.test(m)) && msg('missing-asset').some(m => /not an image/.test(m)), 'lint: an unknown slug, an unknown bank, a file that is not an image — three missing-asset errors that say why', JSON.stringify(msg('missing-asset')));
+    ok(l.warnings === 2 && msg('image-draft')[0].includes('draft') && msg('image-retired')[0].includes('retired') && !msg('missing-asset').some(m => /retired/.test(m)), 'lint: a draft image passes with a warning; a retired one still builds, with a warning (an old deck must find it — spec/images.md, decision 5)');
     ok(!l.findings.some(f => f.level === 'error' && /hero-team/.test(f.message)), 'lint: an approved image is not an error');
     const noBank = jmdLib.lint(deck(['img:test/hero-team']), { images: await jmdLib.bankImages(deck(['img:test/hero-team']), 'slate') });
     ok(noBank.errors === 1 && noBank.findings.find(f => f.level === 'error').message.includes('no image bank declared'), 'a brand without banks: img: is an error naming the cause (slate declares none)');

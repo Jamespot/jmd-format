@@ -147,6 +147,28 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 .wm--circles.wm--b:after{right:-120px;top:-150px;width:300px;height:300px}
 .slide--indigo .wm--mark .wm-g,.slide--accent .wm--mark .wm-g,.slide--sky .wm--mark .wm-g{--gc:#fff;--go:.05}
 .slide--indigo .wm--circles:before,.slide--indigo .wm--circles:after,.slide--accent .wm--circles:before,.slide--accent .wm--circles:after,.slide--sky .wm--circles:before,.slide--sky .wm--circles:after{background:#fff;opacity:.07}
+/* decor — the brand's own elements (decor:, 1.49.0): behind everything like the watermark, painted in the brand's colours
+   (its tint, through currentColor). A corner is sized on the page's short side, an edge by its thickness, `full` covers the page */
+.decor-layer{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.decor{position:absolute;display:block;fill:currentColor}
+.decor:is(.decor--corner-tl,.decor--corner-tr,.decor--corner-bl,.decor--corner-br){aspect-ratio:1;width:calc(var(--ds) * 1%);height:auto}
+:is(.layout-slide,.layout-webpage) .decor:is(.decor--corner-tl,.decor--corner-tr,.decor--corner-bl,.decor--corner-br){width:auto;height:calc(var(--ds) * 1%)}
+/* an A4 page is full of words: its corners are half the size a slide gives them, and only on the first page */
+:is(.layout-memo,.layout-doc) .decor:is(.decor--corner-tl,.decor--corner-tr,.decor--corner-bl,.decor--corner-br){width:calc(var(--ds) * .5%)}
+.decor--corner-tl{top:0;left:0}.decor--corner-tr{top:0;right:0}.decor--corner-bl{bottom:0;left:0}.decor--corner-br{bottom:0;right:0}
+.decor--edge-top,.decor--edge-bottom{left:0;width:100%;height:calc(var(--ds) * 1%)}
+.decor--edge-top{top:0}.decor--edge-bottom{bottom:0}
+.decor--edge-left,.decor--edge-right{top:0;height:100%;width:calc(var(--ds) * 1%)}
+.decor--edge-left{left:0}.decor--edge-right{right:0}
+.decor--full{inset:0;width:100%;height:100%}
+/* a corner element is drawn for the bottom-right corner (themes/brands/decor): the other three are its mirror images */
+.decor--corner-tl{transform:scale(-1,-1)}.decor--corner-tr{transform:scaleY(-1)}.decor--corner-bl{transform:scaleX(-1)}
+:root{--decor-primary:var(--brand-primary);--decor-accent:var(--brand-accent);--decor-highlight:var(--brand-highlight);--decor-secondary:var(--brand-secondary);
+  --decor-ink:var(--brand-ink);--decor-white:#fff;--decor-lavender:var(--brand-bg-lavender,var(--jp-purple-100));--decor-wash:var(--brand-bg-wash,var(--jp-purple-050));
+  --decor-butter:var(--brand-bg-butter,var(--jp-butter));--decor-card:var(--brand-card,var(--jp-purple-100))}
+.decor-tint--primary{color:var(--decor-primary)}.decor-tint--accent{color:var(--decor-accent)}.decor-tint--highlight{color:var(--decor-highlight)}
+.decor-tint--secondary{color:var(--decor-secondary)}.decor-tint--ink{color:var(--decor-ink)}.decor-tint--white{color:var(--decor-white)}
+.decor-tint--lavender{color:var(--decor-lavender)}.decor-tint--wash{color:var(--decor-wash)}.decor-tint--butter{color:var(--decor-butter)}.decor-tint--card{color:var(--decor-card)}
 .mark-blob--statement{top:-120px;right:-90px;width:440px;height:440px;opacity:.18}
 
 /* ── Type ─────────────────────────────────────────────── */
@@ -328,12 +350,31 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
 .divider .slide-h1{font-size:calc(76px * var(--type-scale,1));max-width:1000px}
 .divider .slide-lead{max-width:760px}
 
-/* agenda */
-.agenda{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
-.agenda li{display:flex;align-items:baseline;gap:24px;padding-bottom:14px;border-bottom:1.5px solid var(--jp-line)}
-.agenda .n{font-family:var(--font-mono);font-weight:700;color:var(--jp-purple-700);
-  font-size:16px;letter-spacing:.06em;min-width:36px}
-.agenda .t{font-family:var(--font-display);font-weight:800;font-size:27px;line-height:1.2;color:var(--jp-ink)}
+/* agenda — the contents page (#75): parts numbered in the brand's primary, sub-parts lettered under them, 1 to 3 columns.
+   Every number is a real character (never a CSS counter): the PowerPoint export reads the page's text. */
+.agenda{display:grid;grid-template-columns:repeat(var(--cols,1),minmax(0,1fr));gap:0 56px;align-items:start;width:100%;
+  --a-h:32px;--a-s:21px;--a-n:58px}
+.agenda--c2{--a-h:27px;--a-s:19px;--a-n:50px}
+.agenda--c3{--a-h:23px;--a-s:17px;--a-n:42px;gap:0 40px}
+.agenda--dense{--a-h:22px;--a-s:16px}
+.agenda--c3.agenda--dense{--a-h:20px;--a-s:15px;--a-n:38px}
+.agenda-col{display:flex;flex-direction:column;gap:calc(var(--a-s) * 1.1)}
+.agenda-part{border-top:2px solid var(--jp-line);padding-top:calc(var(--a-s) * .7)}
+.agenda-h{display:grid;grid-template-columns:var(--a-n) minmax(0,1fr);align-items:baseline;margin:0;
+  font-family:var(--font-display);font-weight:800;font-size:calc(var(--a-h) * var(--type-scale,1));line-height:1.18;color:var(--jp-ink)}
+.agenda-n{color:var(--brand-primary);font-weight:900}
+.agenda-subs{list-style:none;margin:calc(var(--a-s) * .45) 0 0;padding:0 0 0 var(--a-n);display:flex;flex-direction:column;gap:calc(var(--a-s) * .3)}
+.agenda-subs li{display:grid;grid-template-columns:1.6em minmax(0,1fr);align-items:baseline;margin:0;
+  font-size:var(--a-s);line-height:1.3;color:var(--jp-ink-muted)}
+.agenda-subs li:before{content:none;display:none}
+.agenda-k{font-weight:700;color:var(--brand-primary)}
+.agenda--lit .agenda-part:not(.is-hero) .agenda-h,.agenda--lit .agenda-part:not(.is-hero) .agenda-subs li,.agenda--lit .agenda-part:not(.is-hero) .agenda-n,.agenda--lit .agenda-part:not(.is-hero) .agenda-k{color:color-mix(in srgb, var(--brand-ink) 42%, white)}
+.agenda--lit .agenda-part.is-hero{border-top-color:var(--brand-primary)}
+.slide--indigo .agenda-h,.slide--accent .agenda-h,.slide--sky .agenda-h{color:#fff}
+.slide--indigo .agenda-subs li,.slide--accent .agenda-subs li,.slide--sky .agenda-subs li{color:rgba(255,255,255,.85)}
+.slide--indigo .agenda-n,.slide--accent .agenda-n,.slide--sky .agenda-n,.slide--indigo .agenda-k,.slide--accent .agenda-k,.slide--sky .agenda-k{color:var(--jp-yellow-500)}
+.slide--indigo .agenda-part,.slide--accent .agenda-part,.slide--sky .agenda-part{border-top-color:rgba(255,255,255,.25)}
+.slide--indigo .agenda--lit .agenda-part:not(.is-hero) *,.slide--accent .agenda--lit .agenda-part:not(.is-hero) *,.slide--sky .agenda--lit .agenda-part:not(.is-hero) *{color:rgba(255,255,255,.45)}
 
 /* metrics */
 .metrics{display:grid;gap:22px;grid-template-columns:repeat(var(--n,3),1fr)}
@@ -1396,3 +1437,40 @@ svg{--mark-dot:var(--brand-primary)}
 .slide .statement.statement--in-page .attr{margin-top:12px;font-size:12px}
 .slide .divider.divider--in-page{align-self:stretch;padding:0;margin:0;text-align:left;align-items:flex-start;gap:8px}
 .slide .divider.divider--in-page .slide-h1{font-size:calc(36px * var(--type-scale,1))}
+
+/* ── The page layout a charter decides (#73) ─────────────────────────────────────────────
+   Five brand keys, each a class the renderer sets on the page (jmd-core.js pageLayout) — never in the .jmd, and nothing here
+   applies to a brand that leaves them out. Last in the file: they outrank the layouts' own rules for the same elements. */
+/* align: left — the cover, the dividers and the centred intents start on the left, like the rest of the page (a statement
+   already does: its sentence is set from the left in every brand) */
+.slide.brand-align-left.slide--cover .body-pad,.slide.brand-align-left:is(.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) .body-pad{align-items:flex-start;text-align:left}
+.slide.brand-align-left:is(.slide--cover,.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) .slide-head{align-items:flex-start}
+.slide.brand-align-left:is(.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) :is(a.cta,.figure){align-self:flex-start}
+.slide.brand-align-left .divider{text-align:left;align-items:flex-start}
+/* footer-band: line — a thin rule at the foot, the organisation on the left, the date and the page number on the right, in the
+   body font; the corner number gives way to it. Slide and Story only: a Memo and a Doc keep their own footer. */
+.slide-band{position:absolute;left:56px;right:56px;bottom:20px;z-index:5;display:flex;align-items:baseline;justify-content:space-between;gap:24px;
+  padding-top:8px;border-top:1px solid var(--jp-ink-faint);font-family:var(--font-body);font-size:13px;line-height:1.3;color:var(--jp-ink-muted);white-space:nowrap}
+.slide-band .band-l{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.slide-band .band-r{flex:none;text-align:right}
+.slide.brand-band > .slide-tag{display:none}
+:is(.slide--indigo,.slide--accent,.slide--sky) .slide-band{color:rgba(255,255,255,.82);border-top-color:rgba(255,255,255,.4)}
+.slide--highlight .slide-band{color:var(--jp-indigo-800);border-top-color:color-mix(in srgb,var(--jp-indigo-800) 30%,transparent)}
+.layout-story .slide-band{left:40px;right:40px;bottom:30px;font-size:18px;padding-top:12px}
+/* cover-logo: large — the institutional block on the cover, at its own proportions (--brand-logo-ratio, from the logo's viewBox);
+   the other pages keep it small in their header, at its proportions too: a wide block squeezed into a square is unreadable */
+.slide.brand-logo-large .lockup svg{height:30px;width:calc(30px * var(--brand-logo-ratio,1));max-width:200px}
+.slide.brand-logo-large.slide--cover .lockup svg,.slide.brand-logo-large .sheet--cover .lockup svg{height:76px;width:calc(76px * var(--brand-logo-ratio,1));max-width:440px}
+.slide.brand-logo-large.slide--cover .lockup,.slide.brand-logo-large .sheet--cover .lockup{font-size:30px;gap:16px}
+.slide.brand-logo-large.slide--cover .body-pad{padding-top:calc(170px * var(--type-scale,1))}
+.layout-doc .slide.brand-logo-large .sheet--cover .lockup svg{height:120px;width:calc(120px * var(--brand-logo-ratio,1));max-width:640px}
+/* table-head: light — the header in a light tint of the deep colour, its words in ink or black, whichever reads (tools/build.mjs
+   tableHead: 4.5:1 at least); a dark page keeps its own header */
+.slide.brand-thead-light:not(.slide--indigo,.slide--accent,.slide--sky) .table thead th{background:var(--brand-thead-bg);color:var(--brand-thead-ink)}
+/* chrome-label: body — the section's name, top right, in the body font as written, not in capitals of the mono, and at 4.5:1 on
+   its page (tools/build.mjs chromeLabel: the ink or black on the light pages, white or black on the dark ones) */
+.slide.brand-label-body .chrome-meta{font-family:var(--font-body);text-transform:none;letter-spacing:0;font-size:15px;color:var(--brand-label-ink)}
+.slide.brand-label-body.slide--indigo .chrome-meta,.slide.brand-label-body .slide--indigo .chrome-meta{color:var(--brand-label-on-primary)}
+.slide.brand-label-body.slide--accent .chrome-meta,.slide.brand-label-body .slide--accent .chrome-meta{color:var(--brand-label-on-accent)}
+.slide.brand-label-body.slide--sky .chrome-meta,.slide.brand-label-body .slide--sky .chrome-meta{color:var(--brand-label-on-secondary)}
+.layout-story .slide.brand-label-body .chrome-meta{font-size:20px}

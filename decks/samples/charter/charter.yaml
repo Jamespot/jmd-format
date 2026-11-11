@@ -1,0 +1,24 @@
+# Charter — a fictional public body's charter, to show the page layout keys (#73): white, black words, everything on the left,
+# a footer band, the institutional block large on the cover, a light table head. No real institution's logo or name.
+name: ""
+logo: logo.svg
+primary: "#1F3A68"
+accent: "#1F3A68"
+highlight: "#E8EEF7"
+ink: "#161616"
+secondary: "#5A6B85"
+font-display: Arial
+font-body: Arial
+font-fallback: "Helvetica Neue", Helvetica, sans-serif
+type-scale: 0.86
+watermark: none
+card-marker: none
+card-fill: plain
+card-shadow: none
+footer: Office national de l'exemple · Direction des usages numériques
+motion: none
+align: left
+footer-band: line
+cover-logo: large
+table-head: light
+chrome-label: body

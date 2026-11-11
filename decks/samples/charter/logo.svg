@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120">
+  <!-- a fictional institutional block: an emblem and the body's name as bars — no real institution's mark -->
+  <circle cx="22" cy="30" r="22" fill="#1F3A68"/>
+  <rect x="14" y="22" width="16" height="16" fill="#FFFFFF"/>
+  <rect x="0" y="64" width="150" height="9" fill="#161616"/>
+  <rect x="0" y="80" width="118" height="9" fill="#161616"/>
+  <rect x="0" y="100" width="64" height="2" fill="#161616"/>
+  <rect x="180" y="20" width="168" height="12" fill="#161616"/>
+  <rect x="180" y="40" width="140" height="12" fill="#161616"/>
+  <rect x="180" y="68" width="110" height="7" fill="#5A6B85"/>
+  <rect x="180" y="82" width="132" height="7" fill="#5A6B85"/>
+</svg>

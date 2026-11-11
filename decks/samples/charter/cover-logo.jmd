@@ -1,0 +1,20 @@
+---
+format: jmd/3
+layout: slide
+title: Cover logo — the institutional block large on the cover, small elsewhere
+lang: fr
+date: 9 novembre 2026
+---
+
+---
+notes: With `cover-logo: large` the logo is the institutional block of the cover; the other pages keep it small in their header.
+---
+# Rapport d'activité 2026
+Office national de l'exemple
+
+---
+section: Synthèse
+---
+## En une page
+- Une année de transformation des services.
+- Des usagers plus nombreux en ligne qu'au guichet.

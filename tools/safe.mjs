@@ -13,6 +13,12 @@ const ENUMS = {
   'card-fill': ['alternate', 'plain'],
   'card-shadow': ['offset', 'none'],
   motion: ['none', 'soft', 'slide', 'zoom', 'step'],
+  // the page layout a charter decides once for every page (#73); the first word is the default, the look every brand had before
+  align: ['center', 'left'],
+  'footer-band': ['none', 'line'],
+  'cover-logo': ['small', 'large'],
+  'table-head': ['strong', 'light'],
+  'chrome-label': ['mono', 'body'],
 };
 export const COLOR_KEYS = ['primary', 'accent', 'highlight', 'ink', 'secondary', 'bg-lavender', 'bg-wash', 'bg-butter', 'card'];
 const FONT = /^[\p{L}\p{N}\s,'"_-]+$/u; // a font list: names (any script), quotes, commas — never `<`, `}`, `;`, `\`, `(`
@@ -40,9 +46,103 @@ export function validateBrand(b, { marks = [] } = {}) {
       if (typeof v !== 'string' || !(/^https:\/\/\S+$/.test(v) || testHttp || /^[\w./-]+\/?$/.test(v)) || v.split('/').includes('..')) badBank(k, `is not an https folder nor a path next to the brand.yaml: ${JSON.stringify(String(v))}`);
     }
   }
+  if (b.decor !== undefined && b.decor !== '') decorOf(b); // throws, naming the element and the field
   if (b.logo !== undefined && b.logo !== '' && b.logo !== 'custom' && !/^https?:\/\/\S+$/.test(b.logo) && !/^[\w./-]+\.(svg|png)$/.test(b.logo) && !(MARK_ID.test(b.logo) && marks.includes(b.logo)))
     bad('logo', `is not one of the marks (${marks.join(', ')}) nor an https URL`);
   return b;
+}
+
+/* ── decor: the brand's own graphic elements (1.49.0, #69) ──
+   What a charter brings that is neither a colour nor a typeface: a corner shape, a band along an edge, curves on the dark
+   pages, a glow. Each one is an SVG drawing — never a picture — rebuilt from the logo's allowlist and always painted in a
+   colour of the brand, posed by data: a place, a size, the pages it goes on. `decor:` replaces `watermark:`, which is still
+   read as its old name (mark and circles are two of the ready elements, drawn by the engine). */
+export const DECOR_READY = ['quarter', 'glow', 'waves', 'band', 'dots']; // themes/brands/decor/<id>.svg
+export const DECOR_ENGINE = ['mark', 'circles']; // what `watermark:` drew, still drawn by the engine
+export const DECOR_PLACES = ['corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'edge-top', 'edge-bottom', 'edge-left', 'edge-right', 'full'];
+export const DECOR_TINTS = ['primary', 'accent', 'highlight', 'secondary', 'ink', 'lavender', 'wash', 'butter', 'card', 'white'];
+const DECOR_INTENTS = ['hook', 'problem', 'reveal', 'prove', 'explain', 'decide', 'recap', 'celebrate', 'fun', 'act'];
+export const DECOR_ON = ['all', 'cover', 'dark', 'light', ...DECOR_INTENTS];
+export const DECOR_LAYOUTS = ['slide', 'memo', 'doc', 'story', 'webpage'];
+export const DECOR_MAX = 6, DECOR_SVG_MAX = 100 * 1024;
+export const DECOR_SVG_ONLY = 'a charter element must be an SVG file (no PNG, no JPEG): a drawing takes the brand\'s colours and stays sharp at every size, a picture can do neither';
+// where a ready element goes when it is named alone — a designer's choice, one line each
+export const DECOR_DEFAULTS = {
+  quarter: { place: 'corner-br', size: '46', tint: 'lavender', on: 'light', opacity: '1' },
+  glow: { place: 'corner-tr', size: '60', tint: 'secondary', on: 'all', opacity: '.5' },
+  waves: { place: 'full', size: '100', tint: 'white', on: 'dark', opacity: '.35' },
+  band: { place: 'edge-bottom', size: '2', tint: 'accent', on: 'light', opacity: '1' },
+  dots: { place: 'corner-tr', size: '30', tint: 'accent', on: 'light', opacity: '.35' },
+};
+const DECOR_NAME = /^[a-z][a-z0-9-]{0,23}$/;
+const DECOR_REF = /^(https:\/\/[^\s"'<>]+|[\w-][\w.-]*(\/[\w.-]+)*)$/; // an https URL, or a path beside the brand file (never `..`)
+
+/** The brand's decor, normalized — { watermark: mark|circles|none, items: [{ name, svg, place, size, tint, on, layouts, opacity }] } —
+    or an Error naming the element and the field. `decor:` is `none`, a list of ready element names (`quarter waves`, `mark`), or a
+    map of named elements; left out, the old `watermark:` says it (`none` → no decor). */
+export function decorOf(b) {
+  const bad = (n, why) => { throw new Error(`brand decor${n ? ' ' + n : ''}: ${why}`); };
+  let d = b.decor;
+  if (d === undefined || d === '') return { watermark: b.watermark || 'none', items: [] };
+  if (typeof d === 'string') {
+    const words = d.trim().toLowerCase().split(/[\s,]+/).filter(Boolean);
+    if (words.includes('none')) { if (words.length > 1) bad('', '`none` stands alone'); return { watermark: 'none', items: [] }; }
+    d = {};
+    for (const w of words) {
+      if (!DECOR_READY.includes(w) && !DECOR_ENGINE.includes(w)) bad(w, /\.(png|jpe?g|gif|webp)$/i.test(w) ? DECOR_SVG_ONLY : `not one of the ready elements (${[...DECOR_READY, ...DECOR_ENGINE].join(', ')}) — an element of your own is a map: decor: / name: / svg: file.svg`);
+      d[w] = { svg: w };
+    }
+  }
+  if (typeof d !== 'object' || Array.isArray(d)) bad('', 'is `none`, ready element names, or a map of named elements');
+  const entries = Object.entries(d);
+  if (entries.length > DECOR_MAX + DECOR_ENGINE.length) bad('', `${entries.length} elements, ${DECOR_MAX} at most`);
+  let watermark = 'none'; const items = [];
+  for (const [name, raw] of entries) {
+    if (!DECOR_NAME.test(name)) bad(JSON.stringify(name).slice(0, 40), 'is not a name (a-z, digits, dashes, 24 at most)');
+    const given = typeof raw === 'string' ? { svg: raw } : raw && typeof raw === 'object' ? raw : bad(name, 'is a map (svg, place, size, tint, on, layouts, opacity)');
+    const svg = String(given.svg || (DECOR_READY.includes(name) || DECOR_ENGINE.includes(name) ? name : '')).trim();
+    if (DECOR_ENGINE.includes(svg)) { watermark = svg; continue; } // the engine's drawing: no place, no size
+    if (/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(svg)) bad(name, DECOR_SVG_ONLY);
+    const testHttp = process.env.JMD_BRAND_HTTP && /^http:\/\/(127\.0\.0\.1|localhost)[:/][^\s"'<>]*$/.test(svg); // tests only, as for the image banks
+    if (!DECOR_READY.includes(svg) && !(/\.svg$/i.test(svg) && (DECOR_REF.test(svg) || testHttp) && !svg.split('/').includes('..')))
+      bad(name, /\.svg$/i.test(svg) ? `svg ${JSON.stringify(svg.slice(0, 80))} is neither a file beside the brand file (a plain path, never \`..\`) nor an https URL` : `svg ${JSON.stringify(svg.slice(0, 80))} is neither a ready element (${DECOR_READY.join(', ')}) nor an .svg file — ${DECOR_SVG_ONLY}`);
+    for (const k of Object.keys(given)) if (!['svg', 'place', 'size', 'tint', 'on', 'layouts', 'opacity'].includes(k)) bad(name, `unknown field \`${String(k).slice(0, 24)}\` (svg, place, size, tint, on, layouts, opacity)`);
+    const it = { ...(DECOR_DEFAULTS[svg] || { place: 'corner-br', size: '40', tint: 'accent', on: 'all', opacity: '1' }), ...given, svg };
+    const place = String(it.place).toLowerCase(), tint = String(it.tint).toLowerCase();
+    if (!DECOR_PLACES.includes(place)) bad(name, `place ${JSON.stringify(String(it.place).slice(0, 24))} is not one of ${DECOR_PLACES.join(', ')}`);
+    if (!/^\d{1,3}$/.test(String(it.size)) || +it.size < 1 || +it.size > 100) bad(name, 'size is a percentage, 1 to 100 (of the page\'s short side for a corner, its thickness for an edge)');
+    if (!DECOR_TINTS.includes(tint)) bad(name, `tint ${JSON.stringify(String(it.tint).slice(0, 24))} is not one of the brand's colours: ${DECOR_TINTS.join(', ')} — an element is always drawn in the brand's colours`);
+    if (!/^(0?\.\d{1,3}|1(\.0+)?)$/.test(String(it.opacity)) || +it.opacity < .05) bad(name, 'opacity is a number from 0.05 to 1');
+    const on = String(it.on).toLowerCase().split(/[\s,]+/).filter(Boolean);
+    for (const o of on) if (!DECOR_ON.includes(o)) bad(name, `on ${JSON.stringify(o.slice(0, 24))} is not one of ${DECOR_ON.join(', ')}`);
+    // a page-sized drawing is drawn for a 16:9 page: on a phone it would be cropped to its middle, so a story has it only when asked
+    const layouts = it.layouts ? String(it.layouts).toLowerCase().split(/[\s,]+/).filter(Boolean) : DECOR_LAYOUTS.filter(l => !(place === 'full' && l === 'story'));
+    for (const l of layouts) if (!DECOR_LAYOUTS.includes(l)) bad(name, `layout ${JSON.stringify(l.slice(0, 24))} is not one of ${DECOR_LAYOUTS.join(', ')}`);
+    items.push({ name, svg, place, size: +it.size, tint, on: on.length ? on : ['all'], layouts, opacity: +it.opacity });
+  }
+  if (items.length > DECOR_MAX) bad('', `${items.length} elements, ${DECOR_MAX} at most`);
+  return { watermark, items };
+}
+
+/** A decor SVG, rebuilt by the logo's allowlist, then repainted: every colour it carries becomes the brand's (`currentColor`, set by
+    its tint) — `none` and the gradients of its own stay. { symbol, dropped }: the symbol is `brand-decor-<name>`, its ids prefixed. */
+export function decorSymbol(name, svg, place, tint = 'accent') {
+  if (Buffer.byteLength(String(svg)) > DECOR_SVG_MAX) throw new Error(`brand decor ${name}: the SVG is ${Math.round(Buffer.byteLength(String(svg)) / 1024)} KB, ${DECOR_SVG_MAX / 1024} KB at most`);
+  const r = sanitizeSvg(svg, { prefix: 'dc-' + name + '-' });
+  const aspect = { 'corner-tl': 'xMinYMin meet', 'corner-tr': 'xMaxYMin meet', 'corner-bl': 'xMinYMax meet', 'corner-br': 'xMaxYMax meet', full: 'xMidYMid slice' }[place] || 'none';
+  const paint = v => /^\s*(none|transparent|url\(#[\w-]+\))\s*$/i.test(v) ? v : 'currentColor';
+  // a gradient's stops are painted where the gradient is defined, not where it is used: currentColor would be the hidden sprite's,
+  // so a stop takes the tint by its custom property (engine.css, --decor-<tint>), which every element of the page inherits
+  const stopPaint = `var(--decor-${DECOR_TINTS.includes(tint) ? tint : 'accent'})`;
+  const symbol = r.symbol
+    .replace(/ (fill|stroke)="([^"]*)"/g, (_, k, v) => ` ${k}="${paint(v)}"`)
+    .replace(/ style="([^"]*)"/g, (_, st) => ` style="${st.replace(/(^|;)\s*(fill|stroke)\s*:\s*([^;]*)/g, (m, sep, k, v) => `${sep}${k}:${paint(v)}`)}"`)
+    .replace(/<stop([^>]*?)(\/?)>/g, (_, attrs, close) => {
+      let st = ''; attrs = attrs.replace(/ stop-color="[^"]*"/g, '').replace(/ style="([^"]*)"/g, (m, v) => { st = v.replace(/(^|;)\s*stop-color\s*:[^;]*/g, '').replace(/^;+/, ''); return ''; });
+      return `<stop${attrs} style="${st ? st + ';' : ''}stop-color:${stopPaint}"${close}>`;
+    })
+    .replace('<symbol id="brand-mark"', `<symbol id="brand-decor-${name}" preserveAspectRatio="${aspect}"`);
+  return { symbol, dropped: r.dropped };
 }
 
 /** A fetched fonts CSS (a brand's `fonts:` URL) is never copied into the page: it is parsed and rebuilt from an allowlist —

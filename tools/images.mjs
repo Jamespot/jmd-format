@@ -12,7 +12,12 @@ export const PREFIX = /^[a-z][a-z0-9-]*$/;
 /** `up:<box>/<name>`: a file the user dropped in a box the agent opened (mcp/upload.mjs) — hosted only, read from JMD_UPLOADS_DIR. */
 export const UPLOAD_REF = /^up:([A-Za-z0-9_-]{16})\/([a-z0-9][a-z0-9-]{0,63}\.(png|jpg|gif|webp|svg))$/;
 export const uploadsDir = () => process.env.JMD_UPLOADS_DIR || null;
-const INDEX_TTL = 10 * 60 * 1000, FILE_MAX = 2 * 1024 * 1024, INDEX_MAX = 4 * 1024 * 1024;
+/* Who may read a box, asked before its file is read: the hosted server plugs in here (a box it copied from another service is
+   read only for the person it was copied for, and may be fetched on the way). `false` means the box is not there for this
+   caller. Without one, a box is read by whoever names it — its id is the key. */
+let uploadSource = null;
+export const setUploadSource = fn => { uploadSource = typeof fn === 'function' ? fn : null; };
+const INDEX_TTL = 10 * 60 * 1000, FILE_MAX = 2 * 1024 * 1024, INDEX_MAX = 4 * 1024 * 1024, DECK_MAX = 20 * 1024 * 1024;
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', gif: 'image/gif' };
 
 /** The brand's banks, normalized: { prefix → base URL with a trailing slash }. `origin`: the brand.yaml URL, for relative bases. */
@@ -71,8 +76,30 @@ export function parseIndex(text) {
   return out.filter(e => e.slug && e.file);
 }
 
-/** The index of a bank: from memory, then the disk cache (ten minutes), then the network. */
+/* ---- the banks kept on Slides (spec/images.md, « A bank kept on Slides »): read in-process, never over the network ----
+   The hosted server never fetches its own origin. mcp/server.mjs lends a reader — { origin, index(id), file(id, name), used(id, slug) }
+   over its store — and a base that is EXACTLY `<origin>/bank/<id>/`, the id 22 characters of base64url, is read through it, never
+   cached (an image uploaded is searchable at once). Anything else — `<origin>.evil.com`, another port, an id of another length or
+   with a slash in it — is an ordinary https folder and goes through fetchBytes and its door, where an unknown host fails. */
+let local = null;
+const LOCAL_ID = /^[A-Za-z0-9_-]{22}$/;
+export function setLocalBanks(reader) { local = reader && reader.origin ? { ...reader, origin: String(reader.origin).replace(/\/+$/, '') } : null; }
+/** The public folder of a bank kept here, or null when no reader is set (stdio, the public CLI). */
+export function localBankBase(id) { return local && LOCAL_ID.test(String(id || '')) ? `${local.origin}/bank/${id}/` : null; }
+/** The id of a bank kept here when `base` is exactly its folder on our origin, else null. */
+export function localBankId(base) {
+  if (!local || typeof base !== 'string') return null;
+  const head = local.origin + '/bank/';
+  if (!base.startsWith(head)) return null;
+  const m = /^([A-Za-z0-9_-]{22})\/$/.exec(base.slice(head.length));
+  return m ? m[1] : null;
+}
+const LOCAL_TYPES = new Set(['image/png', 'image/jpeg', 'image/svg+xml']);
+
+/** The index of a bank: from memory, then the disk cache (ten minutes), then the network — or, for a bank kept here, its rows. */
 export async function loadIndex(base) {
+  const lid = localBankId(base);
+  if (lid) return (await local.index(lid)) || [];
   const url = base + 'images.yaml';
   const mem = memory.get(url); if (mem && Date.now() - mem.at < INDEX_TTL) return mem.entries;
   let text = cached(url, INDEX_TTL);
@@ -86,6 +113,7 @@ export async function loadIndex(base) {
     `refs`: the deck's asset references (runtime JMD.assets). Nothing here throws for a bad reference: a refusal is a linter error, said in words. */
 export async function resolveImages(refs, brandBanks) {
   const assets = {}, refused = {}, warnings = [];
+  let bankBytes = 0; // the bank images of one deck, together: 20 MB, as the files beside a deck (tools/build.mjs ASSET_LIMIT)
   const wanted = [...new Set(refs.map(r => r.src).filter(s => /^(img:|up:|https?:\/\/)/.test(s)))];
   const indexes = {};
   for (const src of wanted) {
@@ -94,7 +122,8 @@ export async function resolveImages(refs, brandBanks) {
       if (!m) { refused[src] = 'not a drop-box reference: up:<box>/<name.ext>, as jmd_upload listed it'; continue; }
       if (!dir) { refused[src] = 'drop boxes exist on the hosted connector only: use a file next to the .jmd'; continue; }
       const file = join(dir, m[1], m[2]);
-      let bytes; try { bytes = readFileSync(file); } catch { refused[src] = `no file "${m[2]}" in this drop box (the box is unknown, gone after 24 h, or the file was never dropped — jmd_upload lists what it holds)`; continue; }
+      let mine = true; if (uploadSource) { try { mine = (await uploadSource(m[1])) !== false; } catch { mine = false; } }
+      let bytes; try { if (!mine) throw new Error('not this caller\'s'); bytes = readFileSync(file); } catch { refused[src] = `no file "${m[2]}" in this drop box (the box is unknown, gone after 24 h, or the file was never dropped — jmd_upload lists what it holds)`; continue; }
       const mime = sniff(bytes); if (!mime) { refused[src] = `"${m[2]}" is not an image`; continue; }
       assets[src] = `data:${mime};base64,${bytes.toString('base64')}`;
       continue;
@@ -117,8 +146,23 @@ export async function resolveImages(refs, brandBanks) {
     try { indexes[bank] ||= await loadIndex(base); } catch (e) { refused[src] = `bank "${bank}" unreachable: ${e.message}`; continue; }
     const e = indexes[bank].find(x => x.slug === slug);
     if (!e) { refused[src] = `no image "${slug}" in bank "${bank}" — search it (jmd_image_search) and pin a slug the bank has`; continue; }
-    if (e.status === 'retired') { refused[src] = `"${slug}" is retired in bank "${bank}": pick another`; continue; }
+    /* Retired: hidden from search, still built — an old deck rebuilt must find its picture (decision 5, both kinds of bank).
+       Withdrawn (our admins, rights lost): the file is gone and the build says why. */
+    if (e.status === 'withdrawn') { refused[src] = `"${slug}" was withdrawn from bank "${bank}": pick another (jmd_image_search)`; continue; }
+    if (e.status === 'retired') warnings.push({ ref: src, rule: 'image-retired', message: `${src} is retired in its bank: it still shows, but a new deck should pick another` });
     if (e.status === 'draft') warnings.push({ ref: src, message: `${src} is a draft in its bank, not approved yet` });
+    const lid = localBankId(base);
+    if (lid) { // a bank kept here: the row said which file, the store gives its bytes, and they are judged again before they are embedded
+      let got = null; try { got = e.file ? await local.file(lid, e.file) : null; } catch { got = null; }
+      const lmime = got && sniff(got.bytes);
+      if (!got) { refused[src] = `"${slug}": its file is not in bank "${bank}"`; continue; }
+      if (!LOCAL_TYPES.has(lmime)) { refused[src] = `"${slug}": not a PNG, a JPEG or an SVG`; continue; }
+      if (got.bytes.length > FILE_MAX) { refused[src] = `"${slug}": more than ${FILE_MAX >> 20} MB`; continue; }
+      if ((bankBytes += got.bytes.length) > DECK_MAX) { refused[src] = `the deck's bank images weigh more than ${DECK_MAX >> 20} MB together, the limit`; continue; }
+      assets[src] = `data:${lmime};base64,${got.bytes.toString('base64')}`;
+      if (local.used) try { await local.used(lid, slug); } catch { } // from the first deck that names it, its slug is frozen
+      continue;
+    }
     const ext = (e.file.split('.').pop() || '').toLowerCase(), mime = MIME[ext];
     if (!mime) { refused[src] = `"${slug}": ${e.file} is not an image file`; continue; }
     const url = new URL(e.file, base).href;
@@ -127,6 +171,7 @@ export async function resolveImages(refs, brandBanks) {
       try { const got = await fetchBytes(url, FILE_MAX); if (!sniff(got.bytes)) throw new Error(`${e.file} is not an image (${got.type || 'no content type'})`); bytes = got.bytes; store(url, bytes); }
       catch (err) { refused[src] = `"${slug}": ${err.message}`; continue; }
     }
+    if ((bankBytes += bytes.length) > DECK_MAX) { refused[src] = `the deck's bank images weigh more than ${DECK_MAX >> 20} MB together, the limit`; continue; }
     assets[src] = `data:${mime};base64,${bytes.toString('base64')}`;
   }
   return { assets, refused, warnings };
@@ -153,7 +198,7 @@ export async function searchImages(brandBanks, query, { kind = null, limit = 12 
   for (const [bank, base] of Object.entries(brandBanks)) {
     let entries; try { entries = await loadIndex(base); } catch (e) { hits.push({ bank, error: e.message }); continue; }
     for (const e of entries) {
-      if ((e.status || 'approved') === 'retired' || (kind && e.kind !== kind)) continue;
+      if (['retired', 'withdrawn'].includes(e.status || 'approved') || !e.file || (kind && e.kind !== kind)) continue;
       const slug = wordsOf(e.slug), cap = wordsOf(String(e.caption || '').split(/\.\s/)[0]), tags = (Array.isArray(e.tags) ? e.tags : []).map(norm), tagWords = tags.flatMap(wordsOf), kindWord = norm(e.kind);
       const isKind = w => kindWord && (w === kindWord || w === kindWord + 's'); // "logo client": the kind is a word of the query, no `kind` argument needed
       const starts = (list, w) => list.some(x => w.length <= 3 ? x === w : x.startsWith(stem(w)));
