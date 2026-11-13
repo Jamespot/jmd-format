@@ -1103,7 +1103,7 @@ try {
   }
   cli('build decks/samples/hello-jmd.jmd -o build/hello-ocean.html --brand ocean');
   const ocean = readFileSync(join(root, 'build/hello-ocean.html'), 'utf8');
-  ok(ocean.includes('--brand-primary:#0B2545') && ocean.includes('neutral mark "dot"') && !ocean.includes('@font-face'), 'jmd build --brand ocean: navy palette, the dot mark family, no embedded font');
+  ok(ocean.includes('--brand-primary:#0b2545') && ocean.includes('neutral mark "dot"') && !ocean.includes('@font-face'), 'jmd build --brand ocean: navy palette, the dot mark family, no embedded font');
   writeFileSync(join(root, 'build/acme.yaml'), 'name: Acme\nprimary: "#123456"\nlogo: tri\n');
   const acme = loadBrand(join(root, 'build/acme.yaml'));
   ok(acme.id === 'acme' && acme.accent === '#123456' && acme.logo === 'tri' && acme['card-marker'] === 'glyphs' && acme.fonts === 'fonts/system.css', 'a .yaml path is a brand; blanks take the neutral defaults');
@@ -1117,7 +1117,7 @@ try {
     ok(JMD.lint(JMD.parse(wmDeck('flower'))).some(f => f.level === 'error' && f.rule === 'watermark'), 'an unknown watermark is an error naming the three');
   }
   const inline = loadBrand('primary: "#0B2545"\naccent: "#F18F01"');
-  ok(inline.id === 'custom' && inline.accent === '#F18F01' && inline.name === '', 'YAML text is a brand too (custom)');
+  ok(inline.id === 'custom' && inline.accent === '#f18f01' && inline.name === '', 'YAML text is a brand too (custom)');
   let err = ''; try { loadBrand('primary: blue'); } catch (e) { err = e.message; } ok(err.includes('#rrggbb'), 'a brand without a #hex primary is refused');
   try { loadBrand('primary: "#000"\nlogo: nope'); } catch (e) { err = e.message; } ok(err.includes('not one of the marks'), 'an unknown mark is refused, the list given');
   const sym = markSymbol('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" onload="x()"><script>evil()</script><circle cx="5" cy="5" r="4"/></svg>');
@@ -1137,13 +1137,13 @@ try {
     ok(/^brand footer-band: .* is not one of none, line$/.test(yamlErr), 'a brand.yaml with a footer-band out of the list is refused, nothing built', yamlErr);
     // defaults: a brand that says none of them draws the very same page, and its CSS has no new variable
     const four = readFileSync(join(root, 'decks/samples/four-blocks.jmd'), 'utf8');
-    const same = ['ocean', 'slate', ANY_BRAND].every(id => { const b = loadBrand(id), d = { ...b, align: 'center', 'footer-band': 'none', 'cover-logo': 'small', 'table-head': 'strong', 'chrome-label': 'mono' }; const a = JMD.render(JMD.parse(four), { brand: b }); return a === JMD.render(JMD.parse(four), { brand: d }) && !/brand-(align|band|logo|thead|label)|slide-band/.test(a); });
-    ok(same && !/--brand-thead-(bg|ink):|--brand-logo-ratio:/.test(buildHtml({ jmd: four, brand: 'ocean' })), 'brand layout keys: left out or at their default, the page is the very same as before — no class, no band, no new CSS variable');
+    const same = ['ocean', 'slate', ANY_BRAND].every(id => { const b = loadBrand(id), d = { ...b, align: 'center', 'footer-band': 'none', 'cover-logo': 'small', 'table-head': 'strong', 'chrome-label': 'mono', 'cover-case': 'normal', 'cover-bg': 'intent' }; const a = JMD.render(JMD.parse(four), { brand: b }); return a === JMD.render(JMD.parse(four), { brand: d }) && !/brand-(align|band|logo|thead|label|title|cover-upper)|slide-band|data-status/.test(a); });
+    ok(same && !/--brand-thead-(bg|ink):|--brand-logo-ratio:|--brand-title:|--brand-chart-\d:|--brand-status-[a-z-]+:/.test(buildHtml({ jmd: four, brand: 'ocean' })), 'brand layout keys: left out or at their default, the page is the very same as before — no class, no band, no new CSS variable');
     // the sample charter (decks/samples/charter): a fictional public body, every key on, its logo beside its brand.yaml
     const cdir = join(root, 'decks/samples/charter');
     const charter = () => { const b = jmdLib.withSvgLogo(customBrand(parseBrand(readFileSync(join(cdir, 'charter.yaml'), 'utf8')), 'charter'), readFileSync(join(cdir, 'logo.svg'), 'utf8')); b.logo = 'custom'; return b; };
     const sample = n => readFileSync(join(cdir, n + '.jmd'), 'utf8');
-    for (const n of Object.keys(KEYS)) {
+    for (const n of [...Object.keys(KEYS), 'colours']) {
       const r = await jmdLib.lintDom(sample(n), { brand: charter() });
       ok(r.ok === true && !r.findings.some(f => f.rule === 'overflow' || f.rule === 'fit'), `charter/${n}.jmd lints clean in the charter brand, nothing pushed over the band`, JSON.stringify(r.findings.filter(f => f.level !== 'info')));
     }
@@ -1200,6 +1200,83 @@ try {
     ok(/algn="l"/.test(z.text('ppt/slides/slide1.xml')) && !/algn="ctr"/.test(z.text('ppt/slides/slide1.xml')), 'PPTX: the cover keeps its left alignment');
     const plain = readZip(await jmdLib.pptx(four, { brand: 'ocean' }));
     ok(!plain.has('ppt/slideLayouts/slideLayout2.xml'), 'PPTX: a brand without a band keeps the one blank layout');
+  }
+
+  console.log('\n10e. Brands: what a charter decides of its colours and its cover (2026-11-12) — title-color, chart-colors, status-*, cover-case');
+  {
+    const { validateBrand, chartColors } = await import('./safe.mjs');
+    const { customBrand, parseBrand, buildHtml, titleColor, statusColors, brandWarnings, contrast } = await import('../tools/build.mjs');
+    const jmdLib = await import('../lib/jmd.mjs');
+    const { readZip } = await import('./zip.mjs');
+    // every value by shape: a #hex, six at most, two words — anything else refused with the key named, nothing built
+    const HOSTILE = ['red', '#12345G', '#000;}body{display:none', '</style><script>alert(1)</script>', '#000"', 'var(--x)', 'url(https://x.example/a)'];
+    const refusedHex = ['title-color', 'status-ok', 'status-warn', 'status-error'].every(k => HOSTILE.every(v => { try { validateBrand({ primary: '#000', [k]: v }); return false; } catch (e) { return e.message.startsWith('brand ' + k + ':'); } }));
+    const refusedChart = [...HOSTILE, '#111 #222 #333 #444 #555 #666 #777', '[]', '#111, red'].every(v => { try { validateBrand({ primary: '#000', 'chart-colors': v }); return false; } catch (e) { return e.message.startsWith('brand chart-colors:'); } });
+    const refusedCase = ['UPPER', 'capitals', 'upper;}', '</style>'].every(v => { try { validateBrand({ primary: '#000', 'cover-case': v }); return false; } catch (e) { return e.message.startsWith('brand cover-case:'); } });
+    ok(refusedHex && refusedChart && refusedCase && validateBrand({ primary: '#000', 'title-color': '#000000', 'status-warn': '#F59C00', 'cover-case': 'upper', 'chart-colors': '#111, #222' }),
+      'brand colour keys: title-color and status-* are #hex, chart-colors six #hex at most, cover-case normal|upper — a CSS fragment, markup, a seventh colour or a word is refused naming the key');
+    const flow = parseBrand('primary: "#123456"\nchart-colors: ["#1F3A68", "#2E7D9A", "#6A9F3B"]\n')['chart-colors'], quoted = parseBrand('primary: "#123456"\nchart-colors: "#1F3A68,#2E7D9A,#6A9F3B"\n')['chart-colors'];
+    ok([flow, quoted, ['#1F3A68', '#2E7D9A', '#6A9F3B']].every(v => chartColors(v).join() === '#1F3A68,#2E7D9A,#6A9F3B'), 'chart-colors: a YAML flow list, one quoted string with commas, or a list — the same three colours', JSON.stringify([flow, quoted]));
+    let yamlErr = ''; try { customBrand(parseBrand('primary: "#123456"\nchart-colors: ["#111", "</style>"]'), 'x'); } catch (e) { yamlErr = e.message; }
+    ok(/^brand chart-colors: .* is not a #hex color$/.test(yamlErr), 'a brand.yaml with a chart colour out of shape is refused, nothing built', yamlErr);
+    // contrast, computed: a title colour reads at 3:1 on every light page, else the titles keep the ink and the linter says why
+    const cdir = join(root, 'decks/samples/charter');
+    const charter = (extra = '') => { const b = jmdLib.withSvgLogo(customBrand(parseBrand(readFileSync(join(cdir, 'charter.yaml'), 'utf8') + extra), 'charter'), readFileSync(join(cdir, 'logo.svg'), 'utf8')); b.logo = 'custom'; return b; };
+    const sample = readFileSync(join(cdir, 'colours.jmd'), 'utf8');
+    const cb = charter(), pale = charter('title-color: "#B8CCE4"\n');
+    const tc = titleColor(cb), tp = titleColor(pale);
+    ok(tc.ok && tc.color === '#000000' && !tp.ok && tp.ratio < 3 && !brandWarnings(cb).length && /title-color #B8CCE4 reads 1\.\d\d:1 on the \w+ page/.test(brandWarnings(pale)[0] || '') && titleColor({ primary: '#000' }) === null,
+      `title-color: black reads on every light page of the charter (${tc.ratio.toFixed(1)}:1 at worst); a pale blue does not (${tp.ratio.toFixed(2)}:1) and is said`, brandWarnings(pale).join(' '));
+    const paleHtml = buildHtml({ jmd: sample, brand: pale });
+    const paleJson = JSON.parse(/<script type="application\/json" id="brand">([^<]*)</.exec(paleHtml)[1]);
+    ok(!paleHtml.includes('--brand-title:') && paleJson['title-color'] === undefined && paleJson['chart-colors'] && !JMD.render(JMD.parse(sample), { brand: paleJson }).includes('brand-title'),
+      'title-color under 3:1: no title variable in :root, the key left out of the page\'s brand — the titles keep the ink');
+    const told = await jmdLib.lintDom(sample, { brand: pale });
+    ok(told.findings.some(f => f.rule === 'brand-contrast' && f.level === 'warning' && f.slide === 0 && /B8CCE4/.test(f.message)) && !(await jmdLib.lintDom(sample, { brand: cb })).findings.some(f => f.rule === 'brand-contrast'),
+      'the linter says it: a warning `brand-contrast` on the deck for a title colour that does not read, none for one that does');
+    const st = statusColors(cb), defaults = statusColors({});
+    ok(st.warn.color === '#F59C00' && st.warn.ink !== '#F59C00' && Object.values(st).concat(Object.values(defaults)).every(x => contrast(x.ink, '#FFFFFF') >= 4.5) && Object.values(defaults).every(x => x.ink === x.color),
+      'status colours: their words read at 4.5:1 on white — a pale orange is darkened for the delta, the defaults read as they are', JSON.stringify(st));
+    const built = buildHtml({ jmd: sample, brand: cb });
+    ok(built.includes('--brand-title:#000000;') && ['#1F3A68', '#2E7D9A', '#6A9F3B', '#C9A227', '#B5543C', '#7A5C99'].every((c, i) => built.includes(`--brand-chart-${i + 1}:${c};`)) && built.includes('--brand-status-warn:#F59C00;') && built.includes(`--brand-status-warn-ink:${st.warn.ink};`),
+      'the charter\'s :root carries its title colour, its six chart colours and its statuses, each a validated #hex');
+    // in the page: read from the computed styles — a hook page and a reveal page added keep their own titles
+    const deck = sample + '\n---\nintent: hook\n---\n## Une page sombre\n\nSon titre reste blanc.\n\n---\nintent: reveal\n---\n## Un titre discret\n\n::: statement\nLa phrase qui compte.\n:::\n';
+    const cfile = join(tmp, 'colours.html'); writeFileSync(cfile, buildHtml({ jmd: deck, brand: cb }));
+    const cp = await open('file://' + cfile); await cp.settle(300);
+    const got = JSON.parse(await cp.eval(`(() => { const s = jamesJmd.state.slides, cs = (el, k) => el ? getComputedStyle(el)[k] : null;
+      return JSON.stringify({ coverCase: cs(s[0].querySelector('.slide-h1'), 'textTransform'), coverInk: cs(s[0].querySelector('.slide-h1'), 'color'),
+        h2: cs(s[2].querySelector('.slide-h2'), 'color'), dark: cs(s[4].querySelector('.slide-h2'), 'color'), reveal: cs(s[5].querySelector('.slide-h2'), 'color'),
+        slices: [...s[1].querySelectorAll('.chart-slice')].map(e => cs(e, 'fill')),
+        cards: [...s[3].querySelectorAll('.card.kpi')].map(c => [c.dataset.status, cs(c, 'borderTopColor'), cs(c, 'borderTopWidth'), cs(c.querySelector('.kpi-d'), 'color')]) }); })()`));
+    await cp.close();
+    const rgb = h => 'rgb(' + [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)).join(', ') + ')';
+    ok(got.coverCase === 'uppercase' && got.coverInk === rgb('#000000') && got.h2 === rgb('#000000') && got.dark === rgb('#FFFFFF') && got.reveal !== rgb('#000000'),
+      'title-color and cover-case: the cover\'s title in capitals, the titles of the light pages black; a dark page\'s title stays white, the quiet title of reveal its own', JSON.stringify(got));
+    ok(got.slices.join() === ['#1F3A68', '#2E7D9A', '#6A9F3B', '#C9A227', '#B5543C', '#7A5C99'].map(rgb).join(), 'chart-colors: the six slices of a pie in the charter\'s six colours, in their order', JSON.stringify(got.slices));
+    ok(got.cards.map(c => c[0]).join() === 'ok,warn,error' && got.cards.every((c, i) => c[1] === rgb([st.ok, st.warn, st.error][i].color) && c[2] === '6px' && c[3] === rgb([st.ok, st.warn, st.error][i].ink)),
+      'status: each kpi card says its status by its top edge in the brand\'s colour and its delta in the colour that reads', JSON.stringify(got.cards));
+    const lay = l => JMD.render(JMD.parse(sample.replace('layout: slide', 'layout: ' + l)), { brand: cb });
+    ok(lay('story').includes('brand-cover-upper') && lay('doc').includes('brand-cover-upper') && JMD.render(JMD.parse(sample), { brand: loadBrand('ocean') }).includes('data-status="warn"'),
+      'cover-case: a Story\'s and a Doc\'s cover too; a kpi card\'s status is the deck\'s, drawn in any brand (the default green, orange, red)');
+    // cover-bg (2026-11-12): a hook cover on a white page loses the hook's coloured form, keeps its intent; primary is the deep colour;
+    // a hook that is not a cover, and a brand that leaves it out, keep the accent
+    const hookDeck = '---\nformat: jmd/3\nlayout: slide\ntitle: T\n---\n\n---\nintent: hook\n---\n# The cover\nA lead.\n\n---\nintent: hook\n---\n## Not the cover\n';
+    const coverOf = (k, l = 'slide') => { const h = JMD.render(JMD.parse(hookDeck.replace('layout: slide', 'layout: ' + l)), { brand: { ...loadBrand('ocean'), ...(k ? { 'cover-bg': k } : {}) } }); return [...h.matchAll(/<section class="([^"]*)"[^>]*data-intent="hook"/g)].map(m => m[1]); };
+    const [w0, w1] = coverOf('white'), [p0] = coverOf('primary'), [d0, d1] = coverOf(null), [i0] = coverOf('intent'), [s0] = coverOf('white', 'story');
+    ok(/slide--white/.test(w0) && !/slide--hook/.test(w0) && /slide--cover/.test(w0) && /slide--accent/.test(w1) && /slide--hook/.test(w1) && /slide--indigo/.test(p0) && /slide--hook/.test(p0)
+      && /slide--accent/.test(d0) && /slide--hook/.test(d0) && d1 && i0 === d0 && /slide--white/.test(s0),
+      'cover-bg: white makes the cover a white page (its intent kept, the hook\'s form dropped), primary the deep colour; another hook, a Story\'s cover too, and the default untouched', JSON.stringify({ w0, p0, d0 }));
+    const refusedBg = ['WHITE', 'black', 'white;}', '</style>'].every(v => { try { validateBrand({ primary: '#000', 'cover-bg': v }); return false; } catch (e) { return /cover-bg/.test(e.message); } });
+    ok(refusedBg && validateBrand({ primary: '#000', 'cover-bg': 'white' }), 'cover-bg: a word out of the list is refused, the key named');
+    // the exports: the PowerPoint's theme accents are the chart colours, the cover written in capitals, the titles black
+    const z = readZip(await jmdLib.pptx(sample, { brand: charter() }));
+    const theme = z.text('ppt/theme/theme1.xml'), s1 = z.text('ppt/slides/slide1.xml'), s3 = z.text('ppt/slides/slide3.xml');
+    ok(['1F3A68', '2E7D9A', '6A9F3B', 'C9A227', 'B5543C', '7A5C99'].every((c, i) => theme.includes(`<a:accent${i + 1}><a:srgbClr val="${c}"/>`)), 'PPTX: the six chart colours are the theme\'s six accents');
+    ok(/cap="all"[^>]*><a:solidFill><a:srgbClr val="000000"(?:\/>|><\/a:srgbClr>)(?:(?!<a:t>)[\s\S])*<a:t>Bilan numérique du semestre<\/a:t>/.test(s1) && /<a:srgbClr val="000000"(?:\/>|><\/a:srgbClr>)(?:(?!<a:t>)[\s\S])*<a:t>Démarches traitées par trimestre<\/a:t>/.test(s3),
+      'PPTX: the cover\'s title in capitals (cap="all", the words as written), the titles in the title colour');
+    const plain = readZip(await jmdLib.pptx(readFileSync(join(root, 'decks/samples/four-blocks.jmd'), 'utf8'), { brand: 'ocean' })).text('ppt/theme/theme1.xml');
+    ok(plain.includes('<a:accent3><a:srgbClr val="4CB8A4"/>'), 'PPTX: a brand without chart colours keeps the accents it had');
   }
 
   console.log('\n10d. The typeface catalogue (#83): open-licence faces a brand names, carried by the deck');
@@ -1271,6 +1348,24 @@ try {
     const fontAttack = 'x"; } </style><script>alert(1)</script><style>';
     ok((badBrand('font-display', fontAttack) || '').includes('font-display'), 'brand: a font name carrying </style><script> is refused, the field named (confirmed hole, closed)');
     ok((badBrand('accent', '"#123456; } </style>"') || '').includes('accent'), 'brand: a color carrying `;` is refused');
+    /* A colour written bare (`ink: #000000`) was read as a comment and dropped in silence (Nicolas, 2026-11-12); colours as people
+       write them are read as `#rrggbb`. What is read must still be a colour: the parse keeps a bare `#…` value whole, so what is
+       not a colour reaches the shape check and is refused naming the field — never cut to a colour, never dropped. */
+    const { normalColor } = await import('../tools/safe.mjs'), { customBrand, parseBrand } = await import('../tools/build.mjs');
+    const bare = customBrand(parseBrand('name: T\nprimary: "#000091"\nink: #000000\naccent: #E1000F  # the red\nhighlight: #fd0\nsecondary: 000091'), 'x');
+    ok(bare.ink === '#000000' && bare.accent === '#e1000f' && bare.highlight === '#ffdd00' && bare.secondary === '#000091' && (await jmdLib.resolveBrand('name: T\nprimary: "#000091"\nink: #000000')).ink === '#000000',
+      'brand: an unquoted #hex is the colour, not a comment; a comment after it still goes; no #, capitals and three digits are read as #rrggbb', JSON.stringify([bare.ink, bare.accent, bare.highlight, bare.secondary]));
+    const nested = parseBrand('primary: "#123456"\ndecor:\n  own:\n    svg: corner.svg  # beside\n    tint: accent\nimages:\n  pic: https://a.example/img/  # bank\nname: After');
+    ok(nested.decor.own.svg === 'corner.svg' && nested.decor.own.tint === 'accent' && nested.images.pic === 'https://a.example/img/' && nested.name === 'After', 'brand: the decor and images blocks read as before, their comments stripped', JSON.stringify(nested));
+    const colourAttacks = ['#000091;}body{', '#000091;}body{display:none}', '"#000091;}body{"', '#fff</style><script>alert(1)</script>', '000091;}', '#00009', 'fed', '"#0000911"', 'url(#a)', '#E1000Fz'];
+    const colourRefused = colourAttacks.filter(v => (badBrand('ink', v) || '').startsWith('brand ink:'));
+    const primaryAttack = (() => { try { loadBrand('primary: #000091;}body{'); return ''; } catch (e) { return e.message; } })();
+    ok(colourRefused.length === colourAttacks.length && /primary/.test(primaryAttack),
+      'brand: a bare colour carrying CSS (`primary: #000091;}body{`), markup, a typo or a word is refused, the field named — the tolerance reads a colour, nothing else', colourAttacks.filter(v => !colourRefused.includes(v)).join(' '));
+    ok(['#ABC', 'abcdef', '#AbCdEf'].map(normalColor).join() === '#aabbcc,#abcdef,#abcdef' && normalColor('abc') === 'abc' && normalColor('#abcd') === '#abcd' && normalColor(' #ABCDEF;}') === ' #ABCDEF;}',
+      'a colour as people write it → #rrggbb in lower case; three letters without # stay a word, and anything else is left for the shape check to refuse');
+    const builtC = buildHtml({ jmd: fixed, brand: 'primary: 000091\nink: #000000\naccent: #E1000F' });
+    ok(/--brand-primary:\s*#000091/.test(builtC) && !/#E1000F|:\s*000091/.test(builtC), 'and the colours read so reach the deck as #rrggbb', (/--brand-primary:[^;]*/.exec(builtC) || [''])[0]);
     ok((badBrand('type-scale', '"1</style>"') || '').includes('type-scale') && (badBrand('watermark', 'evil') || '').includes('watermark') && (badBrand('motion', 'x') || '').includes('motion'), 'brand: scale and enum fields are validated by shape');
     ok((badBrand('fonts', '../../../../etc/passwd') || '').includes('fonts') && badBrand('fonts', 'fonts/system.css') === null, 'brand: fonts must be a fonts/….css of the brands folder, nowhere else on the disk');
     /* `brand` was the last channel through which a caller's words reached the server's disk (confirmed hole, closed). `dir`

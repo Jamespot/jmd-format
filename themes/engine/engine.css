@@ -411,8 +411,9 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
 :is(.slide--indigo,.slide--accent,.slide--sky) .table tr.is-hero td:first-child{box-shadow:none}
 
 /* chart — numbers drawn in the brand's colors, never a library: the SVG is drawn in design units (jmd-core.js chartBox), so its
-   type is the slide's type. Series: accent, deep, secondary, highlight; slices: the same, then two quiet tones. */
-.chart{margin:0;display:flex;flex-direction:column;gap:14px;min-width:0;--c1:var(--brand-accent);--c2:var(--jp-indigo-800);--c3:var(--brand-secondary,var(--jp-purple-300));--c4:var(--jp-yellow-500);--c5:var(--jp-purple-300);--c6:var(--jp-ink-faint);--c-quiet:var(--jp-purple-200);--c-text:var(--jp-ink);--c-soft:var(--jp-ink-soft);--c-grid:var(--jp-line);--c-dot:#fff}
+   type is the slide's type. Series: accent, deep, secondary, highlight; slices: the same, then two quiet tones — on a light page, the
+   brand's `chart-colors` take these places in their order (--brand-chart-1…6); a dark page keeps its own, drawn to be read on it. */
+.chart{margin:0;display:flex;flex-direction:column;gap:14px;min-width:0;--c1:var(--brand-chart-1,var(--brand-accent));--c2:var(--brand-chart-2,var(--jp-indigo-800));--c3:var(--brand-chart-3,var(--brand-secondary,var(--jp-purple-300)));--c4:var(--brand-chart-4,var(--jp-yellow-500));--c5:var(--brand-chart-5,var(--jp-purple-300));--c6:var(--brand-chart-6,var(--jp-ink-faint));--c-quiet:var(--jp-purple-200);--c-text:var(--jp-ink);--c-soft:var(--jp-ink-soft);--c-grid:var(--jp-line);--c-dot:#fff}
 :is(.slide--indigo,.slide--accent,.slide--sky,.slide--problem,.slide--act) .chart{--c1:var(--jp-yellow-500);--c2:#fff;--c3:var(--jp-purple-300);--c4:var(--brand-secondary,var(--jp-purple-200));--c5:rgba(255,255,255,.55);--c6:rgba(255,255,255,.3);--c-quiet:rgba(255,255,255,.28);--c-text:#fff;--c-soft:rgba(255,255,255,.72);--c-grid:rgba(255,255,255,.18);--c-dot:var(--jp-indigo-800)}
 .slide--accent .chart{--c-dot:var(--brand-accent)}
 .chart-plot{display:flex;align-items:center;gap:56px;min-width:0}
@@ -455,7 +456,7 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
 
 /* kpi — the cockpit card (1.39.0): the figure very big, the details, one small visual in boxes (native shapes in the PPTX),
    the message closing the card at its foot. The colors are the chart's series, on light and on dark slides. */
-.kpis{--c1:var(--brand-accent);--c2:var(--jp-indigo-800);--c3:var(--brand-secondary,var(--jp-purple-300));--c4:var(--jp-yellow-500);--c-quiet:var(--jp-purple-200);--c-text:var(--jp-ink);--c-soft:var(--jp-ink-soft);--c-grid:var(--jp-line);--c-band:var(--jp-purple-100);--c-over:var(--jp-yellow-600)}
+.kpis{--c1:var(--brand-chart-1,var(--brand-accent));--c2:var(--brand-chart-2,var(--jp-indigo-800));--c3:var(--brand-chart-3,var(--brand-secondary,var(--jp-purple-300)));--c4:var(--brand-chart-4,var(--jp-yellow-500));--c-quiet:var(--jp-purple-200);--c-text:var(--jp-ink);--c-soft:var(--jp-ink-soft);--c-grid:var(--jp-line);--c-band:var(--jp-purple-100);--c-over:var(--jp-yellow-600)}
 :is(.slide--indigo,.slide--accent,.slide--sky,.slide--hook,.slide--problem,.slide--celebrate,.slide--act) .kpis{--c1:var(--jp-yellow-500);--c2:#fff;--c3:var(--jp-purple-300);--c4:var(--brand-secondary,var(--jp-purple-200));--c-quiet:rgba(255,255,255,.28);--c-text:#fff;--c-soft:rgba(255,255,255,.72);--c-grid:rgba(255,255,255,.18);--c-band:rgba(255,255,255,.12);--c-over:var(--jp-yellow-500)}
 .card.kpi{gap:8px;padding:calc(22px * var(--type-scale,1))}
 .card.kpi h3{font-size:calc(21px * var(--type-scale,1))}
@@ -1474,3 +1475,23 @@ svg{--mark-dot:var(--brand-primary)}
 .slide.brand-label-body.slide--accent .chrome-meta,.slide.brand-label-body .slide--accent .chrome-meta{color:var(--brand-label-on-accent)}
 .slide.brand-label-body.slide--sky .chrome-meta,.slide.brand-label-body .slide--sky .chrome-meta{color:var(--brand-label-on-secondary)}
 .layout-story .slide.brand-label-body .chrome-meta{font-size:20px}
+
+/* ── What a charter decides of its colours and its cover (2026-11-12) ────────────────────────────────────────────────────
+   title-color, chart-colors, status-ok/warn/error, cover-case. Like the page layout above: classes and custom properties the
+   build and the renderer set only for a brand that says them, so every other brand gets the very same page. */
+/* title-color — the titles of the light pages (white, the wash, lavender, butter) in the brand's title colour, set by the build
+   only when it reads at 3:1 on all four (tools/build.mjs titleColor); a dark page, a sheet of colour inside a light page and the
+   quiet title of `reveal` keep their own */
+.slide.brand-title:is(.slide--white,.slide--wash,.slide--lavender,.slide--butter) :is(.slide-h1,.slide-h2):not(:is(.slide--indigo,.slide--accent,.slide--sky,.slide--skylight,.slide--highlight,.slide--reveal) *){color:var(--brand-title)}
+/* status — a kpi card whose title says `{.ok}` `{.warn}` `{.error}`: its top edge thick in the status colour, its delta in the
+   status's words colour (4.5:1 on white, tools/build.mjs statusColors); on a dark page the delta stays white, the edge says it.
+   The defaults read at 4.5:1 on white too. A border, not a shadow: the PowerPoint export reads it back as a shape. */
+.kpi--ok{--st:var(--brand-status-ok,#18753C);--st-ink:var(--brand-status-ok-ink,#18753C)}
+.kpi--warn{--st:var(--brand-status-warn,#B34000);--st-ink:var(--brand-status-warn-ink,#B34000)}
+.kpi--error{--st:var(--brand-status-error,#CE0500);--st-ink:var(--brand-status-error-ink,#CE0500)}
+.card.kpi[data-status]{border-top:6px solid var(--st)}
+.kpi[data-status] .kpi-d{color:var(--st-ink)}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--hook,.slide--problem,.slide--celebrate,.slide--act) .kpi[data-status] .kpi-d{color:var(--c-text)}
+/* cover-case: upper — the cover's title in capitals (a Slide's or a Story's cover, a Doc's cover page), set by CSS: the source
+   keeps the words as written, and the PowerPoint export reads the capitals back (cap="all"). Dividers keep their case. */
+.slide.brand-cover-upper.slide--cover .slide-h1,.slide.brand-cover-upper :is(.sheet--cover .slide-h1,.doc-cover-title){text-transform:uppercase;letter-spacing:0}

@@ -1,0 +1,104 @@
+---
+format: jmd/3
+layout: slide
+title: Votre marque, sur une présentation entière
+lang: fr
+date: 2026-11-12
+---
+
+---
+intent: hook
+notes: La couverture, telle que chaque présentation de la marque l'ouvrira.
+---
+# Votre marque, sur une présentation entière
+Couverture, sommaire, chapitres, cartes, tableau, graphique, citation et fin.
+
+---
+notes: Le sommaire se remplit tout seul avec les chapitres de la présentation et les titres de leurs slides.
+---
+## Sommaire
+
+::: agenda
+:::
+
+---
+notes: Un chapitre ouvre une partie.
+---
+::: section
+Où nous en sommes
+:::
+
+---
+section: Où nous en sommes
+notes: Trois idées côte à côte.
+---
+## Trois chantiers pour l'année
+
+::: cards
+- Accueillir | Un parcours unique pour chaque nouvel arrivant, de la signature au premier mois.
+- Simplifier | Moins de formulaires, des demandes suivies du début à la fin.
+- Mesurer | Des indicateurs partagés, lus chaque mois par l'équipe.
+:::
+
+---
+section: Où nous en sommes
+notes: Un tableau, avec son en-tête.
+---
+## Où en est chaque service
+
+::: table
+| Service | Demandes | Délai moyen | Tendance |
+|---|--:|--:|---|
+| Ressources humaines | 1 240 | 4 jours | En baisse |
+| Informatique | 860 | 2 jours | Stable |
+| Achats | 410 | 6 jours | En hausse |
+:::
+
+---
+section: Où nous en sommes
+notes: Un graphique à plusieurs séries montre les couleurs des graphiques.
+---
+## Les demandes, trimestre après trimestre
+
+::: chart {.bar}
+series: RH | Informatique | Achats
+- T1 | 280 | 190 | 90
+- T2 | 300 | 210 | 100
+- T3 | 320 | 220 | 105
+- T4 | 340 | 240 | 115
+:::
+
+---
+notes: Le second chapitre.
+---
+::: section
+Ce que nous proposons
+:::
+
+---
+section: Ce que nous proposons
+notes: Une étape après l'autre.
+---
+## Le plan en quatre étapes
+
+::: timeline
+- Janvier | Cadrage | Les besoins de chaque service, écrits ensemble.
+- Mars | Premiers parcours | Deux services pilotes. {.now}
+- Juin | Généralisation | Tous les services, un par un. {.next}
+- Septembre | Bilan | Ce qui a marché, ce qui change.
+:::
+
+---
+intent: reveal
+notes: Une phrase seule, sur une page de couleur.
+---
+::: statement
+Une marque se règle une fois, et chaque présentation la porte.
+:::
+
+---
+intent: act
+notes: La page de fin.
+---
+## Merci, à vous de jouer.
+Réglez votre marque une fois : chaque présentation la portera.

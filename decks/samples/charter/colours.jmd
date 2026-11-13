@@ -1,0 +1,66 @@
+---
+format: jmd/3
+layout: slide
+title: Colours — black titles, six chart accents, three statuses
+lang: fr
+date: 12 novembre 2026
+---
+
+---
+notes: With `cover-case: upper` the cover's title is set in capitals; the source keeps it as written.
+---
+# Bilan numérique du semestre
+Les indicateurs présentés au comité de direction.
+
+---
+section: Usages
+notes: With `chart-colors` the slices take the charter's six accents, in their order.
+---
+## Les démarches en ligne, par canal
+
+::: chart {.pie}
+- Portail | 38
+- Application | 24
+- Téléphone | 14
+- Guichet | 11
+- Courrier | 8
+- Partenaires | 5
+:::
+
+---
+section: Usages
+notes: Two series: the first two chart colours. Titles in `title-color`, black, the text in the ink.
+---
+## Démarches traitées par trimestre
+
+::: chart {.bar}
+series: 2025 | 2026
+unit: k
+- T1 | 42 | 48
+- T2 | 45 | 53
+- T3 | 39 | 51
+- T4 | 47 | 60
+:::
+
+---
+section: Pilotage
+notes: `{.ok}`, `{.warn}` and `{.error}` on a card's title: the brand's status colours, a band at its top and the delta in its colour.
+---
+## Le tableau de bord du semestre
+
+::: kpi
+### Démarches en ligne {.ok}
+60 % | des démarches | +12 pts sur un an
+bars: T1 = 48 | T2 = 53 | T3 = 51 | T4 = 60
+> Objectif annuel atteint.
+
+### Délai de réponse {.warn}
+14 j | en moyenne | −7 j, cible 10 j
+trend: J = 21 | F = 19 | M = 18 | A = 16 | M = 15 | J = 14
+> Encore au-dessus de la cible.
+
+### Satisfaction {.error}
+3,1 / 5 | sur le téléphone | −0,4 sur un an
+stack: Satisfaits = 41 | Neutres = 22 | Déçus = 37
+> Un plan d'action au prochain comité.
+:::

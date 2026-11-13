@@ -22,3 +22,11 @@ footer-band: line
 cover-logo: large
 table-head: light
 chrome-label: body
+# what a charter decides of its colours and its cover (2026-11-12): black titles beside the navy, six accents for the charts,
+# three status colours, the cover's title in capitals
+title-color: "#000000"
+chart-colors: ["#1F3A68", "#2E7D9A", "#6A9F3B", "#C9A227", "#B5543C", "#7A5C99"]
+status-ok: "#2E8540"
+status-warn: "#F59C00"
+status-error: "#D52B1E"
+cover-case: upper

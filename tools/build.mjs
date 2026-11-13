@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpa
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateBrand, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY } from './safe.mjs';
+import { validateBrand, normalizeColors, chartColors, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY } from './safe.mjs';
 import { catalogueFace, brandCatalogueFaces, faceCss } from './fonts.mjs';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -18,8 +18,17 @@ export function parseBrand(txt) {
   const o = {}; let nested = null; // `images:` is the one key with a nested map: `  <prefix>: <base>` lines under it (spec/images.md)
   let decor = false, item = null; // `decor:` holds named elements: `  <name>:` then `    <field>: <value>` lines under it (spec/brand.md)
   const unq = v => /^".*"$/.test(v) || /^'.*'$/.test(v) ? v.slice(1, -1) : v;
+  /* `# …` after a space is a comment — except a colour written bare (`ink: #000000`, as a charter copied out of PowerPoint
+     writes it; read as a comment, the value was empty and the text took another colour without a word, Nicolas 2026-11-12):
+     a value that opens on `#` and a hex digit is a value, kept whole up to the next space — so `#00009` or `#000091;}body{`
+     reach validateBrand and are refused with its sentence, never dropped in silence — and a real comment after it
+     (`ink: #000000  # body text`) still goes. A comment is `# ` and words: no shipped brand writes `key: #<hex>` as one. */
+  const uncomment = raw => {
+    const h = /^(\s*[a-z][\w-]*:\s+)(#[0-9a-f]\S*)(.*)$/i.exec(raw);
+    return (h ? h[1] + h[2] + h[3].replace(/\s+#.*$/, '') : raw.replace(/\s+#.*$/, '')).replace(/\s+$/, '');
+  };
   for (const raw of txt.split('\n')) {
-    const line = raw.replace(/\s+#.*$/, '').replace(/\s+$/, '');
+    const line = uncomment(raw);
     if (decor) {
       let m = /^\s{3,}([a-z][\w-]*):\s*(.*)$/.exec(line);
       if (m && item) { o.decor[item][m[1]] = unq(m[2].trim()); continue; }
@@ -78,6 +87,7 @@ export const marks = () => readdirSync(join(brandsDir, 'marks')).map(f => f.repl
 
 /** Fill a custom brand's blanks — the same look as the neutral brands, in the customer's colors. */
 export function customBrand(b, id) {
+  normalizeColors(b); // `000091`, `#E1000F`, `#fd0` → `#rrggbb` before the check below, which would refuse the first
   if (!b.primary || !/^#[0-9a-f]{3,8}$/i.test(b.primary)) throw new Error('a brand needs at least `primary: "#rrggbb"` — the deep color');
   const d = { accent: b.primary, highlight: '#FFD166', ink: b.primary, 'font-display': 'Helvetica Neue', 'font-body': 'Helvetica Neue', 'font-fallback': '"Segoe UI", system-ui, sans-serif', fonts: 'fonts/system.css', 'type-scale': '0.94', logo: 'dot', glyphs: '4', watermark: 'mark', 'card-marker': 'glyphs', 'card-fill': 'plain', 'card-shadow': 'none', motion: 'soft' };
   if (b.decor !== undefined && b.decor !== '') delete d.watermark; // `decor:` says it all; `watermark:` is its old name (1.49.0)
@@ -204,8 +214,48 @@ export function logoRatio(mark) {
   const r = vb && +vb[2] > 0 ? +vb[1] / +vb[2] : 1;
   return Math.min(8, Math.max(0.25, Math.round(r * 1000) / 1000 || 1));
 }
+/* ── What a charter decides of its colours (2026-11-12): titles, charts, statuses ──
+   `title-color`: the titles of the light pages in a colour of their own (a ministry's black titles beside its blue). Large text,
+   so 3:1 is the bar (WCAG 1.4.3) — on white and on the three light tints a page can wear; under it on any of them the titles keep
+   the ink, and the linter says why (brandWarnings). */
+export const TITLE_MIN = 3;
+export function titleColor(b) {
+  const hex = k => /^#[0-9a-f]{3,8}$/i.test(b[k] || '') ? toHex(rgbOf(b[k])) : null;
+  const want = hex('title-color');
+  if (!want) return null;
+  const mix = (c, t) => toHex(rgbOf(c).map(v => 255 + (v - 255) * t));
+  const accent = hex('accent') || hex('primary') || '#000000', highlight = hex('highlight') || '#FFD166';
+  const pages = { white: '#FFFFFF', wash: hex('bg-wash') || mix(accent, 0.08), lavender: hex('bg-lavender') || mix(accent, 0.13), butter: hex('bg-butter') || mix(highlight, 0.30) };
+  const ratios = Object.fromEntries(Object.entries(pages).map(([k, bg]) => [k, contrast(want, bg)]));
+  const [page, ratio] = Object.entries(ratios).sort((x, y) => x[1] - y[1])[0];
+  return { color: want, ok: ratio >= TITLE_MIN, ratio, page, ratios };
+}
+/** The three statuses a figure can say (`{.ok}` `{.warn}` `{.error}` on a kpi card): the brand's, else a green, an orange and a red
+    that read at 4.5:1 on white. `ink` is the colour the words take: the brand's colour when it reads at 4.5:1 on white, else the
+    same hue darkened until it does — a status said in a pale colour is still read. */
+export const STATUS_DEFAULTS = { ok: '#18753C', warn: '#B34000', error: '#CE0500' };
+export function statusColors(b) {
+  const out = {};
+  for (const k of Object.keys(STATUS_DEFAULTS)) {
+    const v = /^#[0-9a-f]{3,8}$/i.test(b['status-' + k] || '') ? toHex(rgbOf(b['status-' + k])) : STATUS_DEFAULTS[k];
+    let ink = v, t = 1;
+    while (contrast(ink, '#FFFFFF') < 4.5 && t > 0) { t = Math.round((t - 0.05) * 100) / 100; ink = toHex(rgbOf(v).map(x => x * t)); }
+    out[k] = { color: v, ink };
+  }
+  return out;
+}
+/** What a brand asked that the page cannot give, said as a sentence each — the linter shows them (lib/jmd.mjs lintDom). */
+export function brandWarnings(b) {
+  const out = [], t = titleColor(b);
+  if (t && !t.ok) out.push(`brand title-color ${t.color} reads ${t.ratio.toFixed(2)}:1 on the ${t.page} page, under the ${TITLE_MIN}:1 a title needs: the titles keep the text colour (ink) — choose a darker title colour`);
+  return out;
+}
 function layoutCss(b, mark) {
   let css = '';
+  const t = titleColor(b);
+  if (t && t.ok) css += `  --brand-title:${cssTok(t.color)};\n`;
+  chartColors(b['chart-colors']).forEach((c, i) => { css += `  --brand-chart-${i + 1}:${cssTok(toHex(rgbOf(c)))};\n`; });
+  if (Object.keys(STATUS_DEFAULTS).some(k => b['status-' + k])) for (const [k, v] of Object.entries(statusColors(b))) css += `  --brand-status-${k}:${cssTok(v.color)};\n  --brand-status-${k}-ink:${cssTok(v.ink)};\n`;
   if (b['table-head'] === 'light') { const t = tableHead(b); css += `  --brand-thead-bg:${cssTok(t.bg)};\n  --brand-thead-ink:${cssTok(t.ink)};\n`; }
   if (b['chrome-label'] === 'body') { const l = chromeLabel(b); css += `  --brand-label-ink:${cssTok(l.ink)};\n  --brand-label-on-primary:${cssTok(l.primary)};\n  --brand-label-on-accent:${cssTok(l.accent)};\n  --brand-label-on-secondary:${cssTok(l.secondary)};\n`; }
   if (b['cover-logo'] === 'large') css += `  --brand-logo-ratio:${cssTok(String(logoRatio(mark)))};\n`;
@@ -269,7 +319,7 @@ ${optional('--brand-bg-lavender', 'bg-lavender')}${optional('--brand-bg-wash', '
     .replace('@@BRAND_CSS@@', () => brandCss)
     .replace('@@ENGINE@@', () => readFileSync(join(root, 'themes/engine/engine.css'), 'utf8').trim())
     .replace('@@BRAND_MARK@@', () => mark.trim() + (decor ? '\n' + decor : ''))
-    .replace('@@BRAND_JSON@@', () => JSON.stringify({ ...b, decor: undefined, decorSvgs: undefined, decorDir: undefined, decorUrls: undefined, decorDropped: undefined, markSvg: undefined, logoDropped: undefined, fontsCss: undefined, fontsDropped: undefined, fontsUrl: undefined, logoUrl: undefined }).replace(/</g, '\\u003c'))
+    .replace('@@BRAND_JSON@@', () => JSON.stringify({ ...b, 'title-color': titleColor(b)?.ok ? b['title-color'] : undefined, decor: undefined, decorSvgs: undefined, decorDir: undefined, decorUrls: undefined, decorDropped: undefined, markSvg: undefined, logoDropped: undefined, fontsCss: undefined, fontsDropped: undefined, fontsUrl: undefined, logoUrl: undefined }).replace(/</g, '\\u003c'))
     .replace('@@ASSETS_JSON@@', () => JSON.stringify(assetMap).replace(/</g, '\\u003c'))
     .replace('@@JMD_NAME@@', () => esc(name))
     .replace('@@JMD@@', () => safeJmd) // exact bytes: the runtime strips only the newline on each side

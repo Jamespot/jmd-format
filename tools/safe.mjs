@@ -6,7 +6,7 @@
 import { realpathSync, existsSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
-const HEX = /^#[0-9a-f]{3,8}$/i;
+const HEX = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i; // the four lengths CSS reads; a five- or seven-digit one is a typo the page would drop
 const ENUMS = {
   watermark: ['mark', 'circles', 'none'],
   'card-marker': ['glyphs', 'icon', 'mark', 'letter', 'none'],
@@ -19,21 +19,57 @@ const ENUMS = {
   'cover-logo': ['small', 'large'],
   'table-head': ['strong', 'light'],
   'chrome-label': ['mono', 'body'],
+  // what a charter decides of its colours and its cover (2026-11-12): the cover's title as written, or in capitals
+  'cover-case': ['normal', 'upper'],
+  // the cover's page (2026-11-12, the CISIRH model: a white cover): the colour its intent gives (hook: the accent), white, or the deep colour
+  'cover-bg': ['intent', 'white', 'primary'],
 };
-export const COLOR_KEYS = ['primary', 'accent', 'highlight', 'ink', 'secondary', 'bg-lavender', 'bg-wash', 'bg-butter', 'card'];
+export const COLOR_KEYS = ['primary', 'accent', 'highlight', 'ink', 'secondary', 'bg-lavender', 'bg-wash', 'bg-butter', 'card', 'title-color', 'status-ok', 'status-warn', 'status-error'];
+export const CHART_COLORS_MAX = 6;
+/** `chart-colors:` → the list of #hex colours it names, or an Error. Written as a YAML flow list (`["#000091", "#E1000F"]`), one quoted
+    string with commas and no space before a `#` (`"#000091,#E1000F"` — the brand parser reads ` #` as a comment), or a list already
+    (an object brand): each one a #hex, six at most. */
+export function chartColors(v) {
+  if (v === undefined || v === '' || v === null) return [];
+  const list = Array.isArray(v) ? v.map(String) : String(v).trim().replace(/^\[|\]$/g, '').split(/[\s,]+/).filter(Boolean).map(x => x.replace(/^(["'])(.*)\1$/, '$2')); // a colour quoted whole, as a flow list writes it
+  const say = why => { throw new Error(`brand chart-colors: ${JSON.stringify(String(v).slice(0, 120))} ${why}`); };
+  if (!list.length) say('names no colour');
+  if (list.length > CHART_COLORS_MAX) say(`names ${list.length} colours, ${CHART_COLORS_MAX} at most`);
+  for (const c of list) if (!HEX.test(c)) say(`— ${JSON.stringify(c.slice(0, 24))} is not a #hex color`);
+  return list;
+}
 const FONT = /^[\p{L}\p{N}\s,'"_-]+$/u; // a font list: names (any script), quotes, commas — never `<`, `}`, `;`, `\`, `(`
 const FONT_ONE = /^[\p{L}\p{N}][\p{L}\p{N} _-]{0,63}$/u; // one face, as an Office file names it: no list, no quote
 const MARK_ID = /^[\w-]+$/;
+
+/* A colour as people write it (Nicolas, 2026-11-12: a ministry's charter copied out of PowerPoint): `000091` with no `#`,
+   `#E1000F` in capitals, `#fd0` in three digits — all one colour, read as `#rrggbb` in lower case rather than refused. Only
+   those three shapes: a `#`-less value must be exactly six hex digits (`fed`, `add` are words, not colours), and anything
+   else is returned untouched, for validateBrand to refuse with its sentence. The result is a shape HEX accepts, nothing more. */
+export function normalColor(v) {
+  const s = String(v ?? '').trim(), m = /^#?([0-9a-f]{6})$/i.exec(s) || /^#([0-9a-f]{3})$/i.exec(s);
+  if (!m) return v;
+  const h = m[1].toLowerCase();
+  return '#' + (h.length === 3 ? h.replace(/./g, c => c + c) : h);
+}
+/** The colour keys of a brand, each normalised in place (normalColor) — the one step every way in goes through: a YAML read
+    (customBrand, loadBrand, validateBrand), the card's fields and the tool jmd_themes (mcp/brand.mjs brandFromForm). */
+export function normalizeColors(b) {
+  for (const k of COLOR_KEYS) if (typeof b[k] === 'string' && b[k] !== '') b[k] = normalColor(b[k]);
+  return b;
+}
 
 /** Every brand value against its shape; a field out of shape is an Error naming it, and nothing is built.
     `marks`: the ids of the shipped marks (logo may also be an https URL, or a .svg path next to a brand.yaml URL). */
 export function validateBrand(b, { marks = [] } = {}) {
   const bad = (k, why) => { throw new Error(`brand ${k}: ${JSON.stringify(String(b[k]))} ${why}`); };
+  normalizeColors(b);
   for (const k of COLOR_KEYS) if (b[k] !== undefined && b[k] !== '' && !HEX.test(b[k])) bad(k, 'is not a #hex color');
   for (const k of ['font-display', 'font-body', 'font-fallback']) if (b[k] !== undefined && b[k] !== '' && !FONT.test(b[k])) bad(k, 'is not a font name (letters, spaces, commas, quotes)');
   for (const k of ['font-office', 'font-office-heavy']) if (b[k] !== undefined && b[k] !== '' && !FONT_ONE.test(b[k])) bad(k, 'is not one font name (letters, digits, spaces — no list, no quotes)');
   if (b['type-scale'] !== undefined && b['type-scale'] !== '' && !(/^\d+(\.\d+)?$/.test(b['type-scale']) && +b['type-scale'] >= 0.5 && +b['type-scale'] <= 2)) bad('type-scale', 'is not a number between 0.5 and 2');
   if (b.glyphs !== undefined && b.glyphs !== '' && !/^\d{1,2}$/.test(b.glyphs)) bad('glyphs', 'is not a count');
+  if (b['chart-colors'] !== undefined && b['chart-colors'] !== '') chartColors(b['chart-colors']); // throws, naming the colour
   for (const k in ENUMS) if (b[k] !== undefined && b[k] !== '' && !ENUMS[k].includes(b[k])) bad(k, 'is not one of ' + ENUMS[k].join(', '));
   if (b.fonts !== undefined && b.fonts !== '' && b.fonts !== 'custom' && !/^fonts\/[\w.-]+(\/[\w.-]+)*\.css$/.test(b.fonts) && !/^https?:\/\/\S+\.css$/.test(b.fonts) && !/^[\w.-]+(\/[\w.-]+)*\.css$/.test(b.fonts))
     bad('fonts', 'is not a fonts/….css file of the brands folder, nor a .css next to the brand.yaml URL, nor an https URL');

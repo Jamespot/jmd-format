@@ -1,0 +1,104 @@
+---
+format: jmd/3
+layout: slide
+title: Your brand, on a whole presentation
+lang: en
+date: 2026-11-12
+---
+
+---
+intent: hook
+notes: The cover, as every presentation in this brand will open.
+---
+# Your brand, on a whole presentation
+Cover, contents, chapters, cards, table, chart, quote and last page.
+
+---
+notes: The contents fill themselves with the presentation's chapters and the titles of their slides.
+---
+## Contents
+
+::: agenda
+:::
+
+---
+notes: A chapter opens a part.
+---
+::: section
+Where we stand
+:::
+
+---
+section: Where we stand
+notes: Three ideas side by side.
+---
+## Three projects for the year
+
+::: cards
+- Welcome | One path for every newcomer, from signature to their first month.
+- Simplify | Fewer forms, requests followed from start to finish.
+- Measure | Shared indicators, read every month by the team.
+:::
+
+---
+section: Where we stand
+notes: A table, with its header.
+---
+## Where each department stands
+
+::: table
+| Department | Requests | Average delay | Trend |
+|---|--:|--:|---|
+| Human resources | 1,240 | 4 days | Down |
+| IT | 860 | 2 days | Steady |
+| Purchasing | 410 | 6 days | Up |
+:::
+
+---
+section: Where we stand
+notes: A chart with several series shows the chart colours.
+---
+## Requests, quarter after quarter
+
+::: chart {.bar}
+series: HR | IT | Purchasing
+- Q1 | 280 | 190 | 90
+- Q2 | 300 | 210 | 100
+- Q3 | 320 | 220 | 105
+- Q4 | 340 | 240 | 115
+:::
+
+---
+notes: The second chapter.
+---
+::: section
+What we propose
+:::
+
+---
+section: What we propose
+notes: One step after another.
+---
+## The plan in four steps
+
+::: timeline
+- January | Scoping | Each department's needs, written together.
+- March | First paths | Two pilot departments. {.now}
+- June | Rollout | Every department, one by one. {.next}
+- September | Review | What worked, what changes.
+:::
+
+---
+intent: reveal
+notes: One sentence alone, on a coloured page.
+---
+::: statement
+A brand is set once, and every presentation wears it.
+:::
+
+---
+intent: act
+notes: The last page.
+---
+## Thank you — over to you.
+Set your brand once: every presentation will wear it.

@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.50.0';
+  var VERSION = '1.51.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -623,6 +623,7 @@ globalThis.JMD = (function () {
   var KPI_KEY = /^\s*(stack|cells|dots|bars|hbars|funnel|trend|unit|target|series)\s*:\s*(.*)$/i;
   var KPI_MAX = { stack: 6, cells: 40, dots: 40, bars: 12, hbars: 5, funnel: 4, trend: 24 }; // segments, units for cells and dots
   var KPI_DETAILS = 3;
+  var KPI_STATUS = ['ok', 'warn', 'error']; // `{.ok}` `{.warn}` `{.error}` on a card's title: the brand's status colours
   // what a chart drawn in characters is made of (the linter's `text-chart`)
   var TEXT_CHART = /[▀-▟■-▩○●◐-◓◧-◪⬛⬜⚪⚫]|\uD83D[\uDD34\uDD35]|\uD83D[\uDFE0-\uDFEB]/g;
   // `label = value {.mod}`, values of several series joined by ` + `
@@ -1615,7 +1616,10 @@ globalThis.JMD = (function () {
             if (p.t === 'msg') return '<p class="kpi-msg"' + src(p.line) + '>' + inline(p.text) + '</p>';
             return '<p' + src(p.line) + '>' + inline(p.text) + '</p>';
           }).join('');
-          return '<div class="card kpi' + (has(c.attrs, 'hero') ? ' is-hero' : '') + '">' + (c.title ? '<h3' + src(c.line) + '>' + inline(c.title) + '</h3>' : '') + html + '</div>';
+          // a status on the card's title (`{.ok}` `{.warn}` `{.error}`): its top edge and its delta in the status colour, the
+          // brand's `status-*` or a green, an orange, a red — never a colour written in the deck
+          var st = KPI_STATUS.filter(function (x) { return has(c.attrs, x); })[0];
+          return '<div class="card kpi' + (has(c.attrs, 'hero') ? ' is-hero' : '') + (st ? ' kpi--' + st + '" data-status="' + st : '') + '">' + (c.title ? '<h3' + src(c.line) + '>' + inline(c.title) + '</h3>' : '') + html + '</div>';
         }).join('') + '</div>';
       }
     },
@@ -1766,6 +1770,12 @@ globalThis.JMD = (function () {
     var memoFlow = ctx.layout === 'doc' && !!ctx.memoFlow;
     if (memoFlow) opener = null; // a memo has no cover: a dark intent opens no page there (`memo-intent`), `page: yes` is the way to one
     var bg = ctx.layout === 'doc' ? 'white' : intent ? INTENT_BG[intent] : (m.bg || 'white'); // an intent sets the background itself
+    /* The cover's page as the charter sets it (`cover-bg`, 2026-11-12): white — the hook's form, written for a coloured page,
+       gives way to the cover's own, its intent still said (data-intent) — or the deep colour. A Slide's, a Story's and a
+       webpage's cover; a Doc's cover page is its own. Nothing changes for a brand that leaves it out. */
+    var coverBg = ctx.layout !== 'doc' && (intent || !m.bg) && (ctx.brand || {})['cover-bg'];
+    if (coverBg && coverBg !== 'intent' && slide.nodes.some(function (n) { return n.type === 'title' && n.level === 1; })) bg = coverBg === 'white' ? 'white' : 'indigo';
+    var plainCover = bg === 'white' && coverBg === 'white' && intent && INTENT_BG[intent] !== 'white';
     if (bg === 'sky' && isLight(ctx.brand.secondary || ctx.brand.accent)) bg = 'skylight'; // white on a pale secondary cannot be read: the words go dark
     if (m.section) ctx.section = m.section;
     ctx.here = idx; // an agenda built from the deck lights the part it sits in
@@ -1792,7 +1802,7 @@ globalThis.JMD = (function () {
     var cover = flow ? null : images.find(function (n) { return has(n.attrs, 'cover'); });
     var rightBlock = flow ? null : slide.nodes.find(function (n) { return n.type === 'block' && has(n.attrs, 'right') && BLOCKS[n.name] && !BLOCKS[n.name].full; });
     var classes = ['slide', 'slide--' + bg].concat(pageLayout(ctx));
-    if (intent) classes.push('slide--' + intent, 'slide--intent');
+    if (intent && !plainCover) classes.push('slide--' + intent, 'slide--intent');
     if (right) classes.push('slide--split');
     if (rightBlock) classes.push('slide--split-block');
     if (title && title.level === 1 && ctx.layout !== 'doc') classes.push('slide--cover'); // a long document's `#` is a chapter's title
@@ -1889,6 +1899,10 @@ globalThis.JMD = (function () {
     if (b['cover-logo'] === 'large') out.push('brand-logo-large');
     if (b['table-head'] === 'light') out.push('brand-thead-light');
     if (b['chrome-label'] === 'body') out.push('brand-label-body');
+    // what a charter decides of its titles (2026-11-12): their own colour on the light pages (the build sets it only when it reads),
+    // the cover's title in capitals
+    if (b['title-color']) out.push('brand-title');
+    if (b['cover-case'] === 'upper') out.push('brand-cover-upper');
     return out;
   }
   function hasBand(ctx) { return (ctx.brand || {})['footer-band'] === 'line' && (ctx.layout === 'slide' || ctx.layout === 'story'); }
@@ -2023,7 +2037,7 @@ globalThis.JMD = (function () {
     { name: 'logos', hint: '- ![Name](file) · 40 max', snippet: '::: logos\n- ![Acme](assets/logo-acme.svg)\n- ![Globex](assets/logo-globex.svg)\n:::' },
     { name: 'table', hint: '| a | b | rows · the row above |---|---| is the header · |--:| aligns right · 12 rows, 6 columns · 13–24 rows of ≤ 3 columns fold in two · {.split} · {.hero} on a row', snippet: '::: table\n| Offer | Users | Price |\n|---|---|---|\n| Starter | 10 | 5 € |\n| Pro | 100 | 9 € | {.hero}\n:::' },
     { name: 'chart', hint: '- label | value · {.bar} {.hbar} {.line} {.pie} on the block · unit: € · series: A | B for two columns of values · {.hero} on an item', snippet: '::: chart {.bar}\nunit: k€\n- Q1 | 120\n- Q2 | 180\n- Q3 | 240 {.hero}\n:::' },
-    { name: 'kpi', hint: '### title, then the figure: value | label | delta · ≤ 3 - details · one visual line: stack: cells: dots: bars: hbars: funnel: trend: with label = value | … · unit: target: series: · > message · 4 max', snippet: '::: kpi\n### Engagement\n4,3 / 5 | satisfaction\n- 28 answers out of 68\nstack: Rated 5 = 12 | Rated 4 = 12 | Rated 3 = 4\n> Expectations: shared rituals.\n\n### Pipeline\n179 k€ | in October\nbars: J = 902 | F = 361 | M = 437 | A = 179 {.partial}\nunit: k€\ntarget: 400–550\n> Steady leads, smaller deals.\n:::' },
+    { name: 'kpi', hint: '### title, then the figure: value | label | delta · ≤ 3 - details · one visual line: stack: cells: dots: bars: hbars: funnel: trend: with label = value | … · unit: target: series: · > message · {.ok} {.warn} {.error} on the title for its status · 4 max', snippet: '::: kpi\n### Engagement\n4,3 / 5 | satisfaction\n- 28 answers out of 68\nstack: Rated 5 = 12 | Rated 4 = 12 | Rated 3 = 4\n> Expectations: shared rituals.\n\n### Pipeline\n179 k€ | in October\nbars: J = 902 | F = 361 | M = 437 | A = 179 {.partial}\nunit: k€\ntarget: 400–550\n> Steady leads, smaller deals.\n:::' },
     { name: 'diagram', hint: 'Mermaid: flowchart LR or TD, then A[Step] --> B{Choice} lines · -->|label| · -.-> dotted · A[Text]{.hero} · or a list with a form: {.tree} (indent) {.cycle} {.radial} {.pyramid} {.funnel} {.steps} {.venn} {.target} {.matrix} · center: x: y:', snippet: '::: diagram\nflowchart LR\n  A[Request] --> B{Approved?}\n  B -->|Yes| C[Publish]{.hero}\n  B -->|No| D[Revise]\n  D -.-> A\n:::' },
     { name: 'image', hint: '![alt](file){.right} beside the text · {.cover} decoration · {.wide} alone under the title: a screen, whole', snippet: '![](assets/image.png){.right}' },
     { name: 'link', hint: '[Label →](url){.cta} a button · [text](url) inline', snippet: '[Learn more →](https://example.com){.cta}' }
