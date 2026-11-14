@@ -70,7 +70,18 @@ export class Browser {
   /* `lang` (1.34.0): the language the browser says it reads — what a deck page now follows for its own words (navigator)
      and what our pages read from Accept-Language. English by default, whatever the machine's own, so a check of a page's
      words and a drawn export come out the same on a French laptop and on the CI; a test that wants French asks for it. */
-  static async launch({ port = 0, lang = 'en-US' } = {}) {
+  /* A Chrome that never says it listens (no « DevTools listening » within 15 s) gets one more try: on a loaded machine — a CI
+     runner, two suites side by side — the first start sometimes hangs and the next one comes up at once. That was 1 red
+     run in 8 on main (2026-11-13), each one a whole suite run again. A Chrome that exits is not retried: it is missing. */
+  static async launch(opts = {}) {
+    try { return await Browser.#launchOnce(opts); }
+    catch (e) {
+      if (e.message !== 'Chrome did not start') throw e;
+      process.stderr.write('⚠️  Chrome did not start within 15 s: trying once more\n');
+      return Browser.#launchOnce(opts);
+    }
+  }
+  static async #launchOnce({ port = 0, lang = 'en-US' } = {}) {
     hook(); sweep();
     const b = new Browser();
     b.profile = mkdtempSync(join(tmpdir(), 'jmd-chrome-'));
