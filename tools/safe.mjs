@@ -24,6 +24,17 @@ const ENUMS = {
   // the cover's page (2026-11-12, the CISIRH model: a white cover): the colour its intent gives (hook: the accent), white, or the deep colour
   'cover-bg': ['intent', 'white', 'primary'],
 };
+/* The logo's height as the charter draws it (Nicolas, 2026-11-16: the CISIRH model's block is 13% of the page's height on every
+   slide and 37% on its cover, ours 4% and 10%): `logo-size` on every page of a Slide, `cover-logo-size` on its cover, each a share
+   of the page's height as a PowerPoint measures it. Unsaid, the logo keeps the size the engine gives it. */
+export const LOGO_SIZE_KEYS = ['logo-size', 'cover-logo-size'];
+export const LOGO_SIZE_MIN = 3, LOGO_SIZE_MAX = 60;
+/** `13%`, `13`, `12.5 %` → 0.13 / 0.125 (the fraction of the page's height), or null when out of shape or out of 3–60%. */
+export function logoSize(v) {
+  const m = /^\s*(\d{1,2}(?:\.\d)?)\s*%?\s*$/.exec(String(v ?? ''));
+  if (!m || +m[1] < LOGO_SIZE_MIN || +m[1] > LOGO_SIZE_MAX) return null;
+  return Math.round(+m[1] * 10) / 1000;
+}
 export const COLOR_KEYS = ['primary', 'accent', 'highlight', 'ink', 'secondary', 'bg-lavender', 'bg-wash', 'bg-butter', 'card', 'title-color', 'status-ok', 'status-warn', 'status-error'];
 export const CHART_COLORS_MAX = 6;
 /** `chart-colors:` → the list of #hex colours it names, or an Error. Written as a YAML flow list (`["#000091", "#E1000F"]`), one quoted
@@ -71,6 +82,7 @@ export function validateBrand(b, { marks = [] } = {}) {
   if (b.glyphs !== undefined && b.glyphs !== '' && !/^\d{1,2}$/.test(b.glyphs)) bad('glyphs', 'is not a count');
   if (b['chart-colors'] !== undefined && b['chart-colors'] !== '') chartColors(b['chart-colors']); // throws, naming the colour
   for (const k in ENUMS) if (b[k] !== undefined && b[k] !== '' && !ENUMS[k].includes(b[k])) bad(k, 'is not one of ' + ENUMS[k].join(', '));
+  for (const k of LOGO_SIZE_KEYS) if (b[k] !== undefined && b[k] !== '' && logoSize(b[k]) === null) bad(k, `is not a share of the page's height, ${LOGO_SIZE_MIN}% to ${LOGO_SIZE_MAX}% (13%)`);
   if (b.fonts !== undefined && b.fonts !== '' && b.fonts !== 'custom' && !/^fonts\/[\w.-]+(\/[\w.-]+)*\.css$/.test(b.fonts) && !/^https?:\/\/\S+\.css$/.test(b.fonts) && !/^[\w.-]+(\/[\w.-]+)*\.css$/.test(b.fonts))
     bad('fonts', 'is not a fonts/….css file of the brands folder, nor a .css next to the brand.yaml URL, nor an https URL');
   if (b.images !== undefined) {

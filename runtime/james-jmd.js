@@ -339,6 +339,7 @@
     (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function () {
       if (state.doc !== doc) return;
       document.body.classList.add('is-measuring'); // no animation while measuring: a rising item would read 10px low
+      JMD.fitTables(track); // a table wider than its frame breaks its words rather than lose its last column (#119)
       JMD.paginate(track, state.layout); // a long document: its chapters laid out on as many A4 sheets as they take
       if (track.querySelector('[data-of]') && !inView(state.i)) stage.scrollTop += topOf(state.i).getBoundingClientRect().top - stage.getBoundingClientRect().top - 24; // a memo's sections have just moved up onto each other's sheets
       fitOverflow(track, state.lint, state.layout); // a slide a little over the limit is shown smaller (warning), then measured

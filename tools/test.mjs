@@ -1198,6 +1198,42 @@ try {
     ok(layoutOf(1) === '2' && layoutOf(2) === '2' && layoutOf(3) === '3' && z.has('ppt/slideLayouts/slideLayout3.xml') && (z.text('ppt/slideMasters/slideMaster1.xml').match(/<p:sldLayoutId /g) || []).length === 3,
       'PPTX: the white pages share one band layout, the dark page has its own in white words; the master lists the three');
     ok(/algn="l"/.test(z.text('ppt/slides/slide1.xml')) && !/algn="ctr"/.test(z.text('ppt/slides/slide1.xml')), 'PPTX: the cover keeps its left alignment');
+    /* logo-size, cover-logo-size (Nicolas, 2026-11-16: the CISIRH block drawn at 4% and 10% of the page where its PowerPoint
+       draws it at 13% and 37%): a share of a Slide's page, by shape only; the logo at that height on every page and on the cover,
+       at its own proportions, the text stepping down below it; a Story keeps its header; the PowerPoint export carries the size. */
+    const { logoSize } = await import('./safe.mjs');
+    const badSizes = ['0%', '2%', '61%', '100%', '13%;}body{display:none', '13px', '-5%', 'large', '1e1%', '</style>'];
+    ok(['13%', '37%', '13', '12.5%', '3%', '60%'].every(v => validateBrand({ primary: '#000', 'logo-size': v, 'cover-logo-size': v }))
+      && ['logo-size', 'cover-logo-size'].every(k => badSizes.every(v => { try { validateBrand({ primary: '#000', [k]: v }); return false; } catch (e) { return e.message.startsWith('brand ' + k + ':'); } }))
+      && logoSize('13%') === 0.13 && logoSize('12.5%') === 0.125 && logoSize('61%') === null,
+      'logo-size, cover-logo-size: 3% to 60% of the page pass (with or without %), anything else is refused naming the key — a CSS fragment, pixels, a word');
+    const sized = () => ({ ...charter(), 'logo-size': '13%', 'cover-logo-size': '37%' });
+    const sizedCss = buildHtml({ jmd: sample('cover-logo'), brand: sized() });
+    ok(sizedCss.includes('--brand-logo-size:0.13;') && sizedCss.includes('--brand-cover-logo-size:0.37;') && sizedCss.includes('--brand-logo-ratio:3;') && !buildHtml({ jmd: sample('cover-logo'), brand: cb }).includes('--brand-logo-size:'),
+      'logo-size: the :root carries the shares of the page and the logo\'s proportions; a brand without them, nothing new');
+    const sfile = join(tmp, 'charter-sized.html'); writeFileSync(sfile, buildHtml({ jmd: sample('align') + '\n---\n## Des cartes\n\n::: cards\n### Un\nA.\n### Deux\nB.\n:::\n', brand: sized() }));
+    const sp = await open('file://' + sfile); await sp.settle(300);
+    const sz = JSON.parse(await sp.eval(`(() => { const s = jamesJmd.state.slides, r = el => el.getBoundingClientRect();
+      return JSON.stringify(s.map(x => { const lg = x.querySelector('.lockup svg'), head = x.querySelector('.slide-h1, .slide-h2, .divider'); return { cls: x.className, page: r(x).height, top: r(x).top, w: lg ? r(lg).width : 0, h: lg ? r(lg).height : 0, bottom: lg ? r(lg).bottom : 0, head: head ? r(head).top : null }; })); })()`));
+    await sp.close();
+    const near = (a, b) => Math.abs(a - b) < 0.006;
+    ok(near(sz[0].h / sz[0].page, 0.37) && Math.abs(sz[0].w - Math.min(3 * sz[0].h, 0.6 * sz[0].page * 16 / 9)) < 2 && sz.slice(1).every(x => near(x.h / x.page, 0.13) && Math.abs(x.w / x.h - 3) < 0.05),
+      'logo-size: the logo is 37% of the page high on the cover and 13% on every other page, at its own proportions (3:1 here), a block that wide held to 60% of the cover\'s width', JSON.stringify(sz.map(x => [(x.h / x.page).toFixed(3), (x.w / x.h).toFixed(2)])));
+    ok(sz.every(x => x.head === null || x.head > x.bottom), 'logo-size: no title sits under the logo — the cover\'s, a divider\'s, a page\'s start below it', JSON.stringify(sz.map(x => [Math.round(x.bottom - x.top), x.head === null ? null : Math.round(x.head - x.top)])));
+    for (const n of ['align', 'cover-logo', 'footer-band', 'table-head']) {
+      const r = await jmdLib.lintDom(sample(n), { brand: sized() });
+      ok(r.ok === true && !r.findings.some(f => f.rule === 'overflow' || f.rule === 'fit'), `charter/${n}.jmd with the logo at 13% / 37% still lints clean, nothing pushed out of the page`, JSON.stringify(r.findings.filter(f => f.level !== 'info')));
+    }
+    const storySized = JMD.render(JMD.parse(sample('align').replace('layout: slide', 'layout: story')), { brand: sized() });
+    ok(!/brand-(cover-)?logo-sized/.test(storySized) && /brand-logo-sized/.test(JMD.render(JMD.parse(sample('align')), { brand: sized() })), 'logo-size: a Slide\'s, a Story keeps its header');
+    /* The PowerPoint reads the drawn page back: what is not text leaves as one drawing the size of the slide, the logo in it — so
+       the logo's height is measured in that drawing, its opaque rows in the top-left of a cover and of a divider, where nothing else is drawn; the two heights compared, the logo's own margins cancel out. */
+    const zs = readZip(await jmdLib.pptx(sample('align'), { brand: sized() })); // a cover, then a divider: nothing drawn beside the logo but the rule at the foot
+    const drawingOf = n => { const rels = zs.text(`ppt/slides/_rels/slide${n}.xml.rels`), id = (/<p:pic>[\s\S]*?r:embed="([^"]+)"/.exec(zs.text(`ppt/slides/slide${n}.xml`)) || [])[1]; const t = id && (new RegExp(`Id="${id}"[^>]*Target="\\.\\./media/([^"]+)"`).exec(rels) || new RegExp(`Target="\\.\\./media/([^"]+)"[^>]*Id="${id}"`).exec(rels) || [])[1]; return t ? zs.read('ppt/media/' + t) : null; };
+    const inkRows = async png => { const pg = await open('about:blank'); try { return JSON.parse(await pg.eval(`new Promise(ok => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); const w = Math.floor(im.width / 2), h = Math.floor(im.height * 0.7), d = g.getImageData(0, 0, w, h).data; let top = -1, bottom = -1; for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 40) { if (top < 0) top = y; bottom = y; break; } } ok(JSON.stringify((bottom - top + 1) / im.height)); }; im.src = 'data:image/png;base64,${png.toString('base64')}'; })`)); } finally { await pg.close(); } };
+    const [d1, d2] = [drawingOf(1), drawingOf(2)];
+    const [r1, r2] = d1 && d2 ? [await inkRows(d1), await inkRows(d2)] : [0, 0];
+    ok(r1 > 0.2 && r2 > 0.05 && Math.abs(r1 / r2 - 37 / 13) < 0.25, 'PPTX: the logo leaves at the charter\'s heights — the cover\'s 37% against a divider\'s 13% (the logo\'s ink, measured in the drawing)', [r1, r2, r1 / r2].map(x => (+x).toFixed(3)).join(' '));
     const plain = readZip(await jmdLib.pptx(four, { brand: 'ocean' }));
     ok(!plain.has('ppt/slideLayouts/slideLayout2.xml'), 'PPTX: a brand without a band keeps the one blank layout');
   }
@@ -1234,6 +1270,40 @@ try {
     const told = await jmdLib.lintDom(sample, { brand: pale });
     ok(told.findings.some(f => f.rule === 'brand-contrast' && f.level === 'warning' && f.slide === 0 && /B8CCE4/.test(f.message)) && !(await jmdLib.lintDom(sample, { brand: cb })).findings.some(f => f.rule === 'brand-contrast'),
       'the linter says it: a warning `brand-contrast` on the deck for a title colour that does not read, none for one that does');
+    // reading a PowerPoint into a brand is the service's (lib/brand-from-pptx.mjs), which the public tree does not ship (PUBLIC.md)
+    if (existsSync(join(root, 'lib/brand-from-pptx.mjs'))) { /* Nicolas, 2026-11-16, Microsoft's templates: the text written as « light 2 at 25 % » (Contoso) came out light grey, a dark
+         template's white text (Géométrique) came out white on white, and every drawing of theirs lives in the layouts. */
+      const { proposeBrand, contrastOf } = await import('../lib/brand-from-pptx.mjs');
+      const { writeZip } = await import('./zip.mjs');
+      const A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"', P = `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" ${A} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`;
+      const R = (...t) => `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${t.map(([id, type, target]) => `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`).join('')}</Relationships>`;
+      const shape = fill => `<p:sp><p:nvSpPr><p:cNvPr id="7" name="Forme"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="900000" cy="900000"/></a:xfrm><a:solidFill><a:schemeClr val="${fill}"/></a:solidFill></p:spPr></p:sp>`;
+      const model = (bg, body, shapes) => writeZip({
+        'ppt/presentation.xml': `<p:presentation ${P}><p:sldMasterIdLst><p:sldMasterId id="1" r:id="rId1"/></p:sldMasterIdLst><p:sldSz cx="12192000" cy="6858000"/></p:presentation>`,
+        'ppt/_rels/presentation.xml.rels': R(['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml']),
+        'ppt/theme/theme1.xml': `<a:theme ${A} name="t"><a:themeElements><a:clrScheme name="x"><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="E4E4E4"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>${[1, 2, 3, 4, 5, 6].map(i => `<a:accent${i}><a:srgbClr val="${['32B5DF', 'CD41B0', 'FF8B00', '34D8A7', 'C6FC15', '027EBF'][i - 1]}"/></a:accent${i}>`).join('')}</a:clrScheme></a:themeElements></a:theme>`,
+        'ppt/slideMasters/slideMaster1.xml': `<p:sldMaster ${P}><p:cSld><p:bg><p:bgPr><a:solidFill><a:schemeClr val="${bg}"/></a:solidFill></p:bgPr></p:bg><p:spTree/></p:cSld><p:txStyles><p:titleStyle><a:lvl1pPr><a:defRPr><a:solidFill><a:schemeClr val="${body[0]}">${body[1]}</a:schemeClr></a:solidFill></a:defRPr></a:lvl1pPr></p:titleStyle><p:bodyStyle><a:lvl1pPr><a:defRPr><a:solidFill><a:schemeClr val="${body[0]}">${body[1]}</a:schemeClr></a:solidFill></a:defRPr></a:lvl1pPr></p:bodyStyle></p:txStyles></p:sldMaster>`,
+        'ppt/slideMasters/_rels/slideMaster1.xml.rels': R(['rId1', 'theme', '../theme/theme1.xml']),
+        'ppt/slideLayouts/slideLayout1.xml': `<p:sldLayout ${P} type="title"><p:cSld><p:spTree>${shapes}</p:spTree></p:cSld></p:sldLayout>`,
+      }, { paths: true });
+      const contoso = proposeBrand(model('bg1', ['bg2', '<a:lumMod val="25000"/>'], shape('accent1') + shape('accent2')));
+      const geo = proposeBrand(model('tx1', ['bg1', ''], shape('accent3')));
+      const val = (r, k) => (r.found.find(f => f.key === k) || {}).value;
+      const fr = r => r.missing.map(m => m.fr).join(' ');
+      ok(val(contoso, 'ink') === '#3b3838' && !val(contoso, 'title-color') && !/Ce modèle est sombre/.test(fr(contoso)),
+        'PowerPoint → brand: the text « light 2 at 25 % » is read with its modifier — #3b3838, the grey PowerPoint draws, not the light grey under it', val(contoso, 'ink'));
+      ok(val(geo, 'ink') === '#000000' && /Ce modèle est sombre \(fond #000000/.test(fr(geo)) && /This template is dark/.test(geo.missing.map(m => m.en).join(' ')),
+        'PowerPoint → brand: a dark template\'s white text is not proposed for white pages — its text takes the template\'s dark colour, and the card says why', val(geo, 'ink'));
+      ok([contoso, geo].every(r => contrastOf(val(r, 'ink'), '#ffffff') >= 4.5 && /Les gabarits dessinent leur propre décor \(\d forme/.test(fr(r))),
+        'PowerPoint → brand: every proposed text reads at 4.5:1 on white, and the drawings of the layouts are said not taken, counted', fr(contoso));
+    }
+    {
+      const { readableInk } = await import('../tools/build.mjs');
+      const white = readableInk({ ink: '#ffffff' }), html = buildHtml({ jmd: sample, brand: customBrand(parseBrand('primary: "#1f3a5f"\nink: "#ffffff"\n'), 'w') });
+      ok(!white.ok && contrast(white.color, '#FFFFFF') >= 4.5 && /--brand-ink:#737373;/.test(html) && readableInk({ ink: '#3b3838' }).color === '#3b3838'
+        && /brand ink #FFFFFF reads 1\.00:1 on a white page/.test(brandWarnings({ primary: '#000', ink: '#ffffff' })[0] || ''),
+        'a brand whose text colour does not read on white (a brand saved before) is drawn in that colour darkened to 4.5:1, and the linter says so', white.color);
+    }
     const st = statusColors(cb), defaults = statusColors({});
     ok(st.warn.color === '#F59C00' && st.warn.ink !== '#F59C00' && Object.values(st).concat(Object.values(defaults)).every(x => contrast(x.ink, '#FFFFFF') >= 4.5) && Object.values(defaults).every(x => x.ink === x.color),
       'status colours: their words read at 4.5:1 on white — a pale orange is darkened for the delta, the defaults read as they are', JSON.stringify(st));
@@ -1689,6 +1759,12 @@ try {
     /* The editor: a section that starts on the last one's sheet is still its own */
     await pm.eval('jamesJmd.show(1); true');
     ok(await pm.eval(`(() => { const of = document.querySelector('[data-of="1"]'); return !!of && of.closest('.sheet') === document.querySelector('.sheet') && jamesJmd.state.i === 1; })()`), 'memo: a piece knows its section on another section\'s sheet');
+    /* A table never runs past its frame (#119, Pascal's memo: `(trimestrielle/semestrielle` widened two columns, the frame cut the fourth) */
+    const wideTable = (cell) => '---\nformat: jmd/3\nlayout: memo\ntitle: W\n---\n\n---\n## Billing\n\n::: table\n| Criterion | Us | Them | Watch |\n|---|---|---|---|\n| Frequency | ' + cell + ' | ' + cell + ' | Align the terms of payment |\n| Penalties | 3x the legal rate | 3x the legal rate | Same rate for all |\n:::\n';
+    ok(/\(trimestrielle\/<wbr>semestrielle/.test(JMD.render(JMD.parse(wideTable('Annual (trimestrielle/semestrielle if > 500 €)')), { brand: {} })) && !/<wbr>/.test(JMD.render(JMD.parse(wideTable('[a](https://x.example/y) and / alone')), { brand: {} }).replace(/<a [^>]*>/g, '')), 'table: a cell may break after a `/` in its text, never inside a tag, never on a lone slash');
+    const widths = async src => { await pm.eval(`jamesJmd.load(${JSON.stringify(src)}, "w.jmd"); true`); await pm.settle(400); return JSON.parse(await pm.eval(`JSON.stringify([...document.querySelectorAll('.table-wrap')].map(w => ({ over: w.querySelector('table').scrollWidth - w.clientWidth, tight: w.classList.contains('is-tight') })))`)); };
+    const slashed = await widths(wideTable('Annual (trimestrielleannuelle/semestriellemensuelle if > 500 €)')), long = await widths(wideTable('Annual (trimestrielleannuellesemestriellemensuelleintergouvernementale if > 500 €)')), plain = await widths(wideTable('Annual'));
+    ok(slashed.every(t => t.over <= 1 && !t.tight) && long.every(t => t.over <= 1 && t.tight) && plain.every(t => !t.tight), 'table: a long word breaks at its `/`; one with none breaks inside rather than push the last column off the page; a table that fits is left alone', JSON.stringify({ slashed, long, plain }));
     await pm.close();
     const emptyPage = '---\nformat: jmd/3\nlayout: memo\npages: fixed\ntitle: E\n---\n\n---\n---\n## Half a page\n\n- One line.\n';
     const pe = await open('file://' + join(root, 'build/note.james-jmd.html')); await pe.settle(200);

@@ -401,6 +401,7 @@ a.cta{display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 28px;
 .table strong{color:var(--jp-ink)}
 .table--compact th,.table--compact td{padding:calc(9px * var(--type-scale,1)) 18px}
 .table--compact{font-size:max(14px, calc(16px * var(--type-scale,1)))}
+.table-wrap.is-tight th,.table-wrap.is-tight td{overflow-wrap:anywhere} /* still wider than its frame: a word breaks rather than the last column be cut (#119) */
 .slide--wash .table-wrap,.slide--lavender .table-wrap,.slide--butter .table-wrap{border-color:transparent}
 :is(.slide--indigo,.slide--accent,.slide--sky) .table-wrap{border-color:rgba(255,255,255,.18)}
 :is(.slide--indigo,.slide--accent,.slide--sky) .table thead th{background:rgba(255,255,255,.14)}
@@ -1465,6 +1466,14 @@ svg{--mark-dot:var(--brand-primary)}
 .slide.brand-logo-large.slide--cover .lockup,.slide.brand-logo-large .sheet--cover .lockup{font-size:30px;gap:16px}
 .slide.brand-logo-large.slide--cover .body-pad{padding-top:calc(170px * var(--type-scale,1))}
 .layout-doc .slide.brand-logo-large .sheet--cover .lockup svg{height:120px;width:calc(120px * var(--brand-logo-ratio,1));max-width:640px}
+/* logo-size, cover-logo-size — the logo at the height the charter's PowerPoint draws it (Nicolas, 2026-11-16: the CISIRH block is
+   13% of the page on every slide, 37% on its cover), a share of a Slide's page (--brand-logo-size, --brand-cover-logo-size, set by
+   the build), at the logo's own proportions. The text below it steps down so that nothing sits under the block: the chrome's top
+   (36px) + the logo + a gap. Slide only — a Story, a Memo and a Doc keep their header. */
+.slide.brand-logo-sized .lockup svg{height:calc(var(--slide-h) * var(--brand-logo-size));width:calc(var(--slide-h) * var(--brand-logo-size) * var(--brand-logo-ratio,1));max-width:calc(var(--slide-w) * .4);flex:none}
+.slide.brand-logo-sized .body-pad{padding-top:max(calc(132px * var(--type-scale,1)),calc(36px + var(--slide-h) * var(--brand-logo-size) + 28px))}
+.slide.brand-cover-logo-sized.slide--cover .lockup svg{height:calc(var(--slide-h) * var(--brand-cover-logo-size));width:calc(var(--slide-h) * var(--brand-cover-logo-size) * var(--brand-logo-ratio,1));max-width:calc(var(--slide-w) * .6);flex:none}
+.slide.brand-cover-logo-sized.slide--cover .body-pad{padding-top:calc(36px + var(--slide-h) * var(--brand-cover-logo-size) + 32px);justify-content:flex-start}
 /* table-head: light — the header in a light tint of the deep colour, its words in ink or black, whichever reads (tools/build.mjs
    tableHead: 4.5:1 at least); a dark page keeps its own header */
 .slide.brand-thead-light:not(.slide--indigo,.slide--accent,.slide--sky) .table thead th{background:var(--brand-thead-bg);color:var(--brand-thead-ink)}

@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpa
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateBrand, normalizeColors, chartColors, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY } from './safe.mjs';
+import { validateBrand, normalizeColors, chartColors, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY, logoSize } from './safe.mjs';
 import { catalogueFace, brandCatalogueFaces, faceCss } from './fonts.mjs';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -244,9 +244,21 @@ export function statusColors(b) {
   }
   return out;
 }
+/** The text colour a page wears: the brand's `ink` when it reads at 4.5:1 on white, else the same hue darkened until it does.
+    A brand is drawn on white pages; an ink taken from a dark template (white, a light grey — Nicolas, 2026-11-16) wrote every
+    word of the deck invisible. `ok` false makes the linter say so (brandWarnings). */
+export function readableInk(b) {
+  const v = /^#[0-9a-f]{3,8}$/i.test(b.ink || '') ? toHex(rgbOf(b.ink)) : null;
+  if (!v) return { color: b.ink, ok: true };
+  let ink = v, t = 1;
+  while (contrast(ink, '#FFFFFF') < 4.5 && t > 0) { t = Math.round((t - 0.05) * 100) / 100; ink = toHex(rgbOf(v).map(x => x * t)); }
+  return { color: ink === v ? b.ink : ink, ok: ink === v, asked: v, ratio: contrast(v, '#FFFFFF') };
+}
 /** What a brand asked that the page cannot give, said as a sentence each — the linter shows them (lib/jmd.mjs lintDom). */
 export function brandWarnings(b) {
   const out = [], t = titleColor(b);
+  const i = readableInk(b);
+  if (!i.ok) out.push(`brand ink ${i.asked} reads ${i.ratio.toFixed(2)}:1 on a white page, under the 4.5:1 a text needs: the text is drawn in ${i.color}, the same colour darkened — choose a darker text colour`);
   if (t && !t.ok) out.push(`brand title-color ${t.color} reads ${t.ratio.toFixed(2)}:1 on the ${t.page} page, under the ${TITLE_MIN}:1 a title needs: the titles keep the text colour (ink) — choose a darker title colour`);
   return out;
 }
@@ -258,7 +270,11 @@ function layoutCss(b, mark) {
   if (Object.keys(STATUS_DEFAULTS).some(k => b['status-' + k])) for (const [k, v] of Object.entries(statusColors(b))) css += `  --brand-status-${k}:${cssTok(v.color)};\n  --brand-status-${k}-ink:${cssTok(v.ink)};\n`;
   if (b['table-head'] === 'light') { const t = tableHead(b); css += `  --brand-thead-bg:${cssTok(t.bg)};\n  --brand-thead-ink:${cssTok(t.ink)};\n`; }
   if (b['chrome-label'] === 'body') { const l = chromeLabel(b); css += `  --brand-label-ink:${cssTok(l.ink)};\n  --brand-label-on-primary:${cssTok(l.primary)};\n  --brand-label-on-accent:${cssTok(l.accent)};\n  --brand-label-on-secondary:${cssTok(l.secondary)};\n`; }
-  if (b['cover-logo'] === 'large') css += `  --brand-logo-ratio:${cssTok(String(logoRatio(mark)))};\n`;
+  const sized = logoSize(b['logo-size']), coverSized = logoSize(b['cover-logo-size']);
+  if (b['cover-logo'] === 'large' || sized !== null || coverSized !== null) css += `  --brand-logo-ratio:${cssTok(String(logoRatio(mark)))};\n`;
+  // the logo's own height (2026-11-16): a share of the page's height, as the charter's PowerPoint draws it (engine.css brand-logo-sized)
+  if (sized !== null) css += `  --brand-logo-size:${cssTok(String(sized))};\n`;
+  if (coverSized !== null) css += `  --brand-cover-logo-size:${cssTok(String(coverSized))};\n`;
   return css;
 }
 
@@ -276,7 +292,7 @@ export function buildHtml({ jmd = '', name = '', brand = null, dir = null, asset
   --brand-primary:${cssTok(b.primary)};
   --brand-accent:${cssTok(b.accent)};
   --brand-highlight:${cssTok(b.highlight)};
-  --brand-ink:${cssTok(b.ink)};
+  --brand-ink:${cssTok(readableInk(b).color)};
   --brand-secondary:${cssTok(b.secondary || b.accent)};
   --brand-font-display:"${cssStr(family('font-display'))}";
   --brand-font-body:"${cssStr(family('font-body'))}";
@@ -319,7 +335,7 @@ ${optional('--brand-bg-lavender', 'bg-lavender')}${optional('--brand-bg-wash', '
     .replace('@@BRAND_CSS@@', () => brandCss)
     .replace('@@ENGINE@@', () => readFileSync(join(root, 'themes/engine/engine.css'), 'utf8').trim())
     .replace('@@BRAND_MARK@@', () => mark.trim() + (decor ? '\n' + decor : ''))
-    .replace('@@BRAND_JSON@@', () => JSON.stringify({ ...b, 'title-color': titleColor(b)?.ok ? b['title-color'] : undefined, decor: undefined, decorSvgs: undefined, decorDir: undefined, decorUrls: undefined, decorDropped: undefined, markSvg: undefined, logoDropped: undefined, fontsCss: undefined, fontsDropped: undefined, fontsUrl: undefined, logoUrl: undefined }).replace(/</g, '\\u003c'))
+    .replace('@@BRAND_JSON@@', () => JSON.stringify({ ...b, ink: readableInk(b).color, 'title-color': titleColor(b)?.ok ? b['title-color'] : undefined, decor: undefined, decorSvgs: undefined, decorDir: undefined, decorUrls: undefined, decorDropped: undefined, markSvg: undefined, logoDropped: undefined, fontsCss: undefined, fontsDropped: undefined, fontsUrl: undefined, logoUrl: undefined }).replace(/</g, '\\u003c'))
     .replace('@@ASSETS_JSON@@', () => JSON.stringify(assetMap).replace(/</g, '\\u003c'))
     .replace('@@JMD_NAME@@', () => esc(name))
     .replace('@@JMD@@', () => safeJmd) // exact bytes: the runtime strips only the newline on each side

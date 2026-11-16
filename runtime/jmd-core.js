@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.51.3';
+  var VERSION = '1.52.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -125,6 +125,11 @@ globalThis.JMD = (function () {
   /* ───────────────────────── utils ───────────────────────── */
   function esc(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  /* A table cell may break after a `/` (#119): `(trimestrielle/semestrielle` is one word to the browser, a column cannot be
+     narrower than it, and the table ran past its frame, which cut the last column. In the text only, never inside a tag. */
+  function slashBreaks(html) {
+    return html.replace(/(<[^>]*>)|\/(?=[^\s<])/g, function (m, tag) { return tag || '/<wbr>'; });
   }
   function safeUrl(u) {
     u = String(u).trim();
@@ -1560,7 +1565,7 @@ globalThis.JMD = (function () {
         for (var j = 0; j < t.width; j++) numeric[j] = t.rows.length > 0 && t.rows.every(function (r) { return !r.cells[j] || !r.cells[j].text || num(r.cells[j].text) != null; });
         function cell(tag, r, j, line) {
           var c = r.cells[j], a = t.align[j] || (numeric[j] && tag === 'td' ? 'right' : '');
-          return '<' + tag + (a ? ' class="is-' + a + '"' : '') + (c ? src(line, c.col) : '') + '>' + (c ? inline(c.text) : '') + '</' + tag + '>';
+          return '<' + tag + (a ? ' class="is-' + a + '"' : '') + (c ? src(line, c.col) : '') + '>' + (c ? slashBreaks(inline(c.text)) : '') + '</' + tag + '>';
         }
         function row(r, tag) { var cs = []; for (var j = 0; j < t.width; j++) cs.push(cell(tag, r, j, r.line)); return cs.join(''); }
         function one(rows, compact) {
@@ -1897,6 +1902,9 @@ globalThis.JMD = (function () {
     if (b.align === 'left') out.push('brand-align-left');
     if (hasBand(ctx)) out.push('brand-band');
     if (b['cover-logo'] === 'large') out.push('brand-logo-large');
+    // the logo at the height the charter draws it (2026-11-16), a share of a Slide's page: the build sets the size, the page says it
+    if (ctx.layout === 'slide' && isSize(b['logo-size'])) out.push('brand-logo-sized');
+    if (ctx.layout === 'slide' && isSize(b['cover-logo-size'])) out.push('brand-cover-logo-sized');
     if (b['table-head'] === 'light') out.push('brand-thead-light');
     if (b['chrome-label'] === 'body') out.push('brand-label-body');
     // what a charter decides of its titles (2026-11-12): their own colour on the light pages (the build sets it only when it reads),
@@ -1905,6 +1913,7 @@ globalThis.JMD = (function () {
     if (b['cover-case'] === 'upper') out.push('brand-cover-upper');
     return out;
   }
+  function isSize(v) { var m = /^\s*(\d{1,2}(?:\.\d)?)\s*%?\s*$/.exec(String(v == null ? '' : v)); return !!m && +m[1] >= 3 && +m[1] <= 60; }
   function hasBand(ctx) { return (ctx.brand || {})['footer-band'] === 'line' && (ctx.layout === 'slide' || ctx.layout === 'story'); }
   /* A thin rule at the foot of the page: the brand's `footer:` on the left (the organisation's full name), the deck's `date:`
      and the page number on the right, in the body font. The number is marked so that the PowerPoint export writes it as the
@@ -2330,6 +2339,16 @@ globalThis.JMD = (function () {
       if (grow > 1.02) { size(g, grow); if (measure() > limit) size(g, 1); }
     }
   }
+  /* A table is never wider than its frame (#119): the frame clips, so a column past it is text cut off the page, and nothing
+     measured it — the linter reads heights. A word still too long for its column after the breaks at `/` (it depends on the
+     brand's face) lets that table's cells break inside a word: rare, and better than a cut. Before pagination, which reads heights. */
+  function fitTables(track) {
+    Array.prototype.forEach.call(track.querySelectorAll('.table-wrap'), function (w) {
+      w.classList.remove('is-tight');
+      var t = w.querySelector('table');
+      if (t && t.scrollWidth > w.clientWidth + 1) w.classList.add('is-tight');
+    });
+  }
   function fitOverflow(track, out, lay) {
     var page = PAGES[lay] || PAGES.slide, slides = track.querySelectorAll('.slide');
     if (!page.limit || page.sheets) return out; // a long document is never shrunk: its text goes on to the next sheet
@@ -2346,6 +2365,9 @@ globalThis.JMD = (function () {
       var s = Math.floor(((page.limit - top) / (bottom - top)) * 0.99 * 100) / 100; // a hair under, so the measure that follows is clean
       if (s < FIT_MIN) return;
       body.style.zoom = String(s); body.style.width = Math.round(width / s) + 'px';
+      /* shrunk, the text wraps anew and may still cross by a hair (an agenda in Segoe UI: 664 for 660, Nicolas 2026-11-16) —
+         measured again, a step smaller each time, down to FIT_MIN; past it, the overflow lint says what is left */
+      while (measure() > page.limit && s - 0.01 >= FIT_MIN) { s = Math.round((s - 0.01) * 100) / 100; body.style.zoom = String(s); body.style.width = Math.round(width / s) + 'px'; }
       sec.classList.add('is-fit'); sec.dataset.fit = String(s);
       out.push({ level: 'warning', slide: i + 1, block: null, rule: 'fit', message: 'content reached ' + Math.round(bottom) + 'px, limit ' + page.limit + ': shown at ' + Math.round(s * 100) + ' % — shorten a text or remove an item to keep the type at full size' });
     });
@@ -2554,5 +2576,5 @@ globalThis.JMD = (function () {
     return out;
   }
 
-  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, layoutWord: layoutWord, memoFlows: memoFlows, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withoutChapter: withoutChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
+  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, layoutWord: layoutWord, memoFlows: memoFlows, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withoutChapter: withoutChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, fitTables: fitTables, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
 })();
