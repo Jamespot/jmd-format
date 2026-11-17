@@ -1129,21 +1129,21 @@ try {
     const { customBrand, parseBrand, buildHtml, tableHead, chromeLabel, logoRatio, contrast } = await import('../tools/build.mjs');
     const jmdLib = await import('../lib/jmd.mjs');
     const { readZip } = await import('./zip.mjs');
-    const KEYS = { align: ['center', 'left'], 'footer-band': ['none', 'line'], 'cover-logo': ['small', 'large'], 'table-head': ['strong', 'light'], 'chrome-label': ['mono', 'body'] };
+    const KEYS = { align: ['center', 'left', 'right'], 'footer-band': ['none', 'line'], 'cover-logo': ['small', 'large'], 'table-head': ['strong', 'light'], 'chrome-label': ['mono', 'body'], 'logo-place': ['left', 'right'] };
     // every value by shape: the two words of each key pass, anything else is refused with the key named — a CSS fragment, markup, another case
-    const refusedAll = Object.keys(KEYS).every(k => ['right', 'LEFT', 'left;}body{display:none', '</style><script>alert(1)</script>', 'line"'].every(v => { try { validateBrand({ primary: '#000', [k]: v }); return false; } catch (e) { return e.message.startsWith('brand ' + k + ':'); } }));
-    ok(Object.entries(KEYS).every(([k, vs]) => vs.every(v => validateBrand({ primary: '#000', [k]: v }))) && refusedAll, 'brand layout keys: the two words of each pass, a value out of the list (a CSS fragment, markup, LEFT) is refused naming the key');
+    const refusedAll = Object.keys(KEYS).every(k => ['middle', 'LEFT', 'left;}body{display:none', '</style><script>alert(1)</script>', 'line"'].every(v => { try { validateBrand({ primary: '#000', [k]: v }); return false; } catch (e) { return e.message.startsWith('brand ' + k + ':'); } }));
+    ok(Object.entries(KEYS).every(([k, vs]) => vs.every(v => validateBrand({ primary: '#000', [k]: v }))) && refusedAll, 'brand layout keys: the words of each pass, a value out of the list (a CSS fragment, markup, LEFT) is refused naming the key');
     let yamlErr = ''; try { customBrand(parseBrand('primary: "#123456"\nfooter-band: </style>'), 'x'); } catch (e) { yamlErr = e.message; }
     ok(/^brand footer-band: .* is not one of none, line$/.test(yamlErr), 'a brand.yaml with a footer-band out of the list is refused, nothing built', yamlErr);
     // defaults: a brand that says none of them draws the very same page, and its CSS has no new variable
     const four = readFileSync(join(root, 'decks/samples/four-blocks.jmd'), 'utf8');
-    const same = ['ocean', 'slate', ANY_BRAND].every(id => { const b = loadBrand(id), d = { ...b, align: 'center', 'footer-band': 'none', 'cover-logo': 'small', 'table-head': 'strong', 'chrome-label': 'mono', 'cover-case': 'normal', 'cover-bg': 'intent' }; const a = JMD.render(JMD.parse(four), { brand: b }); return a === JMD.render(JMD.parse(four), { brand: d }) && !/brand-(align|band|logo|thead|label|title|cover-upper)|slide-band|data-status/.test(a); });
+    const same = ['ocean', 'slate', ANY_BRAND].every(id => { const b = loadBrand(id), d = { ...b, align: 'center', 'footer-band': 'none', 'cover-logo': 'small', 'table-head': 'strong', 'chrome-label': 'mono', 'cover-case': 'normal', 'cover-bg': 'intent', 'logo-place': 'left' }; const a = JMD.render(JMD.parse(four), { brand: b }); return a === JMD.render(JMD.parse(four), { brand: d }) && !/brand-(align|band|logo|thead|label|title|cover-upper)|slide-band|data-status/.test(a); });
     ok(same && !/--brand-thead-(bg|ink):|--brand-logo-ratio:|--brand-title:|--brand-chart-\d:|--brand-status-[a-z-]+:/.test(buildHtml({ jmd: four, brand: 'ocean' })), 'brand layout keys: left out or at their default, the page is the very same as before — no class, no band, no new CSS variable');
     // the sample charter (decks/samples/charter): a fictional public body, every key on, its logo beside its brand.yaml
     const cdir = join(root, 'decks/samples/charter');
     const charter = () => { const b = jmdLib.withSvgLogo(customBrand(parseBrand(readFileSync(join(cdir, 'charter.yaml'), 'utf8')), 'charter'), readFileSync(join(cdir, 'logo.svg'), 'utf8')); b.logo = 'custom'; return b; };
     const sample = n => readFileSync(join(cdir, n + '.jmd'), 'utf8');
-    for (const n of [...Object.keys(KEYS), 'colours']) {
+    for (const n of [...Object.keys(KEYS).filter(k => k !== 'logo-place'), 'colours']) { // logo-place has no sample of its own: the VYV3 decor tests draw it
       const r = await jmdLib.lintDom(sample(n), { brand: charter() });
       ok(r.ok === true && !r.findings.some(f => f.rule === 'overflow' || f.rule === 'fit'), `charter/${n}.jmd lints clean in the charter brand, nothing pushed over the band`, JSON.stringify(r.findings.filter(f => f.level !== 'info')));
     }
@@ -1294,8 +1294,49 @@ try {
         'PowerPoint → brand: the text « light 2 at 25 % » is read with its modifier — #3b3838, the grey PowerPoint draws, not the light grey under it', val(contoso, 'ink'));
       ok(val(geo, 'ink') === '#000000' && /Ce modèle est sombre \(fond #000000/.test(fr(geo)) && /This template is dark/.test(geo.missing.map(m => m.en).join(' ')),
         'PowerPoint → brand: a dark template\'s white text is not proposed for white pages — its text takes the template\'s dark colour, and the card says why', val(geo, 'ink'));
-      ok([contoso, geo].every(r => contrastOf(val(r, 'ink'), '#ffffff') >= 4.5 && /Les gabarits dessinent leur propre décor \(\d forme/.test(fr(r))),
-        'PowerPoint → brand: every proposed text reads at 4.5:1 on white, and the drawings of the layouts are said not taken, counted', fr(contoso));
+      ok([contoso, geo].every(r => contrastOf(val(r, 'ink'), '#ffffff') >= 4.5 && val(r, 'decor') === 'none' && /La couverture : \d formes? dessinées? d'une façon non lue/.test(fr(r))),
+        'PowerPoint → brand: every proposed text reads at 4.5:1 on white, and shapes whose outline is not read are said, counted, and give no decoration', fr(contoso));
+      /* VYV3 (Nicolas, 2026-11-17): level 1 of the text is a bold magenta heading and the running text is level 3; the cover is a
+         violet rectangle over a white page; the footer is the template's instruction; the master draws a shape; the face is Aptos. */
+      const lvl = (i, attrs, clr, bu = '<a:buNone/>') => `<a:lvl${i}pPr>${bu}<a:defRPr ${attrs}><a:solidFill><a:schemeClr val="${clr}"/></a:solidFill></a:defRPr></a:lvl${i}pPr>`;
+      const ph = (type, text) => `<p:sp><p:nvSpPr><p:cNvPr id="3" name="${type}"/><p:cNvSpPr/><p:nvPr><p:ph type="${type}"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:p><a:r><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
+      const free = '<p:sp><p:nvSpPr><p:cNvPr id="9" name="Forme libre"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="10870660" y="1"/><a:ext cx="1321340" cy="769919"/></a:xfrm><a:custGeom><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="10" y="10"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></p:spPr></p:sp>';
+      const page = '<p:sp><p:nvSpPr><p:cNvPr id="6" name="Rectangle 6"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="6858000"/></a:xfrm><a:prstGeom prst="rect"/><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></p:spPr></p:sp>';
+      const vyv = proposeBrand(writeZip({
+        'ppt/presentation.xml': `<p:presentation ${P}><p:sldMasterIdLst><p:sldMasterId id="1" r:id="rId1"/></p:sldMasterIdLst><p:sldSz cx="12192000" cy="6858000"/></p:presentation>`,
+        'ppt/_rels/presentation.xml.rels': R(['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml']),
+        'ppt/theme/theme1.xml': `<a:theme ${A} name="t"><a:themeElements><a:clrScheme name="x"><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="472583"/></a:dk2><a:lt2><a:srgbClr val="ECECEC"/></a:lt2>${['FFDD00', '009EC9', 'CE1052', 'E42312', '1D8839', 'A61680'].map((c, i) => `<a:accent${i + 1}><a:srgbClr val="${c}"/></a:accent${i + 1}>`).join('')}</a:clrScheme><a:fontScheme name="f"><a:majorFont><a:latin typeface="Aptos Display"/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>`,
+        'ppt/slideMasters/slideMaster1.xml': `<p:sldMaster ${P}><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg><p:spTree>${free}${ph('title', 'Modifiez le style du titre')}${ph('ftr', 'Aller dans Insertion &gt; Pied de page pour compléter ce champ')}</p:spTree></p:cSld><p:txStyles><p:titleStyle><a:lvl1pPr algn="l"><a:defRPr><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></a:defRPr></a:lvl1pPr></p:titleStyle><p:bodyStyle>${lvl(1, 'sz="2800" b="1"', 'accent6')}${lvl(2, 'sz="2200"', 'accent2', '<a:buChar char="&gt;"/>')}${lvl(3, 'sz="1900"', 'tx1')}${lvl(4, 'sz="1900"', 'tx1', '<a:buChar char="•"/>')}${lvl(5, 'sz="1500" i="1"', 'bg2')}</p:bodyStyle></p:txStyles></p:sldMaster>`,
+        'ppt/slideMasters/_rels/slideMaster1.xml.rels': R(['rId1', 'theme', '../theme/theme1.xml']),
+        'ppt/slideLayouts/slideLayout1.xml': `<p:sldLayout ${P} type="title"><p:cSld><p:spTree>${page}${ph('ctrTitle', 'Modifiez le style du titre')}</p:spTree></p:cSld></p:sldLayout>`,
+      }, { paths: true }), { fonts: ['Arial', 'Open Sans', 'Lato'] });
+      ok(val(vyv, 'ink') === '#000000' && val(vyv, 'cover-bg') === 'primary' && val(vyv, 'primary') === '#472583' && !val(vyv, 'footer') && !/Insertion/.test(vyv.spec) && Array.isArray(val(vyv, 'decor')) && val(vyv, 'decor').map(d => `${d.name}:${d.place}:${d.on}`).join() === 'page-tr:corner-tr:all',
+        'PowerPoint → brand (VYV3): the text is the running level (3, black), not the bold magenta heading of level 1; a violet rectangle over the whole cover makes a cover in the main colour (and no drawing); the template\'s footer instruction is not a footer; the master\'s own shape becomes its element in the top-right corner', vyv.spec);
+      /* the drawings themselves (lib/pptx-drawings.mjs): a path in the page's points, its flip baked in, a corner drawn for the
+         bottom-right one; a white shape over a coloured one is a hole; only a page-sized drawing keeps a fade */
+      const { drawingsOf } = await import('../lib/pptx-drawings.mjs');
+      const sp = (x, y, w, h, fill, xf = '') => `<p:sp><p:nvSpPr><p:cNvPr id="1" name="s"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm${xf}><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:custGeom><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="10" y="0"/></a:lnTo><a:lnTo><a:pt x="10" y="10"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom>${fill}</p:spPr></p:sp>`;
+      const fillOf = c => `<a:solidFill><a:srgbClr val="${c}"/></a:solidFill>`, gradOf = `<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="0074B0"/></a:gs><a:gs pos="100000"><a:srgbClr val="A3D8E6"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>`;
+      const colourOf = f => { const m = /val="([0-9A-Fa-f]{6})"/.exec(f); return m ? '#' + m[1].toLowerCase() : null; };
+      const T = xml => `<p:sldLayout><p:cSld><p:spTree>${xml}</p:spTree></p:cSld></p:sldLayout>`;
+      const dw = drawingsOf([
+        { key: 'page', xml: T(sp(0, 0, 1270000, 635000, fillOf('E42312'), ' flipV="1"')), on: 'all', label: { en: 'm', fr: 'm' } },
+        { key: 'chapter', xml: T(sp(0, 0, 12192000, 6858000, gradOf).replace('<a:custGeom><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="10" y="0"/></a:lnTo><a:lnTo><a:pt x="10" y="10"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom>', '<a:prstGeom prst="rect"/>') + sp(2000000, 1000000, 6000000, 4000000, fillOf('FFFFFF')) + sp(5000000, 3000000, 500000, 500000, fillOf('009EC9'))), on: 'section', label: { en: 'c', fr: 'c' } },
+      ], { colourOf, SW: 12192000, SH: 6858000, tints: { primary: '#472583', accent: '#009ec9', highlight: '#ffdd00' } });
+      const [corner, frame] = dw.items;
+      ok(corner && corner.place === 'corner-tl' && corner.size === 19 && corner.tint === 'highlight' && /viewBox="860 490 100 50"/.test(corner.svg) && /<path d="M960 490L860 490L860 540Z" fill="#000000"\/>/.test(corner.svg) && !/Gradient/.test(corner.svg),
+        'PowerPoint drawings: a corner shape is drawn for the bottom-right corner (mirrored from the top-left, its flip baked in), in points, flat, its size the page\'s short side, its tint the nearest brand colour', corner && corner.svg);
+      ok(frame && frame.place === 'full' && frame.tint === 'accent' && frame.on === 'section' && /fill-rule="evenodd"/.test(frame.svg) && /viewBox="0 0 960 540"/.test(frame.svg) && /stop-opacity="0\.6"/.test(frame.svg) && dw.said.some(n => /au milieu de la page/.test(n.fr)),
+        'PowerPoint drawings: a painted page with a white shape over it is one frame, the white cut out by the even-odd rule, its gradient kept as a fade; a shape in the middle of the page is said, not taken', frame && frame.svg.slice(0, 300));
+      const flower = drawingsOf([{ key: 'cover', xml: T(sp(0, 3600000, 5400000, 3258000, '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="E42312"/></a:gs><a:gs pos="100000"><a:srgbClr val="FFDD00"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>')), on: 'opening', label: { en: 'c', fr: 'c' } }],
+        { colourOf, SW: 12192000, SH: 6858000, tints: { primary: '#472583', accent: '#009ec9', highlight: '#ffdd00', white: '#ffffff', 'chart-2': '#e42312' } }).items[0];
+      ok(flower && flower.tint === 'chart-2' && flower.fade === 'highlight' && /stop-color="#000000"[\s\S]*stop-color="#ffffff"/.test(flower.svg) && frame.fade === undefined,
+        'PowerPoint drawings: a red-to-yellow flower is drawn red to yellow — its own colour the tint, its other end the fade; a blue fading to white stays one colour with a transparency', flower && JSON.stringify({ tint: flower.tint, fade: flower.fade }));
+      const { decorSymbol } = await import('./safe.mjs');
+      ok(['corner-tl', 'corner-tr', 'corner-bl', 'corner-br'].every(pl => decorSymbol('x', '<svg viewBox="0 0 20 10"><path d="M0 0H20V10Z"/></svg>', pl).symbol.includes('preserveAspectRatio="xMaxYMax meet"')),
+        'a corner element anchors bottom-right whatever its corner — the CSS mirrors the box, so a drawing wider than tall no longer floats off its edge');
+      ok(val(vyv, 'font-display') === 'Open Sans' && val(vyv, 'font-office') === 'Aptos' && !/Aptos.*absente/.test(fr(vyv)),
+        'PowerPoint → brand (VYV3): Aptos, Microsoft\'s, is worn as Open Sans in the deck and named Aptos in the .pptx it exports', vyv.spec);
     }
     {
       const { readableInk } = await import('../tools/build.mjs');
@@ -1622,12 +1663,12 @@ try {
     ok(['place: corner-br" onload="alert(1)', 'size: 1e3', 'size: 0', 'opacity: 2', 'on: hook" x="', 'layouts: slide,print', 'svg: ../secret.svg', 'svg: javascript:alert(1).svg', 'svg: http://example.com/x.svg', 'svg: //evil.example/x.svg', 'colour: red']
       .every(f => /^brand decor x/.test(refused('decor:\n  x:\n    svg: band\n    ' + f) || '')), 'decor: a place, a size, an opacity, pages, layouts, a path or a field out of shape is refused, the element named');
     let named = null; try { decorOf({ decor: { 'a" onload="x': { svg: 'band' } } }); } catch (e) { named = e.message; }
-    let seven = null; try { decorOf({ decor: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map(i => ['e' + i, { svg: 'band' }])) }); } catch (e) { seven = e.message; }
-    ok(named && /is not a name/.test(named) && seven && /6 at most/.test(seven), 'decor: a name that tries to leave its attribute is refused, and so is a seventh element');
+    let seven = null; try { decorOf({ decor: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => ['e' + i, { svg: 'band' }])) }); } catch (e) { seven = e.message; }
+    ok(named && /is not a name/.test(named) && seven && /10 at most/.test(seven), 'decor: a name that tries to leave its attribute is refused, and so is an eleventh element (ten since a charter\'s five chapter pages, 2026-11-17)');
     // the SVG: the logo's allowlist, then repainted in the brand's colours
     const hostile = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10" onload="alert(1)"><script>alert(2)</script><foreignObject><div>x</div></foreignObject><image href="https://evil.example/t.png"/><use xlink:href="https://evil.example/x.svg#a"/><defs><linearGradient id="g"><stop offset="0" stop-color="#ff0000" style="stop-opacity:.5"/><stop offset="1" style="stop-color:#00ff00"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)" onclick="alert(3)"/><path d="M0 0L10 10" stroke="blue" style="fill:red;stroke-width:2"/><circle r="1" fill="none"/></svg>';
     const ds = decorSymbol('halo', hostile, 'corner-tl', 'secondary');
-    ok(!/script|foreignobject|<image|evil|on\w+=|https?:|#ff0000|#00ff00|blue|red/i.test(ds.symbol) && ds.symbol.startsWith('<symbol id="brand-decor-halo" preserveAspectRatio="xMinYMin meet"') && ds.dropped.includes('<script>') && ds.dropped.includes('onload'),
+    ok(!/script|foreignobject|<image|evil|on\w+=|https?:|#ff0000|#00ff00|blue|red/i.test(ds.symbol) && ds.symbol.startsWith('<symbol id="brand-decor-halo" preserveAspectRatio="xMaxYMax meet"') && ds.dropped.includes('<script>') && ds.dropped.includes('onload'),
       'decor SVG: script, handlers, foreign content, pictures and links out are gone, as for a logo', ds.symbol.slice(0, 200));
     ok(ds.symbol.includes('fill="url(#dc-halo-g)"') && ds.symbol.includes('<linearGradient id="dc-halo-g">') && ds.symbol.includes('stroke="currentColor"') && /style="fill:currentColor;stroke-width:2"/.test(ds.symbol) && ds.symbol.includes('fill="none"')
       && (ds.symbol.match(/stop-color:var\(--decor-secondary\)/g) || []).length === 2 && ds.symbol.includes('stop-opacity:.5'),
@@ -1661,6 +1702,32 @@ try {
     ok(mm[0] === 'decor--corner-br decor--edge-bottom' && mm[1] === 'decor--edge-bottom' && mm[2] === 'decor--edge-bottom', 'decor: a memo — one flow — has its corner on the first page only, its edges on every page', JSON.stringify(mm));
     ok(parts('slide', 'decor: none\n').every(x => x === '') && !JMD.render(JMD.parse(DD('slide', 'decor: None\n')), { brand: lb('decor: mark quarter') }).includes('class="wm') && JMD.lint(JMD.parse(DD('slide', 'decor: flowers\n'))).some(f => f.level === 'error' && f.rule === 'decor'),
       'decor: `decor: none` in a deck\'s header takes every element off, the mark included; any other value there is an error');
+    /* iteration 2 (VYV3, 2026-11-17): drawings that take turns on the chapter pages, one kept off the opening and the chapters,
+       the opening and the chapters alone, a chart colour as tint */
+    const SEC = `---\nformat: jmd/3\nlayout: slide\ntitle: t\n---\n\n# Cover\n\n---\n\n::: section\nOne\n:::\n\n---\n\n## Light\n\nWords.\n\n---\n\n::: section\nTwo\n:::\n\n---\n\n::: section\nThree\n:::\n`;
+    const turnBrand = lb('chart-colors: "#ce1052,#1d8839"\ndecor:\n  blot:\n    svg: band\n    place: corner-tr\n    on: all\n    tint: accent\n    off: opening section\n  flower:\n    svg: quarter\n    place: corner-bl\n    tint: accent\n    on: opening\n  ch-a:\n    svg: waves\n    on: section\n    turn: 1/2\n    tint: chart-1\n  ch-b:\n    svg: waves\n    on: section\n    turn: 2/2\n    tint: chart-2\n');
+    const tp = JMD.render(JMD.parse(SEC), { brand: turnBrand }).split('<section').slice(1).map(x => (x.match(/decor--[a-z-]+ decor-tint--[a-z0-9-]+/g) || []).join(' '));
+    ok(tp[0] === 'decor--corner-bl decor-tint--accent' && tp[1] === 'decor--full decor-tint--chart-1' && tp[2] === 'decor--corner-tr decor-tint--accent' && tp[3] === 'decor--full decor-tint--chart-2' && tp[4] === 'decor--full decor-tint--chart-1',
+      'decor: `opening` is the cover alone, `section` the chapter pages alone; `off` keeps an element off pages it would go on; `turn: n/m` makes elements take turns on their pages, in the deck\'s order; a chart colour is a tint', JSON.stringify(tp));
+    let badTurn = null; try { decorOf({ decor: { x: { svg: 'band', turn: '3/2' } } }); } catch (e) { badTurn = e.message; }
+    let badOff = null; try { decorOf({ decor: { x: { svg: 'band', off: 'all' } } }); } catch (e) { badOff = e.message; }
+    ok(badTurn && /turn is n\/m/.test(badTurn) && badOff && /off "all"/.test(badOff), 'decor: a turn out of shape and `off: all` are refused, naming the element', `${badTurn} / ${badOff}`);
+    const lp = JMD.render(JMD.parse(SEC), { brand: lb('logo-place: right\nlogo-inset: 1.5%\nalign: right\n') });
+    const lpHtml = bh({ jmd: SEC, brand: lb('logo-place: right\nlogo-inset: 1.5%\n') });
+    let badInset = null; try { lb('logo-inset: 20%'); } catch (e) { badInset = e.message; }
+    ok(/class="slide [^"]*brand-logo-right[^"]*brand-logo-inset/.test(lp) && /brand-align-right/.test(lp) && /--brand-logo-inset:0\.015;/.test(lpHtml) && badInset && /logo-inset/.test(badInset),
+      'logo-place: right and logo-inset put the logo where the charter draws it (a class on each page, the distance a validated variable); align: right; an inset past 10% is refused', badInset || '');
+    /* iteration 3 (VYV3, 2026-11-17): the cover's logo in a bottom corner, and a gradient in two brand colours */
+    const cl = JMD.render(JMD.parse(SEC), { brand: lb('cover-logo-place: bottom-left\ncover-logo-inset: 4%\ncover-logo-size: 29%\n') });
+    const clHtml = bh({ jmd: SEC, brand: lb('cover-logo-place: bottom-left\ncover-logo-inset: 4%\n') });
+    let badPlace = null; try { lb('cover-logo-place: middle'); } catch (e) { badPlace = e.message; }
+    ok(/class="slide [^"]*brand-cover-logo-bottom brand-cover-logo-bl/.test(cl) && /--brand-cover-logo-inset:0\.04;/.test(clHtml) && badPlace && /cover-logo-place/.test(badPlace),
+      'cover-logo-place: bottom-left takes the cover\'s logo to its corner, at cover-logo-inset; another place is refused', badPlace || '');
+    const two = decorSymbol('fl', '<svg viewBox="0 0 10 10"><defs><linearGradient id="g"><stop offset="0%" stop-color="#000000"/><stop offset="100%" stop-color="#ffffff"/></linearGradient></defs><path d="M0 0H10V10Z" fill="url(#g)"/></svg>', 'corner-bl', 'chart-2', 'highlight');
+    const one = decorSymbol('fl', '<svg viewBox="0 0 10 10"><defs><linearGradient id="g"><stop offset="0%" stop-color="#000000"/><stop offset="100%" stop-color="#ffffff"/></linearGradient></defs><path d="M0 0H10V10Z" fill="url(#g)"/></svg>', 'corner-bl', 'chart-2');
+    let badFade = null; try { decorOf({ decor: { x: { svg: 'band', fade: 'pink' } } }); } catch (e) { badFade = e.message; }
+    ok(/stop-color:var\(--decor-chart-2\)"[\s\S]*stop-color:var\(--decor-highlight\)"/.test(two.symbol) && (one.symbol.match(/--decor-chart-2/g) || []).length === 2 && badFade && /fade "pink"/.test(badFade),
+      'decor fade: a gradient goes from the tint (its dark stops) to the fade (its light ones), two colours of the brand; without one, every stop takes the tint; a fade that is no brand colour is refused', two.symbol.slice(0, 300));
     const cov = JMD.render(JMD.parse('---\nformat: jmd/3\nlayout: slide\n---\n\n---\n---\n## A photo\n\n![x](a.png){.cover}\n'), { brand: lb('decor:\n  quarter:\n    on: all') });
     ok(!cov.includes('decor-layer'), 'decor: never on a slide whose photo is its cover');
     const forged = JMD.render(JMD.parse(DD('slide')), { brand: { decorItems: [{ name: 'x', place: 'corner-br" onload="alert(1)', tint: 'accent', on: ['all'], layouts: ['slide'], size: 10, opacity: 1 }, { name: 'y"><script>', place: 'full', tint: 'accent', on: ['all'], layouts: ['slide'], size: 1, opacity: 1 }, { name: 'z', place: 'full', tint: 'accent', on: ['all'], layouts: ['slide'], size: '9;background:url(https://evil)', opacity: 1 }] } });

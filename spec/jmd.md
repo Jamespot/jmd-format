@@ -348,20 +348,24 @@ decor: quarter waves          # ready elements, by name: quarter glow waves band
 ```
 
 ```yaml
-decor:                        # or named elements of the charter's own, 6 at most
+decor:                        # or named elements of the charter's own, 10 at most
   halo:
     svg: halo.svg             # an SVG beside the brand.yaml (or its https URL), or a ready element's name
     place: corner-br          # corner-tl corner-tr corner-bl corner-br | edge-top edge-bottom edge-left edge-right | full
     size: 40                  # % — of the page's short side for a corner, the thickness of an edge; `full` covers the page
-    tint: accent              # a colour of the brand: primary accent highlight secondary ink lavender wash butter card white
-    on: light cover           # the pages: all | cover | dark | light | an intent (hook, act…), several with spaces
+    tint: accent              # a colour of the brand: primary accent highlight secondary ink lavender wash butter card white, or chart-1 … chart-6 (its chart-colors)
+    fade: highlight           # optional: a second colour of the brand — the drawing's gradients go from the tint (their dark stops) to it (their light ones)
+    on: light cover           # the pages: all | cover | opening | section | dark | light | an intent (hook, act…), several with spaces
     layouts: slide memo       # optional; all of them by default, except that `full` leaves story out (a 16:9 drawing cropped to a phone)
     opacity: .5               # 0.05 to 1
+    off: section              # optional: pages it never goes on, in the words of `on`
+    turn: 1/5                 # optional: of the pages it goes on, the 1st of every 5 — elements that take turns (five chapter pages)
 ```
 
 - **An element is an SVG file — never a PNG, never a JPEG**: a drawing takes the brand's colours and stays sharp at every size, a picture can do neither. It is rebuilt by the logo's allowlist (no script, no handler, no link out, no picture inside) and **every colour it carries is replaced by its `tint`** — a charter element is always drawn in the brand's colours. Its gradients and opacities stay.
-- **A corner element is drawn for the bottom-right corner**; the engine mirrors it for the other three.
-- **Where it goes.** `cover` is the opening `#`, `hook`, `celebrate` and a `section`; `dark` is a page on `indigo`, `accent` or `sky`; `light` every other page. Never on a slide whose photo is its `.cover`. On a memo, a long document and a web page — one flow — the corners and the page-sized drawings go on the first page only, half the size a slide gives a corner; the edges go on every page.
+- **A corner element is drawn for the bottom-right corner**, anchored there whatever its proportions; the engine mirrors it for the other three.
+- **Taking turns.** Several elements with the same pages and `turn: 1/3`, `2/3`, `3/3` share them: the pages are counted in the deck's order, each element takes its own of every three — a charter's chapter pages each in another colour. `off` takes pages away from `on` (`on: all` + `off: opening section`).
+- **Where it goes.** `cover` is the opening `#`, `hook`, `celebrate` and a `section`; `opening` the opening `#` alone, `section` a `section` page alone (a charter that draws its cover and its chapter pages each their own way); `dark` is a page on `indigo`, `accent` or `sky`; `light` every other page. Never on a slide whose photo is its `.cover`. On a memo, a long document and a web page — one flow — the corners and the page-sized drawings go on the first page only, half the size a slide gives a corner; the edges go on every page.
 - **Exports.** PDF and images are the page as drawn; in a PowerPoint the decor is the slide's background picture, behind the native text; a story screen is a phone page like any other.
 - **`watermark:` is the old name.** A brand that says `watermark: mark | circles | none` keeps its look: it reads as `decor: mark | circles | none`. When both are written, `decor:` wins.
 

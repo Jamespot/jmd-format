@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpa
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateBrand, normalizeColors, chartColors, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY, logoSize } from './safe.mjs';
+import { validateBrand, normalizeColors, chartColors, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY, logoSize, logoInset } from './safe.mjs';
 import { catalogueFace, brandCatalogueFaces, faceCss } from './fonts.mjs';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -117,7 +117,7 @@ export function decorSymbols(b) {
       svg = readFileSync(c.path, 'utf8');
     }
     if (svg === undefined) throw new Error(`brand decor ${it.name}: ${it.svg} cannot be read here — a ready element (${DECOR_READY.join(', ')}), an https URL, or an .svg beside a brand.yaml`);
-    const r = decorSymbol(it.name, svg, it.place, it.tint); out.push(r.symbol);
+    const r = decorSymbol(it.name, svg, it.place, it.tint, it.fade); out.push(r.symbol);
     if (r.dropped.length) dropped.push(it.name + ': ' + r.dropped.join(' '));
   }
   decorSymbols.dropped = dropped;
@@ -275,6 +275,10 @@ function layoutCss(b, mark) {
   // the logo's own height (2026-11-16): a share of the page's height, as the charter's PowerPoint draws it (engine.css brand-logo-sized)
   if (sized !== null) css += `  --brand-logo-size:${cssTok(String(sized))};\n`;
   if (coverSized !== null) css += `  --brand-cover-logo-size:${cssTok(String(coverSized))};\n`;
+  const inset = logoInset(b['logo-inset']); // the logo's distance from the top and its side (2026-11-17)
+  if (inset !== null) css += `  --brand-logo-inset:${cssTok(String(inset))};\n`;
+  const coverInset = logoInset(b['cover-logo-inset']); // the cover's logo, from its corner (iteration 3)
+  if (coverInset !== null) css += `  --brand-cover-logo-inset:${cssTok(String(coverInset))};\n`;
   return css;
 }
 

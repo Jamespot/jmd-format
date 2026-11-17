@@ -173,10 +173,13 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 .decor--corner-tl{transform:scale(-1,-1)}.decor--corner-tr{transform:scaleY(-1)}.decor--corner-bl{transform:scaleX(-1)}
 :root{--decor-primary:var(--brand-primary);--decor-accent:var(--brand-accent);--decor-highlight:var(--brand-highlight);--decor-secondary:var(--brand-secondary);
   --decor-ink:var(--brand-ink);--decor-white:#fff;--decor-lavender:var(--brand-bg-lavender,var(--jp-purple-100));--decor-wash:var(--brand-bg-wash,var(--jp-purple-050));
-  --decor-butter:var(--brand-bg-butter,var(--jp-butter));--decor-card:var(--brand-card,var(--jp-purple-100))}
+  --decor-butter:var(--brand-bg-butter,var(--jp-butter));--decor-card:var(--brand-card,var(--jp-purple-100));
+  --decor-chart-1:var(--brand-chart-1,var(--brand-accent));--decor-chart-2:var(--brand-chart-2,var(--brand-accent));--decor-chart-3:var(--brand-chart-3,var(--brand-accent));
+  --decor-chart-4:var(--brand-chart-4,var(--brand-accent));--decor-chart-5:var(--brand-chart-5,var(--brand-accent));--decor-chart-6:var(--brand-chart-6,var(--brand-accent))}
 .decor-tint--primary{color:var(--decor-primary)}.decor-tint--accent{color:var(--decor-accent)}.decor-tint--highlight{color:var(--decor-highlight)}
 .decor-tint--secondary{color:var(--decor-secondary)}.decor-tint--ink{color:var(--decor-ink)}.decor-tint--white{color:var(--decor-white)}
 .decor-tint--lavender{color:var(--decor-lavender)}.decor-tint--wash{color:var(--decor-wash)}.decor-tint--butter{color:var(--decor-butter)}.decor-tint--card{color:var(--decor-card)}
+.decor-tint--chart-1{color:var(--decor-chart-1)}.decor-tint--chart-2{color:var(--decor-chart-2)}.decor-tint--chart-3{color:var(--decor-chart-3)}.decor-tint--chart-4{color:var(--decor-chart-4)}.decor-tint--chart-5{color:var(--decor-chart-5)}.decor-tint--chart-6{color:var(--decor-chart-6)}
 .mark-blob--statement{top:-120px;right:-90px;width:440px;height:440px;opacity:.18}
 
 /* ── Type ─────────────────────────────────────────────── */
@@ -1457,6 +1460,18 @@ svg{--mark-dot:var(--brand-primary)}
 .slide.brand-align-left:is(.slide--cover,.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) .slide-head{align-items:flex-start}
 .slide.brand-align-left:is(.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) :is(a.cta,.figure){align-self:flex-start}
 .slide.brand-align-left .divider{text-align:left;align-items:flex-start}
+/* align: right (VYV3, 2026-11-17: its cover's title and subtitle set against the right edge, away from the flower at the bottom left);
+   a chapter page keeps its title where it was — VYV3's chapters set theirs on the left, inside the white of their frame */
+.slide.brand-align-right.slide--cover .body-pad,.slide.brand-align-right:is(.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) .body-pad{align-items:flex-end;text-align:right}
+.slide.brand-align-right:is(.slide--cover,.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) .slide-head{align-items:flex-end}
+.slide.brand-align-right:is(.slide--hook,.slide--reveal,.slide--celebrate,.slide--fun,.slide--act) :is(a.cta,.figure){align-self:flex-end}
+/* logo-place: right — the logo on the right of the header, the chapter's name on the left; logo-inset — the logo at the charter's own
+   distance from the top and from its side (a share of the page's height), which sets it inside the shape the charter draws for it */
+.slide.brand-logo-right .slide-chrome{flex-direction:row-reverse}
+.slide.brand-logo-inset .lockup{position:absolute;top:calc(var(--slide-h) * var(--brand-logo-inset) - 36px);left:calc(var(--slide-h) * var(--brand-logo-inset) - 56px)}
+.slide.brand-logo-inset.brand-logo-right .lockup{left:auto;right:calc(var(--slide-h) * var(--brand-logo-inset) - 56px)}
+.slide.brand-logo-inset.brand-logo-right .chrome-meta{margin-right:auto}
+.slide.brand-logo-inset:not(.brand-logo-right) .chrome-meta{margin-left:auto}
 /* footer-band: line — a thin rule at the foot, the organisation on the left, the date and the page number on the right, in the
    body font; the corner number gives way to it. Slide and Story only: a Memo and a Doc keep their own footer. */
 .slide-band{position:absolute;left:56px;right:56px;bottom:20px;z-index:5;display:flex;align-items:baseline;justify-content:space-between;gap:24px;
@@ -1472,7 +1487,7 @@ svg{--mark-dot:var(--brand-primary)}
 .slide.brand-logo-large .lockup svg{height:30px;width:calc(30px * var(--brand-logo-ratio,1));max-width:200px}
 .slide.brand-logo-large.slide--cover .lockup svg,.slide.brand-logo-large .sheet--cover .lockup svg{height:76px;width:calc(76px * var(--brand-logo-ratio,1));max-width:440px}
 .slide.brand-logo-large.slide--cover .lockup,.slide.brand-logo-large .sheet--cover .lockup{font-size:30px;gap:16px}
-.slide.brand-logo-large.slide--cover .body-pad{padding-top:calc(170px * var(--type-scale,1))}
+.slide.brand-logo-large:not(.brand-cover-logo-bottom).slide--cover .body-pad{padding-top:calc(170px * var(--type-scale,1))}
 .layout-doc .slide.brand-logo-large .sheet--cover .lockup svg{height:120px;width:calc(120px * var(--brand-logo-ratio,1));max-width:640px}
 /* logo-size, cover-logo-size — the logo at the height the charter's PowerPoint draws it (Nicolas, 2026-11-16: the CISIRH block is
    13% of the page on every slide, 37% on its cover), a share of a Slide's page (--brand-logo-size, --brand-cover-logo-size, set by
@@ -1481,7 +1496,12 @@ svg{--mark-dot:var(--brand-primary)}
 .slide.brand-logo-sized .lockup svg{height:calc(var(--slide-h) * var(--brand-logo-size));width:calc(var(--slide-h) * var(--brand-logo-size) * var(--brand-logo-ratio,1));max-width:calc(var(--slide-w) * .4);flex:none}
 .slide.brand-logo-sized .body-pad{padding-top:max(calc(132px * var(--type-scale,1)),calc(36px + var(--slide-h) * var(--brand-logo-size) + 28px))}
 .slide.brand-cover-logo-sized.slide--cover .lockup svg{height:calc(var(--slide-h) * var(--brand-cover-logo-size));width:calc(var(--slide-h) * var(--brand-cover-logo-size) * var(--brand-logo-ratio,1));max-width:calc(var(--slide-w) * .6);flex:none}
-.slide.brand-cover-logo-sized.slide--cover .body-pad{padding-top:calc(36px + var(--slide-h) * var(--brand-cover-logo-size) + 32px);justify-content:flex-start}
+.slide.brand-cover-logo-sized:not(.brand-cover-logo-bottom).slide--cover .body-pad{padding-top:calc(36px + var(--slide-h) * var(--brand-cover-logo-size) + 32px);justify-content:flex-start}
+/* cover-logo-place: bottom-left | bottom-right (iteration 3, VYV3: the cover's logo large, inside the flower at the bottom left) — the
+   logo leaves the header for its corner, at cover-logo-inset from both edges; the title keeps the page's own place */
+.slide.brand-cover-logo-bottom.slide--cover .lockup{position:absolute;top:calc(var(--slide-h) * (1 - var(--brand-cover-logo-inset,.04)) - var(--slide-h) * var(--brand-cover-logo-size,.14) - 36px)}
+.slide.brand-cover-logo-bl.slide--cover .lockup{left:calc(var(--slide-h) * var(--brand-cover-logo-inset,.04) - 56px);right:auto}
+.slide.brand-cover-logo-br.slide--cover .lockup{right:calc(var(--slide-h) * var(--brand-cover-logo-inset,.04) - 56px);left:auto}
 /* table-head: light — the header in a light tint of the deep colour, its words in ink or black, whichever reads (tools/build.mjs
    tableHead: 4.5:1 at least); a dark page keeps its own header */
 .slide.brand-thead-light:not(.slide--indigo,.slide--accent,.slide--sky) .table thead th{background:var(--brand-thead-bg);color:var(--brand-thead-ink)}

@@ -14,7 +14,7 @@ const ENUMS = {
   'card-shadow': ['offset', 'none'],
   motion: ['none', 'soft', 'slide', 'zoom', 'step'],
   // the page layout a charter decides once for every page (#73); the first word is the default, the look every brand had before
-  align: ['center', 'left'],
+  align: ['center', 'left', 'right'],
   'footer-band': ['none', 'line'],
   'cover-logo': ['small', 'large'],
   'table-head': ['strong', 'light'],
@@ -23,12 +23,23 @@ const ENUMS = {
   'cover-case': ['normal', 'upper'],
   // the cover's page (2026-11-12, the CISIRH model: a white cover): the colour its intent gives (hook: the accent), white, or the deep colour
   'cover-bg': ['intent', 'white', 'primary'],
+  // where the logo sits in the header (VYV3, 2026-11-17: in its blot, top right): left, the look every brand had, or right
+  'logo-place': ['left', 'right'],
+  // where the cover's logo sits (VYV3, iteration 3: large, at the bottom left, inside the cover's flower): in the header, or a bottom corner
+  'cover-logo-place': ['header', 'bottom-left', 'bottom-right'],
 };
 /* The logo's height as the charter draws it (Nicolas, 2026-11-16: the CISIRH model's block is 13% of the page's height on every
    slide and 37% on its cover, ours 4% and 10%): `logo-size` on every page of a Slide, `cover-logo-size` on its cover, each a share
    of the page's height as a PowerPoint measures it. Unsaid, the logo keeps the size the engine gives it. */
 export const LOGO_SIZE_KEYS = ['logo-size', 'cover-logo-size'];
 export const LOGO_SIZE_MIN = 3, LOGO_SIZE_MAX = 60;
+/** `logo-inset` (2026-11-17): how far the logo stands from the top and from its side, as a share of the page's height — the
+    charter's own distance, which puts it inside the shape drawn for it. `2%` → 0.02, or null out of shape or out of 0.5–10%. */
+export function logoInset(v) {
+  const m = /^\s*(\d{1,2}(?:\.\d)?)\s*%?\s*$/.exec(String(v ?? ''));
+  if (!m || +m[1] < 0.5 || +m[1] > 10) return null;
+  return Math.round(+m[1] * 10) / 1000;
+}
 /** `13%`, `13`, `12.5 %` → 0.13 / 0.125 (the fraction of the page's height), or null when out of shape or out of 3–60%. */
 export function logoSize(v) {
   const m = /^\s*(\d{1,2}(?:\.\d)?)\s*%?\s*$/.exec(String(v ?? ''));
@@ -83,6 +94,7 @@ export function validateBrand(b, { marks = [] } = {}) {
   if (b['chart-colors'] !== undefined && b['chart-colors'] !== '') chartColors(b['chart-colors']); // throws, naming the colour
   for (const k in ENUMS) if (b[k] !== undefined && b[k] !== '' && !ENUMS[k].includes(b[k])) bad(k, 'is not one of ' + ENUMS[k].join(', '));
   for (const k of LOGO_SIZE_KEYS) if (b[k] !== undefined && b[k] !== '' && logoSize(b[k]) === null) bad(k, `is not a share of the page's height, ${LOGO_SIZE_MIN}% to ${LOGO_SIZE_MAX}% (13%)`);
+  for (const k of ['logo-inset', 'cover-logo-inset']) if (b[k] !== undefined && b[k] !== '' && logoInset(b[k]) === null) bad(k, 'is not a share of the page\'s height, 0.5% to 10% (2%)');
   if (b.fonts !== undefined && b.fonts !== '' && b.fonts !== 'custom' && !/^fonts\/[\w.-]+(\/[\w.-]+)*\.css$/.test(b.fonts) && !/^https?:\/\/\S+\.css$/.test(b.fonts) && !/^[\w.-]+(\/[\w.-]+)*\.css$/.test(b.fonts))
     bad('fonts', 'is not a fonts/….css file of the brands folder, nor a .css next to the brand.yaml URL, nor an https URL');
   if (b.images !== undefined) {
@@ -108,11 +120,11 @@ export function validateBrand(b, { marks = [] } = {}) {
 export const DECOR_READY = ['quarter', 'glow', 'waves', 'band', 'dots']; // themes/brands/decor/<id>.svg
 export const DECOR_ENGINE = ['mark', 'circles']; // what `watermark:` drew, still drawn by the engine
 export const DECOR_PLACES = ['corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'edge-top', 'edge-bottom', 'edge-left', 'edge-right', 'full'];
-export const DECOR_TINTS = ['primary', 'accent', 'highlight', 'secondary', 'ink', 'lavender', 'wash', 'butter', 'card', 'white'];
+export const DECOR_TINTS = ['primary', 'accent', 'highlight', 'secondary', 'ink', 'lavender', 'wash', 'butter', 'card', 'white', 'chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6']; // chart-N: the brand's chart-colors (2026-11-17), the accent where unsaid
 const DECOR_INTENTS = ['hook', 'problem', 'reveal', 'prove', 'explain', 'decide', 'recap', 'celebrate', 'fun', 'act'];
-export const DECOR_ON = ['all', 'cover', 'dark', 'light', ...DECOR_INTENTS];
+export const DECOR_ON = ['all', 'cover', 'opening', 'section', 'dark', 'light', ...DECOR_INTENTS];
 export const DECOR_LAYOUTS = ['slide', 'memo', 'doc', 'story', 'webpage'];
-export const DECOR_MAX = 6, DECOR_SVG_MAX = 100 * 1024;
+export const DECOR_MAX = 10, DECOR_SVG_MAX = 100 * 1024;
 export const DECOR_SVG_ONLY = 'a charter element must be an SVG file (no PNG, no JPEG): a drawing takes the brand\'s colours and stays sharp at every size, a picture can do neither';
 // where a ready element goes when it is named alone — a designer's choice, one line each
 export const DECOR_DEFAULTS = {
@@ -154,19 +166,28 @@ export function decorOf(b) {
     const testHttp = process.env.JMD_BRAND_HTTP && /^http:\/\/(127\.0\.0\.1|localhost)[:/][^\s"'<>]*$/.test(svg); // tests only, as for the image banks
     if (!DECOR_READY.includes(svg) && !(/\.svg$/i.test(svg) && (DECOR_REF.test(svg) || testHttp) && !svg.split('/').includes('..')))
       bad(name, /\.svg$/i.test(svg) ? `svg ${JSON.stringify(svg.slice(0, 80))} is neither a file beside the brand file (a plain path, never \`..\`) nor an https URL` : `svg ${JSON.stringify(svg.slice(0, 80))} is neither a ready element (${DECOR_READY.join(', ')}) nor an .svg file — ${DECOR_SVG_ONLY}`);
-    for (const k of Object.keys(given)) if (!['svg', 'place', 'size', 'tint', 'on', 'layouts', 'opacity'].includes(k)) bad(name, `unknown field \`${String(k).slice(0, 24)}\` (svg, place, size, tint, on, layouts, opacity)`);
+    for (const k of Object.keys(given)) if (!['svg', 'place', 'size', 'tint', 'fade', 'on', 'off', 'turn', 'layouts', 'opacity'].includes(k)) bad(name, `unknown field \`${String(k).slice(0, 24)}\` (svg, place, size, tint, fade, on, off, turn, layouts, opacity)`);
     const it = { ...(DECOR_DEFAULTS[svg] || { place: 'corner-br', size: '40', tint: 'accent', on: 'all', opacity: '1' }), ...given, svg };
     const place = String(it.place).toLowerCase(), tint = String(it.tint).toLowerCase();
     if (!DECOR_PLACES.includes(place)) bad(name, `place ${JSON.stringify(String(it.place).slice(0, 24))} is not one of ${DECOR_PLACES.join(', ')}`);
     if (!/^\d{1,3}$/.test(String(it.size)) || +it.size < 1 || +it.size > 100) bad(name, 'size is a percentage, 1 to 100 (of the page\'s short side for a corner, its thickness for an edge)');
+    // fade (iteration 3, 2026-11-17): the brand colour a gradient of the drawing goes to — its light stops take it, its dark ones the tint
+    const fade = it.fade === undefined || it.fade === '' ? null : String(it.fade).toLowerCase();
+    if (fade !== null && !DECOR_TINTS.includes(fade)) bad(name, `fade ${JSON.stringify(String(it.fade).slice(0, 24))} is not one of the brand's colours: ${DECOR_TINTS.join(', ')}`);
     if (!DECOR_TINTS.includes(tint)) bad(name, `tint ${JSON.stringify(String(it.tint).slice(0, 24))} is not one of the brand's colours: ${DECOR_TINTS.join(', ')} — an element is always drawn in the brand's colours`);
     if (!/^(0?\.\d{1,3}|1(\.0+)?)$/.test(String(it.opacity)) || +it.opacity < .05) bad(name, 'opacity is a number from 0.05 to 1');
     const on = String(it.on).toLowerCase().split(/[\s,]+/).filter(Boolean);
     for (const o of on) if (!DECOR_ON.includes(o)) bad(name, `on ${JSON.stringify(o.slice(0, 24))} is not one of ${DECOR_ON.join(', ')}`);
+    // off (2026-11-17): the pages it never goes on, in the same words — a charter's blot hidden under its cover's and chapters' paint
+    const off = it.off === undefined ? [] : String(it.off).toLowerCase().split(/[\s,]+/).filter(Boolean);
+    for (const o of off) if (!DECOR_ON.includes(o) || o === 'all') bad(name, `off ${JSON.stringify(o.slice(0, 24))} is not one of ${DECOR_ON.filter(x => x !== 'all').join(', ')}`);
+    // turn (2026-11-17): `2/5` — of the pages it would go on, the 2nd of every 5: several drawings take turns (a charter's five chapter pages)
+    let turn = null;
+    if (it.turn !== undefined && it.turn !== '') { const t = /^\s*(\d)\s*\/\s*(\d)\s*$/.exec(String(it.turn)); if (!t || +t[1] < 1 || +t[1] > +t[2] || +t[2] > DECOR_MAX) bad(name, `turn is n/m: the n-th of every m pages it goes on (1 ≤ n ≤ m ≤ ${DECOR_MAX})`); turn = [+t[1], +t[2]]; }
     // a page-sized drawing is drawn for a 16:9 page: on a phone it would be cropped to its middle, so a story has it only when asked
     const layouts = it.layouts ? String(it.layouts).toLowerCase().split(/[\s,]+/).filter(Boolean) : DECOR_LAYOUTS.filter(l => !(place === 'full' && l === 'story'));
     for (const l of layouts) if (!DECOR_LAYOUTS.includes(l)) bad(name, `layout ${JSON.stringify(l.slice(0, 24))} is not one of ${DECOR_LAYOUTS.join(', ')}`);
-    items.push({ name, svg, place, size: +it.size, tint, on: on.length ? on : ['all'], layouts, opacity: +it.opacity });
+    items.push({ name, svg, place, size: +it.size, tint, on: on.length ? on : ['all'], ...(off.length ? { off } : {}), ...(turn ? { turn } : {}), ...(fade ? { fade } : {}), layouts, opacity: +it.opacity });
   }
   if (items.length > DECOR_MAX) bad('', `${items.length} elements, ${DECOR_MAX} at most`);
   return { watermark, items };
@@ -174,20 +195,28 @@ export function decorOf(b) {
 
 /** A decor SVG, rebuilt by the logo's allowlist, then repainted: every colour it carries becomes the brand's (`currentColor`, set by
     its tint) — `none` and the gradients of its own stay. { symbol, dropped }: the symbol is `brand-decor-<name>`, its ids prefixed. */
-export function decorSymbol(name, svg, place, tint = 'accent') {
+export function decorSymbol(name, svg, place, tint = 'accent', fade = null) {
   if (Buffer.byteLength(String(svg)) > DECOR_SVG_MAX) throw new Error(`brand decor ${name}: the SVG is ${Math.round(Buffer.byteLength(String(svg)) / 1024)} KB, ${DECOR_SVG_MAX / 1024} KB at most`);
   const r = sanitizeSvg(svg, { prefix: 'dc-' + name + '-' });
-  const aspect = { 'corner-tl': 'xMinYMin meet', 'corner-tr': 'xMaxYMin meet', 'corner-bl': 'xMinYMax meet', 'corner-br': 'xMaxYMax meet', full: 'xMidYMid slice' }[place] || 'none';
+  /* a corner is drawn for the bottom-right one and the engine's CSS mirrors the box for the other three (engine.css), so every
+     corner anchors its drawing bottom-right: anchoring it at its own corner too flipped it twice, and a drawing wider than tall
+     (a charter's blot read from a PowerPoint, 2026-11-17) floated off its edge — the ready elements, square, never showed it */
+  const aspect = place.startsWith('corner-') ? 'xMaxYMax meet' : place === 'full' ? 'xMidYMid slice' : 'none';
   const paint = v => /^\s*(none|transparent|url\(#[\w-]+\))\s*$/i.test(v) ? v : 'currentColor';
   // a gradient's stops are painted where the gradient is defined, not where it is used: currentColor would be the hidden sprite's,
   // so a stop takes the tint by its custom property (engine.css, --decor-<tint>), which every element of the page inherits
   const stopPaint = `var(--decor-${DECOR_TINTS.includes(tint) ? tint : 'accent'})`;
+  /* with a fade, a gradient goes from the tint to that second colour of the brand: a stop written light (its colour above mid-grey)
+     takes the fade, a dark one the tint — so a charter's red-to-yellow flower stays red to yellow, in the brand's own two */
+  const fadePaint = fade && DECOR_TINTS.includes(fade) ? `var(--decor-${fade})` : null;
+  const lightStop = attrs => { const m = /stop-color(?:="|\s*:\s*)#([0-9a-f]{6}|[0-9a-f]{3})\b/i.exec(attrs); if (!m) return /stop-color(?:="|\s*:\s*)(white)\b/i.test(attrs); const h = m[1].length === 3 ? m[1].replace(/./g, c => c + c) : m[1]; const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5; };
   const symbol = r.symbol
     .replace(/ (fill|stroke)="([^"]*)"/g, (_, k, v) => ` ${k}="${paint(v)}"`)
     .replace(/ style="([^"]*)"/g, (_, st) => ` style="${st.replace(/(^|;)\s*(fill|stroke)\s*:\s*([^;]*)/g, (m, sep, k, v) => `${sep}${k}:${paint(v)}`)}"`)
     .replace(/<stop([^>]*?)(\/?)>/g, (_, attrs, close) => {
+      const light = lightStop(attrs);
       let st = ''; attrs = attrs.replace(/ stop-color="[^"]*"/g, '').replace(/ style="([^"]*)"/g, (m, v) => { st = v.replace(/(^|;)\s*stop-color\s*:[^;]*/g, '').replace(/^;+/, ''); return ''; });
-      return `<stop${attrs} style="${st ? st + ';' : ''}stop-color:${stopPaint}"${close}>`;
+      return `<stop${attrs} style="${st ? st + ';' : ''}stop-color:${fadePaint && light ? fadePaint : stopPaint}"${close}>`;
     })
     .replace('<symbol id="brand-mark"', `<symbol id="brand-decor-${name}" preserveAspectRatio="${aspect}"`);
   return { symbol, dropped: r.dropped };

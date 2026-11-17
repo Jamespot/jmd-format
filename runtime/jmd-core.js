@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.53.0';
+  var VERSION = '1.54.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -1884,7 +1884,8 @@ globalThis.JMD = (function () {
     // the brand's own elements (decor:, 1.49.0): data the build validated, posed behind everything like the watermark, never on a
     // slide whose photo is its cover. A memo, a long document and a web page are one flow: their corners and page-sized drawings
     // go on the first page only (paginate() keeps the edges on the sheets it adds); the pages a charter names are cover, dark, light
-    var decor = cover ? '' : decorLayer(ctx, bg, intent, idx, classes.indexOf('slide--cover') >= 0 || intent === 'hook' || intent === 'celebrate' || !!(full && full.name === 'section'));
+    var opening = classes.indexOf('slide--cover') >= 0, section = !!(full && full.name === 'section');
+    var decor = cover ? '' : decorLayer(ctx, bg, intent, idx, opening || intent === 'hook' || intent === 'celebrate' || section, { opening: opening, section: section });
     // under a cover photo the foot of the slide is the photo: the credit sits on it, in a dark chip, rather than over it in grey
     var credit = ctx.slideCredits.length ? '<div class="img-credit' + (cover ? ' img-credit--cover' : '') + '">' + esc(ctx.slideCredits.join(' · ')) + '</div>' : '';
     var page = decor + watermark + chrome + inner + tag + credit;
@@ -1907,6 +1908,12 @@ globalThis.JMD = (function () {
   function pageLayout(ctx) {
     var b = ctx.brand || {}, out = [];
     if (b.align === 'left') out.push('brand-align-left');
+    if (b.align === 'right') out.push('brand-align-right');
+    // where the logo sits (2026-11-17): on the right, the chapter's name then on the left; inset at the charter's own distance
+    if (b['logo-place'] === 'right') out.push('brand-logo-right');
+    if (ctx.layout === 'slide' && b['logo-inset'] !== undefined && b['logo-inset'] !== '') out.push('brand-logo-inset');
+    // the cover's logo in a bottom corner (iteration 3: VYV3's, large, inside the cover's flower), at its own distance from the corner
+    if (ctx.layout === 'slide' && (b['cover-logo-place'] === 'bottom-left' || b['cover-logo-place'] === 'bottom-right')) out.push('brand-cover-logo-bottom', 'brand-cover-logo-' + (b['cover-logo-place'] === 'bottom-left' ? 'bl' : 'br'));
     if (hasBand(ctx)) out.push('brand-band');
     if (b['cover-logo'] === 'large') out.push('brand-logo-large');
     // the logo at the height the charter draws it (2026-11-16), a share of a Slide's page: the build sets the size, the page says it
@@ -1951,15 +1958,22 @@ globalThis.JMD = (function () {
   }
 
   var DECOR_PLACES = ['corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'edge-top', 'edge-bottom', 'edge-left', 'edge-right', 'full'];
-  var DECOR_TINTS = ['primary', 'accent', 'highlight', 'secondary', 'ink', 'lavender', 'wash', 'butter', 'card', 'white'];
+  var DECOR_TINTS = ['primary', 'accent', 'highlight', 'secondary', 'ink', 'lavender', 'wash', 'butter', 'card', 'white', 'chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6'];
   var DARK_BGS = { indigo: 1, accent: 1, sky: 1 };
-  function decorLayer(ctx, bg, intent, idx, isCover) {
+  // `opening` is the deck's first cover alone, `section` a chapter page alone (2026-11-17, a charter read from a PowerPoint: its
+  // cover and its chapter pages each wear a drawing of their own, which `cover` — both at once — cannot say)
+  function decorLayer(ctx, bg, intent, idx, isCover, kind) {
+    kind = kind || {};
     var flow = ctx.layout === 'memo' || ctx.layout === 'doc' || ctx.layout === 'webpage';
     var html = (ctx.brand.decorItems || []).filter(function (d) {
       if (!d || DECOR_PLACES.indexOf(d.place) < 0 || DECOR_TINTS.indexOf(d.tint) < 0 || !/^[a-z][a-z0-9-]{0,23}$/.test(d.name)) return false;
       if ((d.layouts || []).indexOf(ctx.layout) < 0) return false;
       if (flow && idx > 0 && !/^edge-/.test(d.place)) return false;
-      return (d.on || ['all']).some(function (o) { return o === 'all' || (o === 'dark' && DARK_BGS[bg]) || (o === 'light' && !DARK_BGS[bg]) || (o === 'cover' && isCover) || o === intent; });
+      var is = function (o) { return o === 'all' || (o === 'dark' && DARK_BGS[bg]) || (o === 'light' && !DARK_BGS[bg]) || (o === 'cover' && isCover) || (o === 'opening' && kind.opening) || (o === 'section' && kind.section) || o === intent; };
+      if (!(d.on || ['all']).some(is) || (d.off || []).some(is)) return false;
+      // turn n/m: the pages this element would go on are counted in the deck's order, and it takes the n-th of every m (2026-11-17)
+      if (d.turn && d.turn.length === 2) { var seen = ctx.decorSeen || (ctx.decorSeen = {}); seen[d.name] = (seen[d.name] || 0) + 1; return (seen[d.name] - 1) % d.turn[1] === d.turn[0] - 1; }
+      return true;
     }).map(function (d) {
       var size = Math.max(1, Math.min(100, +d.size || 0)), op = Math.max(0.05, Math.min(1, +d.opacity || 1));
       return '<svg class="decor decor--' + d.place + ' decor-tint--' + d.tint + '" style="--ds:' + size + ';opacity:' + op + '" aria-hidden="true"><use href="#brand-decor-' + d.name + '" width="100%" height="100%"/></svg>';
@@ -1985,6 +1999,7 @@ globalThis.JMD = (function () {
   function render(doc, ctx) {
     ctx_lines_cache = doc.lines || null;
     var c = { doc: doc, here: -1, brand: withWatermark(withDeckDecor((ctx && ctx.brand) || {}, doc.meta.decor), doc.meta.decor === 'none' ? null : doc.meta.watermark), assets: (ctx && ctx.assets) || {}, credits: (ctx && ctx.credits) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', date: doc.meta.date ? String(doc.meta.date) : '', lang: doc.meta.lang || '', chapters: [] };
+    c.decorSeen = {}; // the decor elements that take turns count their pages from the deck's first one, at every render
     if (memoFlows(doc)) { c.memoFlow = true; c.memo = { title: doc.meta.title || '', subtitle: doc.meta.subtitle || '', by: [doc.meta.author, doc.meta.date].filter(Boolean).map(function (x) { return inline(x); }).join(' · ') }; }
     var html = doc.slides.map(function (s, i) { return renderSlide(s, i, c); });
     if (c.layout === 'doc' && !c.memoFlow && html.length) html[0] = html[0].replace(/^(<section[^>]*>)/, function (open) { return open + frontMatter(doc, c); });
