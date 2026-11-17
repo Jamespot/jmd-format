@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { fetchAt } from './net.mjs';
+import { STOCK_BANK, stockPhoto } from './stock.mjs';
 
 export const REF = /^img:([a-z][a-z0-9-]*)\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 export const PREFIX = /^[a-z][a-z0-9-]*$/;
@@ -25,6 +26,10 @@ export function banks(brand, origin = null) {
   const out = {}, decl = brand && brand.images;
   if (!decl) return out;
   for (const [prefix, base] of Object.entries(decl)) {
+    /* `stock: on | off` is not a bank: it says whether the look may use stock photos (tools/stock.mjs, on by default). `pixabay` is
+       the stock's own prefix: a brand cannot declare a bank under it, or `img:pixabay/<id>` would mean two things. */
+    if (prefix === 'stock') { if (!/^(on|off|yes|no|true|false|0|1)$/i.test(String(base).trim())) throw new Error(`brand images: "stock: ${base}" — stock is on or off`); continue; }
+    if (prefix === STOCK_BANK) throw new Error(`brand images: "${STOCK_BANK}" is the stock photos' own prefix — name the bank otherwise`);
     if (!PREFIX.test(prefix)) throw new Error(`brand images: "${prefix}" is not a bank prefix (letters, digits, dashes, starting with a letter)`);
     let url;
     if (/^https:\/\//.test(base) || (process.env.JMD_BRAND_HTTP && /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(base))) url = base;
@@ -111,8 +116,8 @@ export async function loadIndex(base) {
 
 /** Every `img:` reference of a deck resolved against the brand's banks: { assets: { ref → data URI }, refused: { ref → why }, warnings: [{ ref, message }] }.
     `refs`: the deck's asset references (runtime JMD.assets). Nothing here throws for a bad reference: a refusal is a linter error, said in words. */
-export async function resolveImages(refs, brandBanks) {
-  const assets = {}, refused = {}, warnings = [];
+export async function resolveImages(refs, brandBanks, { stock = false } = {}) {
+  const assets = {}, refused = {}, warnings = [], credits = {};
   let bankBytes = 0; // the bank images of one deck, together: 20 MB, as the files beside a deck (tools/build.mjs ASSET_LIMIT)
   const wanted = [...new Set(refs.map(r => r.src).filter(s => /^(img:|up:|https?:\/\/)/.test(s)))];
   const indexes = {};
@@ -140,6 +145,13 @@ export async function resolveImages(refs, brandBanks) {
     const m = REF.exec(src);
     if (!m) { refused[src] = 'not an image reference: img:<bank>/<slug>, lowercase, dashes'; continue; }
     const [, bank, slug] = m;
+    if (bank === STOCK_BANK) { // a stock photo (tools/stock.mjs): by its id, from the cache or Pixabay, judged by its bytes, embedded
+      if (!stock) { refused[src] = 'stock photos are off for this brand (images: stock: off) — pick an image of its banks, or leave the slide without one'; continue; }
+      let got; try { got = await stockPhoto(slug); } catch (e) { refused[src] = `stock photo ${slug}: ${e.message}`; continue; }
+      if ((bankBytes += got.bytes.length) > DECK_MAX) { refused[src] = `the deck's bank images weigh more than ${DECK_MAX >> 20} MB together, the limit`; continue; }
+      assets[src] = `data:${got.mime};base64,${got.bytes.toString('base64')}`; credits[src] = got.credit;
+      continue;
+    }
     if (!Object.keys(brandBanks).length) { refused[src] = 'no image bank declared by this brand (images: in its brand.yaml)'; continue; }
     if (!brandBanks[bank]) { refused[src] = `unknown bank "${bank}": this brand declares ${Object.keys(brandBanks).join(', ')}`; continue; }
     const base = brandBanks[bank];
@@ -174,7 +186,7 @@ export async function resolveImages(refs, brandBanks) {
     if ((bankBytes += bytes.length) > DECK_MAX) { refused[src] = `the deck's bank images weigh more than ${DECK_MAX >> 20} MB together, the limit`; continue; }
     assets[src] = `data:${mime};base64,${bytes.toString('base64')}`;
   }
-  return { assets, refused, warnings };
+  return { assets, refused, warnings, credits };
 }
 
 /* Words that say nothing about a picture. « château de Versailles » used to match every caption through « de », and the agent,
@@ -224,8 +236,8 @@ export async function searchImages(brandBanks, query, { kind = null, limit = 12 
 
 /** `jmd vendor`: the `img:` and `https://` images of a deck copied next to it (assets/<bank>/<slug>.<ext>, assets/url/<name>.<ext>)
     and the source rewritten to those paths. */
-export async function vendor(jmd, refs, brandBanks, dir) {
-  const { assets, refused } = await resolveImages(refs, brandBanks);
+export async function vendor(jmd, refs, brandBanks, dir, opts = {}) {
+  const { assets, refused } = await resolveImages(refs, brandBanks, opts);
   let src = jmd; const written = [];
   for (const [ref, dataUri] of Object.entries(assets)) {
     const mime = /^data:([^;]+);/.exec(dataUri)[1], ext = Object.keys(MIME).find(k => MIME[k] === mime) || 'bin';

@@ -10,16 +10,17 @@ import { request as httpRequest } from 'node:http';
 /** A fetch from the server never joins the network's inside (spec/security.md §3): the host is resolved first and refused when any
     of its addresses is loopback, link-local (the cloud metadata endpoint lives there), private, CGNAT or unique-local; one redirect
     is followed, to the same scheme and host only. JMD_BRAND_HTTP (tests) also allows http and loopback.
-    Returns { body (Buffer), text, headers, url } — the brand file, a bank index, a bank image, an https image of a deck: one door. */
-export async function fetchAt(url, max, hop = 0) {
+    Returns { body (Buffer), text, headers, url } — the brand file, a bank index, a bank image, an https image of a deck: one door.
+    `headers`: sent as well (the stock adapter's key, tools/stock.mjs — to its one pinned host only). */
+export async function fetchAt(url, max, hop = 0, headers = {}) {
   if (!/^https:\/\//.test(url) && !(process.env.JMD_BRAND_HTTP && /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(url))) throw new Error(`${url}: https only`);
   const pinned = await assertPublicHost(url); // the addresses the guard vetted: the socket connects to one of them, never to a second resolution
-  const r = await requestOnce(url, pinned, max);
+  const r = await requestOnce(url, pinned, max, headers);
   if (r.status >= 300 && r.status < 400 && r.headers.location) {
     const to = new URL(r.headers.location, url), from = new URL(url);
     if (hop > 0) throw new Error(`${url}: too many redirects`);
     if (to.protocol !== from.protocol || to.host !== from.host) throw new Error(`${url}: redirects to ${to.origin} — a fetch may only redirect within its own origin`);
-    return fetchAt(to.href, max, hop + 1);
+    return fetchAt(to.href, max, hop + 1, headers);
   }
   if (r.status < 200 || r.status >= 300) throw new Error(`${url}: HTTP ${r.status}`);
   if (r.body.length > max) throw new Error(`${url}: larger than ${max} bytes`);
@@ -27,12 +28,12 @@ export async function fetchAt(url, max, hop = 0) {
 }
 /** One HTTP(S) request whose socket goes to `pinned[0]` (the address the guard checked) while TLS still verifies the certificate against
     the hostname (servername): a DNS answer that changes between the check and the connection changes nothing. Body capped at `max`. */
-export function requestOnce(url, pinned, max) {
+export function requestOnce(url, pinned, max, headers = {}) {
   const u = new URL(url), https = u.protocol === 'https:';
   const { address, family } = pinned[0];
   return new Promise((resolve, reject) => {
     const req = (https ? httpsRequest : httpRequest)(u, {
-      method: 'GET', headers: { accept: '*/*', 'user-agent': 'jmd' }, timeout: 10_000,
+      method: 'GET', headers: { accept: '*/*', 'user-agent': 'jmd', ...headers }, timeout: 10_000,
       lookup: (_host, opts, cb) => (opts && opts.all) ? cb(null, [{ address, family }]) : cb(null, address, family),
     }, res => {
       const chunks = []; let size = 0, cut = false;

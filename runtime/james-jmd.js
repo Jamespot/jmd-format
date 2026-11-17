@@ -15,9 +15,10 @@
   var notesTxt = document.getElementById('notes-txt');
   var openEl = document.getElementById('open');
   var hud = document.getElementById('hud');
-  var brand = {}, assets = {};
+  var brand = {}, assets = {}, credits = {};
   try { brand = JSON.parse(document.getElementById('brand').textContent || '{}'); } catch (e) { }
   try { assets = JSON.parse(document.getElementById('assets').textContent || '{}'); } catch (e) { }
+  try { credits = JSON.parse(document.getElementById('credits').textContent || '{}'); } catch (e) { } // the stock photos' credits; a file built before them has none
   var template = '<!doctype html>\n' + document.documentElement.outerHTML; // pristine template, for the self-contained export
   /* ── the words of the page, in the reader's language (1.34.0, Alain, 2026-10-19: « suivre le navigateur du lecteur, comme le
      reste du site ») ──
@@ -325,7 +326,7 @@
     // the paper: Slide 1280×720 px (engine.css); Doc and Webpage A4 portrait; Story 1080×1920 px, the format of a story or a carousel page
     pageStyle.textContent = state.layout === 'memo' || state.layout === 'doc' || state.layout === 'webpage' ? '@page{size:210mm 297mm;margin:0}' : state.layout === 'story' ? '@page{size:1080px 1920px;margin:0}' : '';
     if (!state.motion) { var saved = null; try { saved = localStorage.getItem('james-jmd.motion'); } catch (e) { } setMotion(saved || brand.motion || 'soft', false); } else setMotion(state.motion, false);
-    track.innerHTML = render(view, { brand: brand, assets: assets });
+    track.innerHTML = render(view, { brand: brand, assets: assets, credits: credits });
     state.slides = Array.prototype.slice.call(track.querySelectorAll('.slide'));
     progress.innerHTML = state.slides.map(function (s, k) { return '<button type="button" aria-label="' + UI.screen(k + 1) + '"><i></i></button>'; }).join('');
     document.title = (doc.meta.title || state.name) + ' — james-jmd';

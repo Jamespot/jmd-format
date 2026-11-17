@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.52.0';
+  var VERSION = '1.53.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -349,10 +349,14 @@ globalThis.JMD = (function () {
 
   /* ───────────────────────── images ───────────────────────── */
   // ctx.assets: { path → data URI or URL }. Unresolved → an empty frame (the linter reports it).
+  /* ctx.credits: { path → "Photo : X / Pixabay" } for the stock photos (tools/stock.mjs). On a slide the credits gather in one line
+     at its foot (renderSlide); in a memo or a long document, whose pages the engine makes, the credit sits on its picture. */
   function imgTag(src, alt, ctx, cls) {
     var url = ctx && ctx.assets && ctx.assets[src];
     if (!url) return '<div class="img-missing' + (cls ? ' ' + cls : '') + '" data-src="' + esc(src) + '"><span>' + esc(alt || src) + '</span></div>';
-    return '<img src="' + esc(url) + '" alt="' + esc(alt || '') + '"' + (cls ? ' class="' + cls + '"' : '') + '>';
+    var credit = ctx.credits && typeof ctx.credits[src] === 'string' ? ctx.credits[src].slice(0, 120) : '';
+    if (credit && ctx.layout !== 'doc' && ctx.slideCredits && ctx.slideCredits.indexOf(credit) < 0) ctx.slideCredits.push(credit);
+    return '<img src="' + esc(url) + '" alt="' + esc(alt || '') + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + (credit && ctx.layout === 'doc' ? '<span class="img-credit img-credit--on">' + esc(credit) + '</span>' : '');
   }
 
   /* ───────────────────────── card icons ─────────────────────────
@@ -1763,6 +1767,7 @@ globalThis.JMD = (function () {
     return 1.05 / (L + 0.05) < 4.5;
   }
   function renderSlide(slide, idx, ctx) {
+    ctx.slideCredits = []; // the stock photos' credits of this slide, gathered by imgTag
     var m = slide.meta, intent = INTENTS.indexOf(m.intent) >= 0 ? m.intent : null;
     if (ctx.layout === 'doc' && isPage(m)) return renderDocPage(slide, idx, ctx);
     /* In a long document an intent is a page's, as everywhere: the engine makes the pages, so a page has to be written to carry
@@ -1880,7 +1885,9 @@ globalThis.JMD = (function () {
     // slide whose photo is its cover. A memo, a long document and a web page are one flow: their corners and page-sized drawings
     // go on the first page only (paginate() keeps the edges on the sheets it adds); the pages a charter names are cover, dark, light
     var decor = cover ? '' : decorLayer(ctx, bg, intent, idx, classes.indexOf('slide--cover') >= 0 || intent === 'hook' || intent === 'celebrate' || !!(full && full.name === 'section'));
-    var page = decor + watermark + chrome + inner + tag;
+    // under a cover photo the foot of the slide is the photo: the credit sits on it, in a dark chip, rather than over it in grey
+    var credit = ctx.slideCredits.length ? '<div class="img-credit' + (cover ? ' img-credit--cover' : '') + '">' + esc(ctx.slideCredits.join(' · ')) + '</div>' : '';
+    var page = decor + watermark + chrome + inner + tag + credit;
     if (ctx.layout === 'doc') {
       page = '<div class="sheet' + (memoFlow ? ' sheet--memo' : '') + '">' + page + '</div>'; // paginate() adds the sheets the chapter needs
       if (opener) page = '<div class="sheet sheet--opener slide--' + INTENT_BG[opener.intent] + ' slide--' + opener.intent + ' slide--intent" data-intent="' + opener.intent + '">' +
@@ -1977,7 +1984,7 @@ globalThis.JMD = (function () {
   }
   function render(doc, ctx) {
     ctx_lines_cache = doc.lines || null;
-    var c = { doc: doc, here: -1, brand: withWatermark(withDeckDecor((ctx && ctx.brand) || {}, doc.meta.decor), doc.meta.decor === 'none' ? null : doc.meta.watermark), assets: (ctx && ctx.assets) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', date: doc.meta.date ? String(doc.meta.date) : '', lang: doc.meta.lang || '', chapters: [] };
+    var c = { doc: doc, here: -1, brand: withWatermark(withDeckDecor((ctx && ctx.brand) || {}, doc.meta.decor), doc.meta.decor === 'none' ? null : doc.meta.watermark), assets: (ctx && ctx.assets) || {}, credits: (ctx && ctx.credits) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', date: doc.meta.date ? String(doc.meta.date) : '', lang: doc.meta.lang || '', chapters: [] };
     if (memoFlows(doc)) { c.memoFlow = true; c.memo = { title: doc.meta.title || '', subtitle: doc.meta.subtitle || '', by: [doc.meta.author, doc.meta.date].filter(Boolean).map(function (x) { return inline(x); }).join(' · ') }; }
     var html = doc.slides.map(function (s, i) { return renderSlide(s, i, c); });
     if (c.layout === 'doc' && !c.memoFlow && html.length) html[0] = html[0].replace(/^(<section[^>]*>)/, function (open) { return open + frontMatter(doc, c); });

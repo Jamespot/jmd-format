@@ -281,7 +281,7 @@ function layoutCss(b, mark) {
 /** `brand`: explicit name or object; omitted/null → the deck's frontmatter brand, else DEFAULT_BRAND (`mono`, or what JMD_DEFAULT_BRAND says).
     `edit`: the shared edit page (spec/espace.md §3) — the same runtime plus the room layer (runtime/vendor/collab.js: Yjs and the
     Hocuspocus provider, runtime/collab.js: the bridge), still one script, its own hash in the CSP; never in a delivered deck. */
-export function buildHtml({ jmd = '', name = '', brand = null, dir = null, assets = null, edit = false } = {}) {
+export function buildHtml({ jmd = '', name = '', brand = null, dir = null, assets = null, credits = null, edit = false } = {}) {
   const b = loadBrand(brand || deckBrand(jmd) || DEFAULT_BRAND);
   if (!b.markSvg && b.logo && !marks().includes(b.logo)) throw new Error(`brand logo "${b.logo}": an SVG logo is fetched next to a brand.yaml URL only; otherwise one of the marks (${marks().join(', ')})`);
   const mark = b.markSvg || readFileSync(join(root, 'themes/brands/marks', (b.logo || 'dot') + '.svg'), 'utf8');
@@ -337,6 +337,8 @@ ${optional('--brand-bg-lavender', 'bg-lavender')}${optional('--brand-bg-wash', '
     .replace('@@BRAND_MARK@@', () => mark.trim() + (decor ? '\n' + decor : ''))
     .replace('@@BRAND_JSON@@', () => JSON.stringify({ ...b, ink: readableInk(b).color, 'title-color': titleColor(b)?.ok ? b['title-color'] : undefined, decor: undefined, decorSvgs: undefined, decorDir: undefined, decorUrls: undefined, decorDropped: undefined, markSvg: undefined, logoDropped: undefined, fontsCss: undefined, fontsDropped: undefined, fontsUrl: undefined, logoUrl: undefined }).replace(/</g, '\\u003c'))
     .replace('@@ASSETS_JSON@@', () => JSON.stringify(assetMap).replace(/</g, '\\u003c'))
+    // the stock photos' credits (tools/stock.mjs), only for pictures the deck embeds: short plain strings, shown by the runtime through esc()
+    .replace('@@CREDITS_JSON@@', () => JSON.stringify(Object.fromEntries(Object.entries(credits || {}).filter(([k, v]) => assetMap[k] && typeof v === 'string').map(([k, v]) => [k, v.replace(/[\u0000-\u001f]/g, ' ').slice(0, 120)]))).replace(/</g, '\\u003c'))
     .replace('@@JMD_NAME@@', () => esc(name))
     .replace('@@JMD@@', () => safeJmd) // exact bytes: the runtime strips only the newline on each side
     .replace('@@RUNTIME@@', () => runtime.trim());

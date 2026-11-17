@@ -130,6 +130,14 @@ body.is-measuring .slide,body.is-measuring .slide *{animation:none!important;tra
 .slide-tag{position:absolute;bottom:36px;right:56px;font-family:var(--font-mono);
   font-size:12px;color:var(--jp-ink-soft);letter-spacing:.04em;z-index:5}
 .slide--indigo .slide-tag{color:rgba(255,255,255,.55)}
+/* A stock photo's credit (tools/stock.mjs): one quiet line at the slide's foot, left, where the number is not; on a memo's or a
+   long document's picture, on the picture itself */
+.img-credit{position:absolute;bottom:14px;left:56px;z-index:5;font-family:var(--font-mono);font-size:10px;letter-spacing:.02em;
+  color:var(--jp-ink-soft);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;pointer-events:none}
+:is(.slide--indigo,.slide--accent,.slide--sky,.slide--hook) .img-credit{color:rgba(255,255,255,.7)}
+.img-credit--cover{left:auto;right:136px;color:#fff;opacity:1;background:rgba(0,0,0,.45);padding:2px 6px;border-radius:4px}
+.img-credit--on{left:auto;right:10px;bottom:8px;max-width:80%;color:#fff;opacity:1;background:rgba(0,0,0,.45);padding:2px 6px;border-radius:4px}
+.figure{position:relative}
 .mark-blob{position:absolute;z-index:0;pointer-events:none;color:var(--jp-purple-500)}
 /* watermark — a brand feature (watermark: mark | circles | none): faint, clipped by the edge, side alternating slide to slide */
 .wm{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
