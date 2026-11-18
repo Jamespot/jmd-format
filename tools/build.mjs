@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpa
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateBrand, normalizeColors, chartColors, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY, logoSize, logoInset } from './safe.mjs';
+import { validateBrand, normalizeColors, chartColors, cssStr, cssTok, cssComment, sanitizeSvg, containedPath, decorOf, decorSymbol, DECOR_READY, logoSize, logoInset, sectionPages, coverImage, coverImageSize } from './safe.mjs';
 import { catalogueFace, brandCatalogueFaces, faceCss } from './fonts.mjs';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -279,7 +279,35 @@ function layoutCss(b, mark) {
   if (inset !== null) css += `  --brand-logo-inset:${cssTok(String(inset))};\n`;
   const coverInset = logoInset(b['cover-logo-inset']); // the cover's logo, from its corner (iteration 3)
   if (coverInset !== null) css += `  --brand-cover-logo-inset:${cssTok(String(coverInset))};\n`;
+  // a charter's chapter pages, taken in turn (2026-11-18): each page's colour, its words', and its mark's
+  sectionPagesOf(b).forEach((p, i) => { css += `  --brand-sec-${i + 1}-bg:${cssTok(p.bg)};\n  --brand-sec-${i + 1}-ink:${cssTok(p.ink)};\n  --brand-sec-${i + 1}-mark:${cssTok(p.mark || 'transparent')};\n`; });
+  const ci = coverImageSize(b['cover-image-size']);
+  if (ci !== null) css += `  --brand-cover-image-size:${cssTok(String(ci))};\n`;
   return css;
+}
+/** The chapter pages a brand names (`section-pages`), each with words that read on it: the charter's colour when it reaches 3:1
+    (a chapter's title is large text, WCAG 1.4.3), else black or white, whichever reads better — and `dark` when white is the
+    page's own words (its logo, its number and its chrome turn white, as on the deck's dark pages). */
+export function sectionPagesOf(b) {
+  let list = [];
+  try { list = sectionPages(b['section-pages']); } catch { return []; }
+  return list.map(p => {
+    const ink = contrast(p.ink, p.bg) >= TITLE_MIN ? p.ink : contrast('#ffffff', p.bg) >= contrast('#000000', p.bg) ? '#ffffff' : '#000000';
+    return { ...p, ink, inkOk: ink === p.ink, dark: contrast('#ffffff', p.bg) >= 4.5 };
+  });
+}
+
+/* The charter's cover picture (`cover-image`, 2026-11-18): a JPEG or a PNG judged by its bytes (tools/safe.mjs coverImage) — read
+   by the resolver from an https address (lib/jmd.mjs), or here beside a local brand.yaml — and carried as a data: URI under one
+   reserved name in the deck's picture table, so every export takes it as it takes a picture of the deck. */
+export const BRAND_COVER = 'jmd:brand-cover';
+function brandCoverImage(b) {
+  if (b.coverImageUri) return b.coverImageUri;
+  const ref = b['cover-image'];
+  if (!ref || ref === 'custom' || /^https?:/.test(ref) || !b.decorDir || b.decorDir === brandsDir) return null;
+  const c = containedPath(b.decorDir, ref);
+  if (c.refused) throw new Error(`brand cover-image: ${ref}: ${c.refused}`);
+  try { return coverImage(readFileSync(c.path)).uri; } catch (e) { throw new Error(`brand cover-image ${ref}: ${e.message}`); }
 }
 
 /** `brand`: explicit name or object; omitted/null → the deck's frontmatter brand, else DEFAULT_BRAND (`mono`, or what JMD_DEFAULT_BRAND says).
@@ -324,6 +352,8 @@ ${optional('--brand-bg-lavender', 'bg-lavender')}${optional('--brand-bg-wash', '
   const version = /VERSION = '([^']+)'/.exec(core)[1], format = /FORMAT_MAX = (\d+)/.exec(core)[1];
   const safeJmd = jmd.replace(/<\/script/gi, '<\\/script');
   const assetMap = { ...(dir ? resolveAssets(jmd, dir).assets : {}), ...(assets || {}) }; // local files, then the bank images resolved upstream
+  const cover = brandCoverImage(b); // the charter's cover picture (2026-11-18), in the same table as the deck's own pictures
+  if (cover) assetMap[BRAND_COVER] = cover;
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   // the runtime script is the one script the page may run: its hash goes in the CSP, so anything else that ever lands in the file stays inert
   const runtimeBody = '\n' + runtime.trim() + '\n'; // exactly what sits between <script> and </script> in the template
@@ -339,7 +369,7 @@ ${optional('--brand-bg-lavender', 'bg-lavender')}${optional('--brand-bg-wash', '
     .replace('@@BRAND_CSS@@', () => brandCss)
     .replace('@@ENGINE@@', () => readFileSync(join(root, 'themes/engine/engine.css'), 'utf8').trim())
     .replace('@@BRAND_MARK@@', () => mark.trim() + (decor ? '\n' + decor : ''))
-    .replace('@@BRAND_JSON@@', () => JSON.stringify({ ...b, ink: readableInk(b).color, 'title-color': titleColor(b)?.ok ? b['title-color'] : undefined, decor: undefined, decorSvgs: undefined, decorDir: undefined, decorUrls: undefined, decorDropped: undefined, markSvg: undefined, logoDropped: undefined, fontsCss: undefined, fontsDropped: undefined, fontsUrl: undefined, logoUrl: undefined }).replace(/</g, '\\u003c'))
+    .replace('@@BRAND_JSON@@', () => JSON.stringify({ ...b, ink: readableInk(b).color, 'title-color': titleColor(b)?.ok ? b['title-color'] : undefined, decor: undefined, decorSvgs: undefined, decorDir: undefined, decorUrls: undefined, decorDropped: undefined, coverImageUri: undefined, coverImageUrl: undefined, 'section-pages': sectionPagesOf(b).length ? sectionPagesOf(b).map(p => ({ dark: p.dark, mark: !!p.mark })) : undefined, markSvg: undefined, logoDropped: undefined, fontsCss: undefined, fontsDropped: undefined, fontsUrl: undefined, logoUrl: undefined }).replace(/</g, '\\u003c'))
     .replace('@@ASSETS_JSON@@', () => JSON.stringify(assetMap).replace(/</g, '\\u003c'))
     // the stock photos' credits (tools/stock.mjs), only for pictures the deck embeds: short plain strings, shown by the runtime through esc()
     .replace('@@CREDITS_JSON@@', () => JSON.stringify(Object.fromEntries(Object.entries(credits || {}).filter(([k, v]) => assetMap[k] && typeof v === 'string').map(([k, v]) => [k, v.replace(/[\u0000-\u001f]/g, ' ').slice(0, 120)]))).replace(/</g, '\\u003c'))

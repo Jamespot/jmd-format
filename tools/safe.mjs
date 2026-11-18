@@ -27,7 +27,39 @@ const ENUMS = {
   'logo-place': ['left', 'right'],
   // where the cover's logo sits (VYV3, iteration 3: large, at the bottom left, inside the cover's flower): in the header, or a bottom corner
   'cover-logo-place': ['header', 'bottom-left', 'bottom-right'],
+  // a chapter page's number (2026-11-18, a charter's chapter pages: « 01 » as large as the title, beside it): above it, small, or beside it, large
+  'section-number': ['small', 'large'],
+  // the deck's last page (2026-11-18, a charter's « Conclusion » layout: its logo large in the middle, its address below)
+  'end-page': ['none', 'logo'],
+  // where the cover's picture goes (2026-11-18, a charter's cover photo on its right half)
+  'cover-image-place': ['right', 'left'],
 };
+/* A charter's chapter pages (2026-11-18, a public financer's PowerPoint: four chapter layouts, night blue, green, pink, grey,
+   each with its title colour and a small square of a third colour before the number): up to six, which the deck's chapter
+   pages take in turn. Each is `#page/#words` or `#page/#words/#mark`, written in a flow list:
+   `section-pages: ["#163043/#f7baaa/#f7baaa", "#004d2d/#f6f1ee"]` — a slash, not a space (` #` opens a YAML comment). */
+export const SECTION_PAGES_MAX = 6;
+export function sectionPages(v) {
+  if (v === undefined || v === '' || v === null) return [];
+  const list = Array.isArray(v) ? v.map(String) : String(v).trim().replace(/^\[|\]$/g, '').split(/[\s,]+/).filter(Boolean).map(x => x.replace(/^(["'])(.*)\1$/, '$2'));
+  const say = why => { throw new Error(`brand section-pages: ${JSON.stringify(String(v).slice(0, 160))} ${why}`); };
+  if (!list.length) say('names no page');
+  if (list.length > SECTION_PAGES_MAX) say(`names ${list.length} pages, ${SECTION_PAGES_MAX} at most`);
+  return list.map(x => {
+    const c = x.split('/');
+    if (c.length < 2 || c.length > 3 || !c.every(h => /^#[0-9a-f]{6}$/i.test(h))) say(`— ${JSON.stringify(x.slice(0, 40))} is not #page/#words or #page/#words/#mark, each a #rrggbb`);
+    return { bg: c[0].toLowerCase(), ink: c[1].toLowerCase(), mark: c[2] ? c[2].toLowerCase() : null };
+  });
+}
+/** `end-text`: a line under the logo of the last page (an address, a phone number) — words only, escaped where they are written. */
+export const END_TEXT_MAX = 200;
+const END_TEXT = new RegExp(`^[^\\u0000-\\u001f\\u007f<>]{1,${END_TEXT_MAX}}$`, 'u');
+/** `cover-image-size`: the share of the cover's width the picture takes, 20% to 100%. → 0.2…1, or null. */
+export function coverImageSize(v) {
+  const m = /^\s*(\d{1,3})\s*%?\s*$/.exec(String(v ?? ''));
+  if (!m || +m[1] < 20 || +m[1] > 100) return null;
+  return +m[1] / 100;
+}
 /* The logo's height as the charter draws it (Nicolas, 2026-11-16: the CISIRH model's block is 13% of the page's height on every
    slide and 37% on its cover, ours 4% and 10%): `logo-size` on every page of a Slide, `cover-logo-size` on its cover, each a share
    of the page's height as a PowerPoint measures it. Unsaid, the logo keeps the size the engine gives it. */
@@ -92,6 +124,11 @@ export function validateBrand(b, { marks = [] } = {}) {
   if (b['type-scale'] !== undefined && b['type-scale'] !== '' && !(/^\d+(\.\d+)?$/.test(b['type-scale']) && +b['type-scale'] >= 0.5 && +b['type-scale'] <= 2)) bad('type-scale', 'is not a number between 0.5 and 2');
   if (b.glyphs !== undefined && b.glyphs !== '' && !/^\d{1,2}$/.test(b.glyphs)) bad('glyphs', 'is not a count');
   if (b['chart-colors'] !== undefined && b['chart-colors'] !== '') chartColors(b['chart-colors']); // throws, naming the colour
+  if (b['section-pages'] !== undefined && b['section-pages'] !== '') sectionPages(b['section-pages']); // throws, naming the page
+  if (b['end-text'] !== undefined && b['end-text'] !== '' && !END_TEXT.test(String(b['end-text']))) bad('end-text', `is not one line of words (${END_TEXT_MAX} characters at most, no < >)`);
+  if (b['cover-image-size'] !== undefined && b['cover-image-size'] !== '' && coverImageSize(b['cover-image-size']) === null) bad('cover-image-size', 'is not a share of the page\'s width, 20% to 100% (45%)');
+  if (b['cover-image'] !== undefined && b['cover-image'] !== '' && b['cover-image'] !== 'custom' && !/^https:\/\/\S+$/.test(b['cover-image']) && !(process.env.JMD_BRAND_HTTP && /^http:\/\/(127\.0\.0\.1|localhost)[:/]\S*$/.test(b['cover-image'])) && !(/^[\w-][\w.-]*(\/[\w.-]+)*\.(jpe?g|png)$/i.test(b['cover-image']) && !b['cover-image'].split('/').includes('..')))
+    bad('cover-image', 'is not a .jpg or .png beside the brand file (a plain path, never `..`) nor an https URL');
   for (const k in ENUMS) if (b[k] !== undefined && b[k] !== '' && !ENUMS[k].includes(b[k])) bad(k, 'is not one of ' + ENUMS[k].join(', '));
   for (const k of LOGO_SIZE_KEYS) if (b[k] !== undefined && b[k] !== '' && logoSize(b[k]) === null) bad(k, `is not a share of the page's height, ${LOGO_SIZE_MIN}% to ${LOGO_SIZE_MAX}% (13%)`);
   for (const k of ['logo-inset', 'cover-logo-inset']) if (b[k] !== undefined && b[k] !== '' && logoInset(b[k]) === null) bad(k, 'is not a share of the page\'s height, 0.5% to 10% (2%)');
@@ -374,15 +411,48 @@ export function confinedDir(dir, scratch) {
    `data:image/png` URI inside the brand-mark symbol: a picture the deck's policy already allows (`img-src data:`), never
    markup, never a fetch. */
 export const PNG_MAX = 300 * 1024;
-export function pngInfo(bytes) {
+export function pngInfo(bytes, max = PNG_MAX) {
   const b = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
-  if (b.length > PNG_MAX) throw new Error(`the PNG is ${Math.round(b.length / 1024)} KB, the limit is ${PNG_MAX / 1024} KB`);
+  if (b.length > max) throw new Error(`the PNG is ${Math.round(b.length / 1024)} KB, the limit is ${max / 1024} KB`);
   if (b.length < 57 || b.readUInt32BE(0) !== 0x89504e47 || b.readUInt32BE(4) !== 0x0d0a1a0a) throw new Error('not a PNG file');
   if (b.readUInt32BE(8) !== 13 || b.toString('latin1', 12, 16) !== 'IHDR') throw new Error('not a PNG file: no header first');
   const width = b.readUInt32BE(16), height = b.readUInt32BE(20);
   if (!width || !height || width > 8192 || height > 8192) throw new Error(`a PNG of ${width}×${height} pixels: 1 to 8192 on each side`);
   if (b.toString('latin1', b.length - 8, b.length - 4) !== 'IEND' || b.readUInt32BE(b.length - 12) !== 0) throw new Error('not a PNG file: it does not end where a PNG ends');
   return { width, height };
+}
+/* A charter's cover picture (2026-11-18): a photograph is a JPEG, or a PNG. It is a picture, never markup: what is checked is that
+   the bytes are one JPEG (its start, a frame header with sane dimensions before the scan, its end last) or one PNG (pngInfo), and
+   their size; it travels as a data: URI in the deck's image table, like a picture of the deck. */
+export const COVER_IMAGE_MAX = 600 * 1024;
+export function jpegInfo(bytes) {
+  const b = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
+  if (b.length < 125 || b[0] !== 0xff || b[1] !== 0xd8 || b[2] !== 0xff) throw new Error('not a JPEG file');
+  if (b[b.length - 2] !== 0xff || b[b.length - 1] !== 0xd9) throw new Error('not a JPEG file: it does not end where a JPEG ends');
+  for (let i = 2; i + 9 < b.length;) {
+    if (b[i] !== 0xff) throw new Error('not a JPEG file: a broken segment');
+    const m = b[i + 1];
+    if (m === 0xff) { i++; continue; }
+    if (m === 0xd8 || m === 0xd9 || m === 0xda) break; // a second start, an end, or the scan before any frame header
+    const len = b.readUInt16BE(i + 2);
+    if (len < 2) throw new Error('not a JPEG file: a broken segment');
+    if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+      const height = b.readUInt16BE(i + 5), width = b.readUInt16BE(i + 7);
+      if (!width || !height || width > 8192 || height > 8192) throw new Error(`a JPEG of ${width}×${height} pixels: 1 to 8192 on each side`);
+      return { width, height };
+    }
+    i += 2 + len;
+  }
+  throw new Error('not a JPEG file: no frame header');
+}
+/** { kind: 'jpeg'|'png', width, height, uri } — a cover picture judged by its bytes, or an Error saying why not. */
+export function coverImage(bytes) {
+  const b = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
+  if (b.length > COVER_IMAGE_MAX) throw new Error(`the picture is ${Math.round(b.length / 1024)} KB, the limit is ${COVER_IMAGE_MAX / 1024} KB`);
+  const png = b.length > 8 && b.readUInt32BE(0) === 0x89504e47;
+  const { width, height } = png ? pngInfo(b, COVER_IMAGE_MAX) : jpegInfo(b);
+  const kind = png ? 'png' : 'jpeg';
+  return { kind, width, height, uri: `data:image/${kind};base64,${b.toString('base64')}` };
 }
 /** { symbol, width, height } — the `<symbol id="brand-mark">` of a PNG logo: one <image>, its own size as the viewBox. */
 export function rasterMark(bytes) {

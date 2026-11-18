@@ -1390,6 +1390,106 @@ try {
     ok(plain.includes('<a:accent3><a:srgbClr val="4CB8A4"/>'), 'PPTX: a brand without chart colours keeps the accents it had');
   }
 
+  console.log('\n10f. Brands: a charter\'s chapter pages, cover picture and end page (2026-11-18) — section-pages, section-number, cover-image, end-page');
+  {
+    const { validateBrand, coverImage, jpegInfo, COVER_IMAGE_MAX, sectionPages } = await import('./safe.mjs');
+    const { customBrand, parseBrand, buildHtml, loadBrand, sectionPagesOf, BRAND_COVER } = await import('../tools/build.mjs');
+    const jmdLib = await import('../lib/jmd.mjs');
+    const { readZip } = await import('./zip.mjs');
+    const cdir = join(root, 'decks/samples/charter'), jpg = readFileSync(join(cdir, 'cover.jpg'));
+    // by shape: each chapter page two or three #rrggbb joined by `/`, six at most; one line of words; a picture beside, never `..`
+    const refused = (k, vals) => vals.every(v => { try { validateBrand({ primary: '#000', [k]: v }); return false; } catch (e) { return e.message.includes(k); } });
+    ok(refused('section-pages', ['#163043', '#163043/#fff', 'red/#ffffff', '#163043/#f7baaa;}body{', '"#163043/#f7baaa/#000000/#ffffff"', '</style>/#ffffff', Array(7).fill('#000000/#ffffff').join(', ')])
+      && refused('end-text', ['<script>alert(1)</script>', 'two\nlines', 'x'.repeat(201)]) && refused('cover-image', ['../cover.jpg', 'a/../../b.jpg', 'cover.svg', 'javascript:alert(1)', 'http://example.com/c.jpg', 'data:image/jpeg;base64,AAAA'])
+      && refused('cover-image-size', ['10%', '120', 'big']) && refused('section-number', ['huge']) && refused('end-page', ['photo']) && refused('cover-image-place', ['top'])
+      && validateBrand({ primary: '#000', 'section-pages': '["#163043/#f7baaa/#f7baaa", "#004d2d/#f6f1ee"]', 'end-text': 'Immeuble · 1 rue de l\'Exemple · 75000 Paris', 'cover-image': 'cover.jpg', 'cover-image-size': '45%', 'section-number': 'large', 'end-page': 'logo', 'cover-image-place': 'right' }),
+      'the new keys by shape: a chapter page out of shape, a seventh page, markup in the end text, a cover picture outside the brand\'s folder or not a picture — each refused, the key named');
+    // a picture is judged by its bytes: one JPEG (start, frame header, end last) or one PNG, 600 KB at most
+    const notJpeg = [Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), jpg.subarray(0, jpg.length - 2), Buffer.concat([jpg, Buffer.from('<script>alert(1)</script>')]), Buffer.concat([jpg.subarray(0, 2), Buffer.alloc(200, 0xff)]), Buffer.alloc(COVER_IMAGE_MAX + 1, 0xff)];
+    ok(jpegInfo(jpg).width === 96 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(coverImage(jpg).uri) && notJpeg.every(b => { try { coverImage(b); return false; } catch { return true; } }),
+      'cover picture: a JPEG is read for its size and carried as a data: URI; markup, a cut file, a JPEG with something after its end, a broken one and an oversized one are refused');
+    // the build: each page's colours in :root, its words at 3:1 or black/white; the picture beside a local brand.yaml in the picture table
+    const pages = sectionPagesOf({ 'section-pages': '["#163043/#f7baaa/#f7baaa", "#f7baaa/#ffffff"]' });
+    ok(pages.length === 2 && pages[0].dark && pages[0].ink === '#f7baaa' && !pages[1].dark && pages[1].ink === '#000000' && !pages[1].inkOk,
+      'section-pages: the words keep the charter\'s colour when it reads at 3:1, else take black or white; a page is dark when white reads on it', JSON.stringify(pages));
+    const charter = (extra = '') => { const b = jmdLib.withSvgLogo(customBrand(parseBrand(readFileSync(join(cdir, 'charter.yaml'), 'utf8') + extra), 'charter'), readFileSync(join(cdir, 'logo.svg'), 'utf8')); b.logo = 'custom'; b.decorDir = cdir; return b; };
+    const keys = '\nsection-pages: ["#163043/#f7baaa/#f7baaa", "#004d2d/#f6f1ee", "#f6f1ee/#163043/#163043"]\nsection-number: large\ncover-image: cover.jpg\ncover-image-place: right\ncover-image-size: 45%\nend-page: logo\nend-text: "Immeuble & Cie · 75000 Paris"\n';
+    const deck = '---\nformat: jmd/3\nlayout: slide\ntitle: T\n---\n\n# La couverture\nUne ligne.\n\n---\n---\n::: section\nUn\n:::\n\n---\n---\n## Une page\n- a\n\n---\n---\n::: section\nDeux\n:::\n\n---\nbg: white\n---\n::: section\nÉcrit blanc\n:::\n\n---\n---\n::: section\nTrois\n:::\n\n---\n---\n::: section\nQuatre\n:::\n\n---\nintent: act\n---\n## Merci\nContactez-nous\n';
+    const html = buildHtml({ jmd: deck, brand: charter(keys) });
+    ok(html.includes('--brand-sec-1-bg:#163043;') && html.includes('--brand-sec-2-ink:#f6f1ee;') && html.includes('--brand-sec-2-mark:transparent;') && html.includes('--brand-cover-image-size:0.45;') && html.includes(`"${BRAND_COVER}":"data:image/jpeg;base64,`) && !html.includes('#163043/#f7baaa'),
+      'build: the chapter pages\' colours are custom properties of :root, the picture beside the brand.yaml is in the deck\'s picture table — the page\'s brand says only how many pages and which are dark');
+    const file = join(tmp, 'chapters.html'); writeFileSync(file, html);
+    const pg = await open('file://' + file); await pg.settle(300);
+    const got = JSON.parse(await pg.eval(`(() => { const s = jamesJmd.state.slides, cs = (el, k) => el ? getComputedStyle(el)[k] : null;
+      return JSON.stringify(s.map(x => ({ c: x.className, bg: cs(x, 'backgroundColor'), h: cs(x.querySelector('.divider .slide-h1'), 'color'), n: (x.querySelector('.divider-n') || {}).textContent || '',
+        mark: x.querySelector('.divider--big-n') ? cs(x.querySelector('.divider--big-n'), 'flexDirection') : '', art: !!x.querySelector('.brand-cover-art img[src^="data:image/jpeg"]'),
+        end: !!x.querySelector('.end-mark svg use'), foot: (x.querySelector('.end-text') || {}).textContent || '' }))); })()`));
+    await pg.close();
+    const rgb = h => 'rgb(' + [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)).join(', ') + ')';
+    const sec = got.filter(x => /brand-section\b/.test(x.c));
+    ok(sec.length === 4 && sec.map(x => x.bg).join() === ['#163043', '#004d2d', '#f6f1ee', '#163043'].map(rgb).join() && sec[0].h === rgb('#f7baaa') && sec[1].h === rgb('#f6f1ee') && /brand-section-dark/.test(sec[0].c) && /brand-section-light/.test(sec[2].c) && /brand-section-mark/.test(sec[0].c) && !/brand-section-mark/.test(sec[1].c)
+      && sec.map(x => x.n).join() === '01,02,04,05' && sec.every(x => x.mark === 'row') && !/brand-section/.test(got[4].c),
+      'section-pages: the chapter pages take the charter\'s in turn — colour, words, mark — numbered large beside their title; a chapter whose slide writes its own bg keeps it', JSON.stringify(sec.map(x => [x.bg, x.h, x.n])));
+    ok(got[0].art && got.filter(x => x.art).length === 1 && /brand-cover-image-right/.test(got[0].c),
+      'cover-image: the charter\'s picture on the deck\'s first cover only, on its side');
+    const last = got[got.length - 1];
+    ok(/brand-end/.test(last.c) && /slide--white/.test(last.c) && !/slide--act/.test(last.c) && last.end && last.foot === 'Immeuble & Cie · 75000 Paris',
+      'end-page: a deck ending on act ends on a white page, the logo large and the brand\'s end text at its foot — the text as words', JSON.stringify(last));
+    const plain = JMD.render(JMD.parse(deck), { brand: loadBrand('ocean') });
+    const noAct = JMD.render(JMD.parse(deck.replace('intent: act', 'intent: explain')), { brand: charter(keys) });
+    ok(!/brand-section|brand-end|brand-cover-image|divider-n/.test(plain) && !/brand-end/.test(noAct),
+      'a brand without the keys draws the very same pages; a last page that neither calls to act nor recaps keeps its own form');
+    // the PowerPoint carries them: the chapter page's colour, the cover picture as a picture
+    const z = readZip(await jmdLib.pptx(deck, { brand: charter(keys) }));
+    ok(/<a:srgbClr val="163043"/i.test(z.text('ppt/slides/slide2.xml') || '') && z.names.some(n => /^ppt\/media\/.*\.(jpe?g|png)$/.test(n)) && /<p:pic>/.test(z.text('ppt/slides/slide1.xml') || ''),
+      'PPTX: a chapter page keeps its colour, the cover its picture');
+    /* Reading them from a PowerPoint (a fictional public lender's model, the shape of the one a customer sent on 2026-11-18): its
+       dark 2 is black and its night blue is accent 1 and dark 1; its first slide lays a photograph on its right half; its chapter
+       layouts are pages of one colour, each title in a colour of its own, a small square before a large « 01 »; its « Conclusion »
+       layout has the logo large in the middle and the address below; its footer is the template's « Titre de la présentation ». */
+    if (existsSync(join(root, 'lib/brand-from-pptx.mjs'))) {
+      const { proposeBrand } = await import('../lib/brand-from-pptx.mjs');
+      const { writeZip } = await import('./zip.mjs');
+      const A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"', P = `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" ${A} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`;
+      const R = (...t) => `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${t.map(([id, type, target]) => `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`).join('')}</Relationships>`;
+      const xf = (x, y, w, h) => `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`;
+      const fill = c => `<a:solidFill><a:schemeClr val="${c}"/></a:solidFill>`;
+      const ph = (type, text, at, extra = '', idx = '') => `<p:sp><p:nvSpPr><p:cNvPr id="3" name="${type}"/><p:cNvSpPr/><p:nvPr><p:ph type="${type}"${idx}/></p:nvPr></p:nvSpPr><p:spPr>${at || ''}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle>${extra}</a:lstStyle><a:p><a:r><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
+      const pic = (rid, at) => `<p:pic><p:nvPicPr><p:cNvPr id="8" name="Image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rid}"/><a:stretch/></p:blipFill><p:spPr>${at}</p:spPr></p:pic>`;
+      const chapter = (name, bg, ink, mark) => `<p:sldLayout ${P}><p:cSld name="${name}"><p:bg><p:bgPr>${fill(bg)}</p:bgPr></p:bg><p:spTree>`
+        + ph('title', 'Titre de la section', xf(2200275, 3025001, 9737726, 553998), `<a:lvl1pPr><a:defRPr sz="4000" b="1">${fill(ink)}</a:defRPr></a:lvl1pPr>`)
+        + ph('body', '01', xf(1100049, 2958531, 692497, 747897), `<a:lvl1pPr><a:defRPr sz="5400">${fill(ink)}</a:defRPr></a:lvl1pPr>`, ' idx="13"')
+        + `<p:sp><p:nvSpPr><p:cNvPr id="5" name="Carré"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="25"/></p:nvPr></p:nvSpPr><p:spPr>${xf(269965, 3063029, 659676, 477942)}${fill(mark)}</p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t> </a:t></a:r></a:p></p:txBody></p:sp>`
+        + '</p:spTree></p:cSld></p:sldLayout>';
+      const logoPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+      const lender = proposeBrand(writeZip({
+        'ppt/presentation.xml': `<p:presentation ${P}><p:sldMasterIdLst><p:sldMasterId id="1" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/></p:presentation>`,
+        'ppt/_rels/presentation.xml.rels': R(['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ['rId2', 'slide', 'slides/slide1.xml']),
+        'ppt/theme/theme1.xml': `<a:theme ${A} name="t"><a:themeElements><a:clrScheme name="x"><a:dk1><a:srgbClr val="1B3550"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="000000"/></a:dk2><a:lt2><a:srgbClr val="F4EFEC"/></a:lt2>${['1B3550', '0B5A3A', 'F2B8A6', 'CCD0D3', 'CCDCD6', 'FAE5DD'].map((c, i) => `<a:accent${i + 1}><a:srgbClr val="${c}"/></a:accent${i + 1}>`).join('')}</a:clrScheme><a:fontScheme name="f"><a:majorFont><a:latin typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Arial"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>`,
+        'ppt/slideMasters/slideMaster1.xml': `<p:sldMaster ${P}><p:cSld><p:spTree>${ph('title', 'Modifiez le style du titre')}${ph('ftr', 'Titre de la présentation')}</p:spTree></p:cSld><p:txStyles><p:titleStyle><a:lvl1pPr><a:defRPr>${fill('tx1')}</a:defRPr></a:lvl1pPr></p:titleStyle><p:bodyStyle><a:lvl1pPr><a:defRPr sz="1800">${fill('tx1')}</a:defRPr></a:lvl1pPr></p:bodyStyle></p:txStyles></p:sldMaster>`,
+        'ppt/slideMasters/_rels/slideMaster1.xml.rels': R(['rId1', 'theme', '../theme/theme1.xml']),
+        'ppt/slideLayouts/slideLayout1.xml': `<p:sldLayout ${P} type="title"><p:cSld name="Titre"><p:spTree>${pic('rId2', xf(254000, 254000, 1100000, 1234000))}${ph('ctrTitle', 'Titre de la présentation', xf(254000, 3088323, 6087836, 2387600))}</p:spTree></p:cSld></p:sldLayout>`,
+        'ppt/slideLayouts/_rels/slideLayout1.xml.rels': R(['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml'], ['rId2', 'image', '../media/logo.png']),
+        'ppt/slideLayouts/slideLayout2.xml': chapter('Titre de section_Bleu', 'accent1', 'accent3', 'accent3'),
+        'ppt/slideLayouts/slideLayout3.xml': chapter('Titre de section_Vert', 'accent2', 'bg2', 'bg2'),
+        'ppt/slideLayouts/slideLayout4.xml': `<p:sldLayout ${P}><p:cSld name="Conclusion_Blanc"><p:spTree>${pic('rId2', xf(4000000, 1300000, 4192000, 2600000))}<p:sp><p:nvSpPr><p:cNvPr id="4" name="Adresse"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${xf(5077933, 5617277, 2036135, 859723)}</p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>Immeuble Exemple</a:t></a:r><a:br/><a:r><a:t>1 rue de l'Exemple</a:t></a:r></a:p><a:p><a:r><a:t>75000 Paris</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sldLayout>`,
+        'ppt/slideLayouts/_rels/slideLayout4.xml.rels': R(['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml'], ['rId2', 'image', '../media/logo.png']),
+        'ppt/slides/slide1.xml': `<p:sld ${P}><p:cSld><p:spTree>${pic('rId2', xf(6677313, 1270000, 5514687, 4549503))}${ph('ctrTitle', 'Titre de la présentation sur deux lignes')}</p:spTree></p:cSld></p:sld>`,
+        'ppt/slides/_rels/slide1.xml.rels': R(['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'image', '../media/photo.jpeg']),
+        'ppt/media/photo.jpeg': jpg, 'ppt/media/logo.png': logoPng,
+      }, { paths: true }), { fonts: ['Arial'] });
+      const val = k => (lender.found.find(f => f.key === k) || {}).value;
+      ok(val('primary') === '#1b3550' && val('accent') === '#0b5a3a' && val('highlight') === '#f2b8a6' && !val('footer') && !/Titre de la présentation/.test(lender.spec),
+        'PowerPoint → brand: a theme whose dark 2 is black takes its accent 1 as the main colour, its green as the accent, its light warm pink as the highlight; « Titre de la présentation » is the template\'s prompt, not a footer', lender.spec);
+      ok(JSON.stringify(val('section-pages')) === JSON.stringify(['#1b3550/#f2b8a6/#f2b8a6', '#0b5a3a/#f4efec/#f4efec']) && val('section-number') === 'large' && /section-pages: \["#1b3550\/#f2b8a6\/#f2b8a6", "#0b5a3a\/#f4efec\/#f4efec"\]/.test(lender.spec) && sectionPages(/^section-pages: (.*)$/m.exec(lender.spec)[1]).length === 2,
+        'PowerPoint → brand: each chapter layout\'s page colour, title colour and square become a chapter page, in order, and the large « 01 » beside the title says section-number: large — written as the brand reads it', JSON.stringify(val('section-pages')));
+      ok(val('cover-image') === 'cover.jpg' && val('cover-image-place') === 'right' && val('cover-image-size') === '45%' && lender.cover && lender.cover.bytes.equals(jpg),
+        'PowerPoint → brand: the photograph on the first slide becomes the cover picture, on the right, at its 45% of the width — its bytes handed over as they are, the logo not taken for it');
+      ok(val('end-page') === 'logo' && val('end-text') === 'Immeuble Exemple · 1 rue de l\'Exemple · 75000 Paris' && !/Conclusion/.test(lender.missing.map(m => m.en).join(' ')),
+        'PowerPoint → brand: the « Conclusion » layout gives the end page — its logo large in the middle, its address line by line under it', val('end-text'));
+    }
+  }
+
   console.log('\n10d. The typeface catalogue (#83): open-licence faces a brand names, carried by the deck');
   {
     const F = await import('./fonts.mjs'), { buildHtml, contentSecurityPolicy } = await import('./build.mjs');

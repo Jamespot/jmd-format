@@ -1532,3 +1532,40 @@ svg{--mark-dot:var(--brand-primary)}
 /* cover-case: upper — the cover's title in capitals (a Slide's or a Story's cover, a Doc's cover page), set by CSS: the source
    keeps the words as written, and the PowerPoint export reads the capitals back (cap="all"). Dividers keep their case. */
 .slide.brand-cover-upper.slide--cover .slide-h1,.slide.brand-cover-upper :is(.sheet--cover .slide-h1,.doc-cover-title){text-transform:uppercase;letter-spacing:0}
+/* section-pages — a charter's chapter pages, taken in turn (2026-11-18, a public financer's four: night blue, green, pink, grey).
+   The build sets each page's colour, its words' (3:1 or black or white, tools/build.mjs sectionPagesOf) and its mark's as custom
+   properties; the renderer says which page a chapter takes and whether it is dark (its logo and chrome then white, as the deck's
+   dark pages have them). A `bg:` written on the slide wins. */
+.slide.brand-section-1{--sec-bg:var(--brand-sec-1-bg);--sec-ink:var(--brand-sec-1-ink);--sec-mark:var(--brand-sec-1-mark)}
+.slide.brand-section-2{--sec-bg:var(--brand-sec-2-bg);--sec-ink:var(--brand-sec-2-ink);--sec-mark:var(--brand-sec-2-mark)}
+.slide.brand-section-3{--sec-bg:var(--brand-sec-3-bg);--sec-ink:var(--brand-sec-3-ink);--sec-mark:var(--brand-sec-3-mark)}
+.slide.brand-section-4{--sec-bg:var(--brand-sec-4-bg);--sec-ink:var(--brand-sec-4-ink);--sec-mark:var(--brand-sec-4-mark)}
+.slide.brand-section-5{--sec-bg:var(--brand-sec-5-bg);--sec-ink:var(--brand-sec-5-ink);--sec-mark:var(--brand-sec-5-mark)}
+.slide.brand-section-6{--sec-bg:var(--brand-sec-6-bg);--sec-ink:var(--brand-sec-6-ink);--sec-mark:var(--brand-sec-6-mark)}
+.slide.brand-section{background:var(--sec-bg)}
+.slide.brand-section .divider :is(.slide-h1,.slide-eyebrow,.divider-n,.slide-lead){color:var(--sec-ink)}
+/* section-number: large — the chapter's number beside its title, larger than it, as the charter sets it; after the mark when the
+   page has one, a small block of the third colour */
+.slide.brand-secnum-large .divider--big-n{flex-direction:row;align-items:flex-start;text-align:left;gap:calc(var(--slide-w) * .028);padding:0 calc(var(--slide-w) * .06) 0 calc(var(--slide-w) * .022)}
+.divider--big-n .divider-n{flex:none;font-family:var(--font-display);font-size:calc(96px * var(--type-scale,1));line-height:.9;font-weight:400;letter-spacing:-.02em;color:var(--brand-ink);font-variant-numeric:tabular-nums}
+.divider--big-n .slide-h1{flex:1;margin:0;padding-top:calc(8px * var(--type-scale,1));font-size:calc(64px * var(--type-scale,1));max-width:none}
+.slide.brand-section-mark .divider--big-n:before{content:"";flex:none;width:calc(var(--slide-w) * .054);height:calc(var(--slide-w) * .039);margin-top:calc(14px * var(--type-scale,1));background:var(--sec-mark)}
+/* cover-image — the charter's cover picture on the deck's first cover, on its right (or left) side, at its share of the width,
+   its own proportions kept and shown whole; the cover's words keep to the other side */
+.slide.brand-cover-image .brand-cover-art{position:absolute;top:0;bottom:0;width:calc(var(--slide-w) * var(--brand-cover-image-size,.45));display:flex;align-items:center;z-index:1;pointer-events:none}
+.slide.brand-cover-image-right .brand-cover-art{right:0}
+.slide.brand-cover-image-left .brand-cover-art{left:0}
+.brand-cover-art img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain}
+.slide.brand-cover-image-right .body-pad{padding-right:calc(var(--slide-w) * var(--brand-cover-image-size,.45) + 24px)}
+.slide.brand-cover-image-left .body-pad{padding-left:calc(var(--slide-w) * var(--brand-cover-image-size,.45) + 24px)}
+/* end-page: logo — the deck's last page as the charter closes it: white, the logo large in its middle (its own proportions, the
+   symbol's), the slide's words under it, centred, and the brand's end-text at its foot; the header's small logo and label step aside */
+.slide.brand-end :is(.lockup,.chrome-meta){visibility:hidden}
+.slide.brand-end .end-mark{position:absolute;left:0;right:0;top:calc(var(--slide-h) * .13);height:calc(var(--slide-h) * .3);display:flex;justify-content:center;z-index:2;color:var(--brand-primary)}
+.slide.brand-end .end-mark svg{height:100%;width:70%}
+/* centred whatever the brand's `align` says of its other pages: the end page is the logo's, and its words sit under it */
+.slide.brand-end .body-pad{padding-top:calc(var(--slide-h) * .5) !important;align-items:center !important;text-align:center !important;justify-content:flex-start}
+.slide.brand-end .slide-head{align-items:center !important}
+.slide.brand-end :is(a.cta,.figure){align-self:center !important}
+.slide.brand-end .end-text{position:absolute;left:96px;right:96px;bottom:calc(var(--slide-h) * .1);margin:0;text-align:center;font-size:15px;line-height:1.5;color:var(--brand-ink);z-index:2}
+.slide.brand-band.brand-end .end-text{bottom:calc(var(--slide-h) * .12)}

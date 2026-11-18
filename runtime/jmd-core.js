@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.54.0';
+  var VERSION = '1.56.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -1672,8 +1672,10 @@ globalThis.JMD = (function () {
         var text = [], textLines = [];
         b.lines.forEach(function (l, k) { if (l.trim()) { text.push(l.trim()); textLines.push(b.map[0] + 1 + k); } });
         ctx.sectionCount = (ctx.sectionCount || 0) + 1;
-        return '<div class="divider' + (inPage ? ' divider--in-page' : '') + '">' +
-          (has(b.attrs, 'numbered') ? '<div class="slide-eyebrow">' + pad2(ctx.sectionCount) + '</div>' : '') +
+        // a charter whose chapter pages carry their number large beside the title (`section-number: large`) numbers every one
+        var big = (ctx.brand || {})['section-number'] === 'large' && !inPage;
+        return '<div class="divider' + (inPage ? ' divider--in-page' : '') + (big ? ' divider--big-n' : '') + '">' +
+          (big ? '<div class="divider-n">' + pad2(ctx.sectionCount) + '</div>' : has(b.attrs, 'numbered') ? '<div class="slide-eyebrow">' + pad2(ctx.sectionCount) + '</div>' : '') +
           '<h1 class="slide-h1"' + src(textLines[0]) + '>' + inline(text[0] || '') + '</h1>' +
           (text[1] ? '<p class="slide-lead">' + inline(text.slice(1).join(' ')) + '</p>' : '') + '</div>';
       }
@@ -1786,6 +1788,20 @@ globalThis.JMD = (function () {
     var coverBg = ctx.layout !== 'doc' && (intent || !m.bg) && (ctx.brand || {})['cover-bg'];
     if (coverBg && coverBg !== 'intent' && slide.nodes.some(function (n) { return n.type === 'title' && n.level === 1; })) bg = coverBg === 'white' ? 'white' : 'indigo';
     var plainCover = bg === 'white' && coverBg === 'white' && intent && INTENT_BG[intent] !== 'white';
+    /* A charter's chapter pages (`section-pages`, 2026-11-18): a chapter page alone — the `section` block and nothing else — takes
+       the next of the brand's pages in turn, its colour, its words', its mark's (the build sets them as custom properties, the
+       runtime only knows how many and which are dark). Its intent is still said (data-intent), its form gives way; a `bg:`
+       written on the slide wins. */
+    var secPages = sectionPagesOf(ctx.brand), secAlone = slide.nodes.length === 1 && slide.nodes[0].type === 'block' && slide.nodes[0].name === 'section';
+    var secTurn = 0;
+    if (secAlone && !m.bg && (ctx.layout === 'slide' || ctx.layout === 'story') && secPages && secPages.length) {
+      ctx.secPage = (ctx.secPage || 0) + 1; secTurn = (ctx.secPage - 1) % secPages.length + 1;
+      bg = secPages[secTurn - 1].dark ? 'indigo' : 'white'; plainCover = !!intent;
+    }
+    /* The deck's last page as the charter closes it (`end-page: logo`, 2026-11-18): when the deck ends on a call to act or a recap,
+       that page is white, the logo large in its middle, the slide's own words under it and the brand's `end-text` at its foot. */
+    var endPage = ctx.layout === 'slide' && idx === ctx.total - 1 && idx > 0 && (ctx.brand || {})['end-page'] === 'logo' && (intent === 'act' || intent === 'recap') && !m.bg;
+    if (endPage) { bg = 'white'; plainCover = true; }
     if (bg === 'sky' && isLight(ctx.brand.secondary || ctx.brand.accent)) bg = 'skylight'; // white on a pale secondary cannot be read: the words go dark
     if (m.section) ctx.section = m.section;
     ctx.here = idx; // an agenda built from the deck lights the part it sits in
@@ -1813,9 +1829,18 @@ globalThis.JMD = (function () {
     var rightBlock = flow ? null : slide.nodes.find(function (n) { return n.type === 'block' && has(n.attrs, 'right') && BLOCKS[n.name] && !BLOCKS[n.name].full; });
     var classes = ['slide', 'slide--' + bg].concat(pageLayout(ctx));
     if (intent && !plainCover) classes.push('slide--' + intent, 'slide--intent');
+    if (secTurn) {
+      classes.push('brand-section', 'brand-section-' + secTurn, secPages[secTurn - 1].dark ? 'brand-section-dark' : 'brand-section-light');
+      if (secPages[secTurn - 1].mark) classes.push('brand-section-mark');
+    }
+    if (endPage) classes.push('brand-end');
     if (right) classes.push('slide--split');
     if (rightBlock) classes.push('slide--split-block');
     if (title && title.level === 1 && ctx.layout !== 'doc') classes.push('slide--cover'); // a long document's `#` is a chapter's title
+    /* The charter's cover picture (`cover-image`, 2026-11-18): on the deck's first cover of a Slide, when that slide has no picture
+       of its own — the build put it in the picture table under one reserved name, so the exports take it as any picture */
+    var brandArt = ctx.layout === 'slide' && !ctx.coverArtDone && classes.indexOf('slide--cover') >= 0 && !images.length && !endPage && ctx.assets && ctx.assets[BRAND_COVER];
+    if (brandArt) { ctx.coverArtDone = true; classes.push('brand-cover-image', 'brand-cover-image-' + ((ctx.brand || {})['cover-image-place'] === 'left' ? 'left' : 'right')); }
     if (isShot(slide, ctx.layout)) classes.push('slide--shot');
 
     /* A statement or a section fills the page alone. Under a title, it keeps its size and the title heads the page; beside
@@ -1875,9 +1900,11 @@ globalThis.JMD = (function () {
       if (rightBlock) inner += '<div class="split-block">' + BLOCKS[rightBlock.name].render(rightBlock, ctx) + '</div>';
       if (cover) inner += '<div class="cover-art">' + imgTag(cover.src, cover.alt, ctx) + '</div>';
     }
+    if (brandArt) inner += '<div class="brand-cover-art">' + imgTag(BRAND_COVER, '', ctx) + '</div>';
+    if (endPage) inner = '<div class="end-mark" aria-hidden="true"><svg><use href="#brand-mark"/></svg></div>' + inner + ((ctx.brand || {})['end-text'] ? '<p class="end-text">' + esc(String(ctx.brand['end-text']).slice(0, 200)) + '</p>' : '');
     // the watermark: a brand feature, never on a slide that has its own decoration. With `mark` it is the deck's glyph — one shape
     // for the whole deck, posed by the intent (engine.css), carried from slide to slide by the presenter; `celebrate` multiplies it
-    var wm = ctx.brand.watermark || 'mark', decorated = full || right || cover;
+    var wm = ctx.brand.watermark || 'mark', decorated = full || right || cover || brandArt || endPage;
     var glyph = '<use href="#' + (+ctx.brand.glyphs ? 'brand-glyph-1' : 'brand-mark') + '"/>';
     var watermark = wm === 'none' || decorated ? ''
       : '<div class="wm wm--' + esc(wm) + ' wm--' + (idx % 2 ? 'b' : 'a') + '" aria-hidden="true">' + (wm === 'mark' ? '<svg class="wm-g">' + glyph + '</svg>' + (intent === 'celebrate' ? new Array(7).join('<svg class="wm-bit">' + glyph + '</svg>') : '') : '') + '</div>';
@@ -1925,7 +1952,20 @@ globalThis.JMD = (function () {
     // the cover's title in capitals
     if (b['title-color']) out.push('brand-title');
     if (b['cover-case'] === 'upper') out.push('brand-cover-upper');
+    if (b['section-number'] === 'large') out.push('brand-secnum-large');
     return out;
+  }
+  /* The chapter pages of a brand as the page knows them: the build hands [{ dark, mark }] (the colours are custom properties); a
+     brand given whole to render() (a test, the linter) still says `#page/#words/#mark` strings, read here by the same shape */
+  function sectionPagesOf(b) {
+    var v = (b || {})['section-pages'];
+    if (!v) return [];
+    var list = Array.isArray(v) ? v : String(v).replace(/^\[|\]$/g, '').split(/[\s,]+/).filter(Boolean).map(function (x) { return x.replace(/^["']|["']$/g, ''); });
+    return list.slice(0, 6).map(function (p) {
+      if (p && typeof p === 'object') return { dark: !!p.dark, mark: !!p.mark };
+      var c = String(p).split('/');
+      return /^#[0-9a-f]{6}$/i.test(c[0]) ? { dark: !isLight(c[0]), mark: !!c[2] } : null;
+    }).filter(Boolean);
   }
   function isSize(v) { var m = /^\s*(\d{1,2}(?:\.\d)?)\s*%?\s*$/.exec(String(v == null ? '' : v)); return !!m && +m[1] >= 3 && +m[1] <= 60; }
   function hasBand(ctx) { return (ctx.brand || {})['footer-band'] === 'line' && (ctx.layout === 'slide' || ctx.layout === 'story'); }
@@ -2000,6 +2040,7 @@ globalThis.JMD = (function () {
     ctx_lines_cache = doc.lines || null;
     var c = { doc: doc, here: -1, brand: withWatermark(withDeckDecor((ctx && ctx.brand) || {}, doc.meta.decor), doc.meta.decor === 'none' ? null : doc.meta.watermark), assets: (ctx && ctx.assets) || {}, credits: (ctx && ctx.credits) || {}, section: doc.meta.section || '', sectionCount: 0, layout: layout(doc), total: doc.slides.length, title: doc.meta.title || '', date: doc.meta.date ? String(doc.meta.date) : '', lang: doc.meta.lang || '', chapters: [] };
     c.decorSeen = {}; // the decor elements that take turns count their pages from the deck's first one, at every render
+    c.secPage = 0; c.coverArtDone = false; // the chapter pages take the charter's in turn, and its cover picture goes on the first cover, at every render
     if (memoFlows(doc)) { c.memoFlow = true; c.memo = { title: doc.meta.title || '', subtitle: doc.meta.subtitle || '', by: [doc.meta.author, doc.meta.date].filter(Boolean).map(function (x) { return inline(x); }).join(' · ') }; }
     var html = doc.slides.map(function (s, i) { return renderSlide(s, i, c); });
     if (c.layout === 'doc' && !c.memoFlow && html.length) html[0] = html[0].replace(/^(<section[^>]*>)/, function (open) { return open + frontMatter(doc, c); });
@@ -2051,6 +2092,7 @@ globalThis.JMD = (function () {
   var BGS = ['white', 'indigo', 'accent', 'sky', 'lavender', 'wash', 'butter'];
   // intents (spec/intents.md): what the slide is for; the theme turns it into form. No intent = the neutral form (bg: applies).
   var INTENTS = ['hook', 'problem', 'reveal', 'prove', 'explain', 'decide', 'recap', 'celebrate', 'fun', 'act'];
+  var BRAND_COVER = 'jmd:brand-cover'; // the charter's cover picture in the picture table (tools/build.mjs)
   var INTENT_BG = { hook: 'accent', problem: 'indigo', reveal: 'white', prove: 'wash', explain: 'white', decide: 'lavender', recap: 'butter', celebrate: 'accent', fun: 'highlight', act: 'indigo' };
   var INTENT_ABOUT = { hook: 'catch attention, give the vision', problem: 'show what is wrong', reveal: 'the key idea, one hero', prove: 'the evidence, dense and equal', explain: 'how it works, step by step', decide: 'the options and the decision', recap: 'three things to remember', celebrate: 'congratulate, thank, a milestone', fun: 'make people laugh', act: 'who does what, when' };
 
