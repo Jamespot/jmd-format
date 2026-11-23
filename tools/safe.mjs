@@ -15,7 +15,8 @@ const ENUMS = {
   motion: ['none', 'soft', 'slide', 'zoom', 'step'],
   // the page layout a charter decides once for every page (#73); the first word is the default, the look every brand had before
   align: ['center', 'left', 'right'],
-  'footer-band': ['none', 'line'],
+  // …or a band of colour across the foot (2026-11-19, SFIL: its colour is footer-band-color)
+  'footer-band': ['none', 'line', 'fill'],
   'cover-logo': ['small', 'large'],
   'table-head': ['strong', 'light'],
   'chrome-label': ['mono', 'body'],
@@ -24,11 +25,14 @@ const ENUMS = {
   // the cover's page (2026-11-12, the CISIRH model: a white cover): the colour its intent gives (hook: the accent), white, or the deep colour
   'cover-bg': ['intent', 'white', 'primary'],
   // where the logo sits in the header (VYV3, 2026-11-17: in its blot, top right): left, the look every brand had, or right
-  'logo-place': ['left', 'right'],
+  // …or at the foot, bottom left (2026-11-19, SFIL: the logo in the band, none at the top)
+  'logo-place': ['left', 'right', 'foot'],
   // where the cover's logo sits (VYV3, iteration 3: large, at the bottom left, inside the cover's flower): in the header, or a bottom corner
   'cover-logo-place': ['header', 'bottom-left', 'bottom-right'],
   // a chapter page's number (2026-11-18, a charter's chapter pages: « 01 » as large as the title, beside it): above it, small, or beside it, large
   'section-number': ['small', 'large'],
+  // the mark before a chapter's number (2026-11-19, SFIL: an arrow pointing at the title): a small block, or that arrow
+  'section-mark': ['block', 'arrow'],
   // the deck's last page (2026-11-18, a charter's « Conclusion » layout: its logo large in the middle, its address below)
   'end-page': ['none', 'logo'],
   // where the cover's picture goes (2026-11-18, a charter's cover photo on its right half)
@@ -78,7 +82,7 @@ export function logoSize(v) {
   if (!m || +m[1] < LOGO_SIZE_MIN || +m[1] > LOGO_SIZE_MAX) return null;
   return Math.round(+m[1] * 10) / 1000;
 }
-export const COLOR_KEYS = ['primary', 'accent', 'highlight', 'ink', 'secondary', 'bg-lavender', 'bg-wash', 'bg-butter', 'card', 'title-color', 'status-ok', 'status-warn', 'status-error'];
+export const COLOR_KEYS = ['primary', 'accent', 'highlight', 'ink', 'secondary', 'bg-lavender', 'bg-wash', 'bg-butter', 'card', 'title-color', 'status-ok', 'status-warn', 'status-error', 'footer-band-color'];
 export const CHART_COLORS_MAX = 6;
 /** `chart-colors:` → the list of #hex colours it names, or an Error. Written as a YAML flow list (`["#000091", "#E1000F"]`), one quoted
     string with commas and no space before a `#` (`"#000091,#E1000F"` — the brand parser reads ` #` as a comment), or a list already

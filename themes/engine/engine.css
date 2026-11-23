@@ -280,6 +280,7 @@ li>span.who i{font-style:normal;font-family:var(--font-body);font-weight:700;fon
 .cards[style*="--n:5"] .card{padding:22px 18px;border-radius:20px}
 .cards[style*="--n:5"] .card h3{font-size:19px}
 .cards[style*="--n:5"] .card p{font-size:14px}
+.cards.is-tight .card :is(h3,p,li){overflow-wrap:anywhere;hyphens:auto} /* a word wider than its card even on two columns breaks rather than cross into the next card (#135) */
 .slide--wash .card,.slide--lavender .card,.slide--butter .card{border-color:transparent}
 
 /* pills — a row of short words */
@@ -939,6 +940,7 @@ body.is-editing .slide.is-active [data-line].is-inline{outline:2px solid var(--j
 .slide--hook .card li:before,.slide--problem .card li:before,.slide--celebrate .card li:before,.slide--act .card li:before{background:var(--jp-yellow-500)}
 .slide--problem .col--light{background:rgba(255,255,255,.08)}.slide--problem .col--light h3{color:#fff}.slide--problem .col p,.slide--problem .col li{color:rgba(255,255,255,.85)}
 .slide--problem .col--dark{background:var(--jp-yellow-500);color:var(--jp-indigo-800)}.slide--problem .col--dark p,.slide--problem .col--dark li{color:var(--jp-indigo-800)}
+.slide--problem .col--dark li:before{background:var(--jp-indigo-800)} /* the yellow column keeps its bullets: yellow dots on yellow were bullets gone (#135) */
 .slide--problem .tl-step h4,.slide--problem .tl-step p{color:#fff}.slide--problem .tl-step p{opacity:.8}
 /* the glyph, problem: pushed into the corner, cut by the edge, under pressure */
 .slide--problem .wm--mark .wm-g{--gx:93%;--gy:102%;--gs:600px;--gr:30deg;--gc:var(--brand-accent);--go:.32}
@@ -1482,6 +1484,24 @@ svg{--mark-dot:var(--brand-primary)}
 :is(.slide--indigo,.slide--accent,.slide--sky) .slide-band{color:rgba(255,255,255,.82);border-top-color:rgba(255,255,255,.4)}
 .slide--highlight .slide-band{color:var(--jp-indigo-800);border-top-color:color-mix(in srgb,var(--jp-indigo-800) 30%,transparent)}
 .layout-story .slide-band{left:40px;right:40px;bottom:30px;font-size:18px;padding-top:12px}
+/* footer-band: fill — a band of colour across the foot (2026-11-19, SFIL: « bandeau de couleur en bas »), page-wide, a fourteenth of
+   the page high, the words in the colour that reads on it (tools/build.mjs bandFill). The ordinary pages only: the cover and the
+   end page have none, a chapter page and a dark page keep the number and the words on their own colour, never a band nor a rule. */
+.slide.brand-band-fill .slide-band{left:0;right:0;bottom:0;height:calc(var(--slide-h) * .074);align-items:center;padding:0 calc(var(--slide-w) * .036);border-top:0;background:var(--brand-band-bg);color:var(--brand-band-ink)}
+.slide.brand-band-fill:is(.slide--cover,.brand-end) .slide-band{display:none}
+.slide.brand-band-fill:is(.brand-section,.slide--indigo,.slide--accent,.slide--sky) .slide-band{background:transparent}
+.slide.brand-band-fill.brand-section .slide-band{color:var(--sec-ink)}
+/* a charter's dark chapter page wears its logo all white, as its template does (SFIL, 2026-11-19: a white logo on the night blue and
+   the green) — a logo in its own colours has parts the page swallows; the light chapter pages keep it as drawn */
+.slide.brand-section-dark .lockup svg{filter:brightness(0) invert(1)}
+.layout-story .slide.brand-band-fill .slide-band{padding:0 40px}
+/* logo-place: foot — the logo at the bottom left, in the middle of the band's height, at its own size (logo-size), none at the
+   top; the band's words start after it. The cover keeps its logo where the cover puts it. (.slide-chrome is the box: 36px down.) */
+.slide.brand-logo-foot:not(.slide--cover) .lockup{position:absolute;left:calc(var(--slide-w) * .016 - 56px);top:calc(var(--slide-h) * .963 - var(--slide-h) * var(--brand-logo-size,.05) / 2 - 36px);z-index:6}
+.slide.brand-logo-foot:not(.slide--cover) .lockup svg{height:calc(var(--slide-h) * var(--brand-logo-size,.05));width:calc(var(--slide-h) * var(--brand-logo-size,.05) * var(--brand-logo-ratio,1));max-width:calc(var(--slide-w) * .2);flex:none}
+.slide.brand-logo-foot:not(.slide--cover) .chrome-meta{margin-left:auto}
+.slide.brand-logo-foot:not(.slide--cover) .slide-chrome{z-index:6} /* above the band it sits in */
+.slide.brand-logo-foot:not(.slide--cover) .slide-band .band-l{padding-left:calc(var(--slide-h) * var(--brand-logo-size,.05) * var(--brand-logo-ratio,1) + var(--slide-w) * .01)}
 /* cover-logo: large — the institutional block on the cover, at its own proportions (--brand-logo-ratio, from the logo's viewBox);
    the other pages keep it small in their header, at its proportions too: a wide block squeezed into a square is unreadable */
 .slide.brand-logo-large .lockup svg{height:30px;width:calc(30px * var(--brand-logo-ratio,1));max-width:200px}
@@ -1550,6 +1570,8 @@ svg{--mark-dot:var(--brand-primary)}
 .divider--big-n .divider-n{flex:none;font-family:var(--font-display);font-size:calc(96px * var(--type-scale,1));line-height:.9;font-weight:400;letter-spacing:-.02em;color:var(--brand-ink);font-variant-numeric:tabular-nums}
 .divider--big-n .slide-h1{flex:1;margin:0;padding-top:calc(8px * var(--type-scale,1));font-size:calc(64px * var(--type-scale,1));max-width:none}
 .slide.brand-section-mark .divider--big-n:before{content:"";flex:none;width:calc(var(--slide-w) * .054);height:calc(var(--slide-w) * .039);margin-top:calc(14px * var(--type-scale,1));background:var(--sec-mark)}
+/* section-mark: arrow — the mark is the charter's arrow pointing at the title (2026-11-19, SFIL), the block cut to its shape */
+.slide.brand-secmark-arrow.brand-section-mark .divider--big-n:before{clip-path:polygon(100% 0,100% 100%,0 58.7%,0 42.2%)}
 /* cover-image — the charter's cover picture on the deck's first cover, on its right (or left) side, at its share of the width,
    its own proportions kept and shown whole; the cover's words keep to the other side */
 .slide.brand-cover-image .brand-cover-art{position:absolute;top:0;bottom:0;width:calc(var(--slide-w) * var(--brand-cover-image-size,.45));display:flex;align-items:center;z-index:1;pointer-events:none}

@@ -283,7 +283,17 @@ function layoutCss(b, mark) {
   sectionPagesOf(b).forEach((p, i) => { css += `  --brand-sec-${i + 1}-bg:${cssTok(p.bg)};\n  --brand-sec-${i + 1}-ink:${cssTok(p.ink)};\n  --brand-sec-${i + 1}-mark:${cssTok(p.mark || 'transparent')};\n`; });
   const ci = coverImageSize(b['cover-image-size']);
   if (ci !== null) css += `  --brand-cover-image-size:${cssTok(String(ci))};\n`;
+  // the band of colour across the foot (2026-11-19): its colour, and words that read on it (the ink at 4.5:1, else black or white)
+  if (b['footer-band'] === 'fill') { const f = bandFill(b); css += `  --brand-band-bg:${cssTok(f.bg)};\n  --brand-band-ink:${cssTok(f.ink)};\n`; }
   return css;
+}
+/** `footer-band: fill`: the band's colour (`footer-band-color`, else the brand's highlight, else a light grey) and its words' —
+    the brand's ink when it reads at 4.5:1 on it (a page number is small text), else black or white, whichever reads better. */
+export function bandFill(b) {
+  const want = b['footer-band-color'] || b.highlight;
+  const bg = (/^#[0-9a-f]{3,8}$/i.test(String(want || '')) ? toHex(rgbOf(want)) : '#f2f2f2').toLowerCase();
+  const ink = readableInk(b).color;
+  return { bg, ink: contrast(ink, bg) >= 4.5 ? ink : contrast('#ffffff', bg) >= contrast('#000000', bg) ? '#ffffff' : '#000000' };
 }
 /** The chapter pages a brand names (`section-pages`), each with words that read on it: the charter's colour when it reaches 3:1
     (a chapter's title is large text, WCAG 1.4.3), else black or white, whichever reads better — and `dark` when white is the

@@ -1020,6 +1020,33 @@ try {
       const planSlide = ct.draft.split('## Plan\n')[1] || '';
       ok(ct.draft.includes('## Plan\n') && !/::: agenda/.test(planSlide) && /1\. Cadrage/.test(planSlide) && (ct.draft.match(/::: agenda/g) || []).length === 1, 'import: a slide titled « Plan » (a project plan as often as a contents page) stays an ordinary slide, never an agenda', planSlide.slice(0, 200));
     }
+    /* Clara's webinar (#135): a line break between a name and a job came out glued (« Clara DienisAccount Executive », and the
+       host wrote « Denis »); two columns came out as both headings then the bullets crossed; two one-column tables (before /
+       after) were not read at all, and the host made up sentences for them. */
+    {
+      const run = t => `<a:r><a:rPr sz="2000"/><a:t>${t}</a:t></a:r>`;
+      const at = (x, y, w, inner) => `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="600000"/></a:xfrm></p:spPr>${inner}`;
+      const box = (x, y, w, ps) => `<p:sp>${at(x, y, w, `<p:txBody>${ps.join('')}</p:txBody>`)}</p:sp>`;
+      const title = t => `<p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>${at(457200, 200000, 8000000, `<p:txBody><a:p><a:r><a:rPr sz="4000"/><a:t>${t}</a:t></a:r></a:p></p:txBody>`)}</p:sp>`;
+      const bul = t => `<a:p><a:pPr><a:buChar char="•"/></a:pPr>${run(t)}</a:p>`;
+      const cell = t => `<a:tc><a:txBody><a:bodyPr/><a:p><a:pPr><a:buChar char="•"/></a:pPr>${run(t)}</a:p></a:txBody></a:tc>`;
+      const tbl = (x, y, rows, w = 4000000) => `<p:graphicFrame><p:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="2000000"/></p:xfrm><a:graphic><a:graphicData><a:tbl><a:tblGrid/>${rows.map(r => `<a:tr h="1">${r.map(cell).join('')}</a:tr>`).join('')}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+      const sld = inner => `<p:sld><p:cSld><p:spTree>${inner}</p:spTree></p:cSld></p:sld>`;
+      writeFileSync(join(tmp, 'clara.pptx'), writeZip({
+        'ppt/slides/slide1.xml': sld(title('Le webinaire') + box(457200, 1500000, 8000000, ['<a:p>' + run('Clara Dienis') + '<a:br><a:rPr sz="2000"/></a:br>' + run('Account Executive') + '</a:p>'])),
+        'ppt/slides/slide2.xml': sld(title('Les enjeux') + box(457200, 1500000, 4000000, ['<a:p>' + run('En interne :') + '</a:p>']) + box(5000000, 1500000, 4000000, ['<a:p>' + run('L’État :') + '</a:p>'])
+          + box(5000000, 2200000, 4000000, [bul('Diminuer votre budget')]) + box(457200, 2200000, 4000000, [bul('Des outils modernes'), bul('Mieux collaborer')])),
+        'ppt/slides/slide3.xml': sld(title('Une journée') + box(457200, 1500000, 4000000, ['<a:p>' + run('Avant') + '</a:p>']) + box(5000000, 1500000, 4000000, ['<a:p>' + run('Après') + '</a:p>'])
+          + tbl(457200, 2200000, [['Livret introuvable'], ['Procédures éparpillées']]) + tbl(5000000, 2200000, [['Espace onboarding'], ['Base unique']])
+          + tbl(457200, 4500000, [['Offre', 'Prix'], ['Pro', '9 €']], 9000000)),
+      }, { paths: true }));
+      const { importPptx } = await import('../lib/import-pptx.mjs');
+      const cl = (await importPptx(join(tmp, 'clara.pptx'), join(tmp, 'clara'))).draft;
+      ok(/Clara Dienis\n/.test(cl) && /Account Executive/.test(cl) && !/DienisAccount/.test(cl), 'import: a line break inside a paragraph parts the two lines — a name never glued to the next word', cl.split('## Les enjeux')[0].slice(-200));
+      ok(/En interne :\n\n- Des outils modernes\n- Mieux collaborer\n\nL’État :\n\n- Diminuer votre budget/.test(cl), 'import: two columns are read one after the other, each heading with its own bullets', (cl.split('## Les enjeux')[1] || '').slice(0, 300));
+      ok(/Avant\n\n- Livret introuvable\n- Procédures éparpillées\n\nAprès\n\n- Espace onboarding\n- Base unique/.test(cl) && /::: table\n\| Offre \| Prix \|\n\|---\|---\|\n\| Pro \| 9 € \|\n:::/.test(cl), 'import: the text of a table is read — a one-column table as a list under its heading, a wider one as `::: table`', (cl.split('## Une journée')[1] || '').slice(0, 400));
+      ok(!JMD.lint(JMD.parse(cl)).some(f => f.level === 'error'), 'import: that draft lints without an error', JSON.stringify(JMD.lint(JMD.parse(cl)).filter(f => f.level === 'error')));
+    }
     if (process.env.JMD_TEST_PPTX && existsSync(process.env.JMD_TEST_PPTX)) {
       const out = execSync(`node bin/jmd.mjs import "${process.env.JMD_TEST_PPTX}" -o ${join(tmp, 'imp')}`, { cwd: root }).toString();
       ok(/\d+ slides, \d+ images/.test(out) && existsSync(join(tmp, 'imp/import-report.md')) && existsSync(join(tmp, 'imp/brand-draft.yaml')), 'jmd import: draft, media, brand draft and report written');
@@ -1134,7 +1161,7 @@ try {
     const refusedAll = Object.keys(KEYS).every(k => ['middle', 'LEFT', 'left;}body{display:none', '</style><script>alert(1)</script>', 'line"'].every(v => { try { validateBrand({ primary: '#000', [k]: v }); return false; } catch (e) { return e.message.startsWith('brand ' + k + ':'); } }));
     ok(Object.entries(KEYS).every(([k, vs]) => vs.every(v => validateBrand({ primary: '#000', [k]: v }))) && refusedAll, 'brand layout keys: the words of each pass, a value out of the list (a CSS fragment, markup, LEFT) is refused naming the key');
     let yamlErr = ''; try { customBrand(parseBrand('primary: "#123456"\nfooter-band: </style>'), 'x'); } catch (e) { yamlErr = e.message; }
-    ok(/^brand footer-band: .* is not one of none, line$/.test(yamlErr), 'a brand.yaml with a footer-band out of the list is refused, nothing built', yamlErr);
+    ok(/^brand footer-band: .* is not one of none, line, fill$/.test(yamlErr), 'a brand.yaml with a footer-band out of the list is refused, nothing built', yamlErr);
     // defaults: a brand that says none of them draws the very same page, and its CSS has no new variable
     const four = readFileSync(join(root, 'decks/samples/four-blocks.jmd'), 'utf8');
     const same = ['ocean', 'slate', ANY_BRAND].every(id => { const b = loadBrand(id), d = { ...b, align: 'center', 'footer-band': 'none', 'cover-logo': 'small', 'table-head': 'strong', 'chrome-label': 'mono', 'cover-case': 'normal', 'cover-bg': 'intent', 'logo-place': 'left' }; const a = JMD.render(JMD.parse(four), { brand: b }); return a === JMD.render(JMD.parse(four), { brand: d }) && !/brand-(align|band|logo|thead|label|title|cover-upper)|slide-band|data-status/.test(a); });
@@ -1443,6 +1470,28 @@ try {
     const z = readZip(await jmdLib.pptx(deck, { brand: charter(keys) }));
     ok(/<a:srgbClr val="163043"/i.test(z.text('ppt/slides/slide2.xml') || '') && z.names.some(n => /^ppt\/media\/.*\.(jpe?g|png)$/.test(n)) && /<p:pic>/.test(z.text('ppt/slides/slide1.xml') || ''),
       'PPTX: a chapter page keeps its colour, the cover its picture');
+    /* SFIL's ordinary pages and chapter pages (Nicolas, 2026-11-19): a grey band across the foot with the logo at its left and none at
+       the top; the chapter's mark an arrow, its logo at the bottom left, white on the dark pages, no band nor rule there */
+    {
+      const foot = keys + 'footer-band: fill\nfooter-band-color: "#f6f1ee"\nlogo-place: foot\nlogo-size: 6%\nsection-mark: arrow\n';
+      ok(refused('footer-band', ['solid']) && refused('logo-place', ['bottom']) && refused('section-mark', ['triangle']) && refused('footer-band-color', ['grey', '#f6f1e']),
+        'brand: footer-band fill, logo-place foot and section-mark arrow by name only; the band\'s colour a #hex');
+      const html2 = buildHtml({ jmd: deck, brand: charter(foot) });
+      ok(html2.includes('--brand-band-bg:#f6f1ee;') && /--brand-band-ink:#[0-9a-f]{6};/.test(html2), 'build: the band\'s colour and the words that read on it are custom properties of :root');
+      const f2 = join(tmp, 'foot.html'); writeFileSync(f2, html2);
+      const pg2 = await open('file://' + f2); await pg2.settle(300);
+      const g = JSON.parse(await pg2.eval(`(() => { const s = jamesJmd.state.slides, r = el => el && el.getBoundingClientRect(), H = s[0].getBoundingClientRect().height;
+        return JSON.stringify(s.map(x => { const band = x.querySelector('.slide-band'), logo = x.querySelector('.lockup svg'), bs = band && getComputedStyle(band), lb = r(logo), sb = r(x), bb = r(band);
+          return { c: x.className, band: bs ? bs.display !== 'none' && bs.backgroundColor : null, rule: bs ? bs.borderTopWidth : null, logoBottom: lb && sb ? (lb.top - sb.top) / sb.height : null,
+            inBand: lb && bb ? lb.top >= bb.top - 1 && lb.bottom <= bb.bottom + 1 : null, filter: logo ? getComputedStyle(logo).filter : '', clip: getComputedStyle(x.querySelector('.divider--big-n') || x, ':before').clipPath }; })); })()`));
+      await pg2.close();
+      const page = g.find(x => !/brand-section|slide--cover|brand-end/.test(x.c) && /brand-band-fill/.test(x.c)), secs = g.filter(x => /brand-section\b/.test(x.c));
+      ok(page && page.band === 'rgb(246, 241, 238)' && page.rule === '0px' && page.inBand === true && page.logoBottom > 0.9 && /brand-logo-foot/.test(page.c),
+        'footer-band: fill — the ordinary page wears a grey band across its foot, no rule, the logo inside it at the bottom left and none at the top', JSON.stringify(page));
+      ok(secs.length === 4 && secs.every(x => x.band === 'rgba(0, 0, 0, 0)' && x.rule === '0px' && x.logoBottom > 0.9 && (/brand-section-mark/.test(x.c) ? /polygon/.test(x.clip) : x.clip === 'none')) && /invert/.test(secs[0].filter) && !/invert/.test(secs[2].filter)
+        && g[0].band === false && g[g.length - 1].band === false,
+        'chapter pages: the mark is the arrow (a page without a mark has none), the logo at the bottom left (all white on a dark page, as drawn on a light one), no band nor rule; the cover and the end page carry no band', JSON.stringify(secs.map(x => [x.band, x.clip, x.filter])));
+    }
     /* Reading them from a PowerPoint (a fictional public lender's model, the shape of the one a customer sent on 2026-11-18): its
        dark 2 is black and its night blue is accent 1 and dark 1; its first slide lays a photograph on its right half; its chapter
        layouts are pages of one colour, each title in a colour of its own, a small square before a large « 01 »; its « Conclusion »
@@ -1456,26 +1505,33 @@ try {
       const fill = c => `<a:solidFill><a:schemeClr val="${c}"/></a:solidFill>`;
       const ph = (type, text, at, extra = '', idx = '') => `<p:sp><p:nvSpPr><p:cNvPr id="3" name="${type}"/><p:cNvSpPr/><p:nvPr><p:ph type="${type}"${idx}/></p:nvPr></p:nvSpPr><p:spPr>${at || ''}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle>${extra}</a:lstStyle><a:p><a:r><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
       const pic = (rid, at) => `<p:pic><p:nvPicPr><p:cNvPr id="8" name="Image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rid}"/><a:stretch/></p:blipFill><p:spPr>${at}</p:spPr></p:pic>`;
-      const chapter = (name, bg, ink, mark) => `<p:sldLayout ${P}><p:cSld name="${name}"><p:bg><p:bgPr>${fill(bg)}</p:bgPr></p:bg><p:spTree>`
+      /* SFIL's chapter mark (2026-11-19): an arrow pointing at the title — four corners, the right edge whole, the left a narrow tip */
+      const arrow = '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="417739" h="302656"><a:moveTo><a:pt x="417739" y="0"/></a:moveTo><a:lnTo><a:pt x="417739" y="302656"/></a:lnTo><a:lnTo><a:pt x="0" y="177744"/></a:lnTo><a:lnTo><a:pt x="0" y="127779"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom>';
+      const chapter = (name, bg, ink, mark, geom = '') => `<p:sldLayout ${P}><p:cSld name="${name}"><p:bg><p:bgPr>${fill(bg)}</p:bgPr></p:bg><p:spTree>`
         + ph('title', 'Titre de la section', xf(2200275, 3025001, 9737726, 553998), `<a:lvl1pPr><a:defRPr sz="4000" b="1">${fill(ink)}</a:defRPr></a:lvl1pPr>`)
         + ph('body', '01', xf(1100049, 2958531, 692497, 747897), `<a:lvl1pPr><a:defRPr sz="5400">${fill(ink)}</a:defRPr></a:lvl1pPr>`, ' idx="13"')
-        + `<p:sp><p:nvSpPr><p:cNvPr id="5" name="Carré"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="25"/></p:nvPr></p:nvSpPr><p:spPr>${xf(269965, 3063029, 659676, 477942)}${fill(mark)}</p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t> </a:t></a:r></a:p></p:txBody></p:sp>`
+        + `<p:sp><p:nvSpPr><p:cNvPr id="5" name="Carré"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="25"/></p:nvPr></p:nvSpPr><p:spPr>${xf(269965, 3063029, 659676, 477942)}${geom}${fill(mark)}</p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t> </a:t></a:r></a:p></p:txBody></p:sp>`
         + '</p:spTree></p:cSld></p:sldLayout>';
       const logoPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
       const lender = proposeBrand(writeZip({
-        'ppt/presentation.xml': `<p:presentation ${P}><p:sldMasterIdLst><p:sldMasterId id="1" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/></p:presentation>`,
-        'ppt/_rels/presentation.xml.rels': R(['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ['rId2', 'slide', 'slides/slide1.xml']),
+        'ppt/presentation.xml': `<p:presentation ${P}><p:sldMasterIdLst><p:sldMasterId id="1" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst><p:sldId id="256" r:id="rId2"/><p:sldId id="257" r:id="rId3"/></p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/></p:presentation>`,
+        'ppt/_rels/presentation.xml.rels': R(['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ['rId2', 'slide', 'slides/slide1.xml'], ['rId3', 'slide', 'slides/slide2.xml']),
         'ppt/theme/theme1.xml': `<a:theme ${A} name="t"><a:themeElements><a:clrScheme name="x"><a:dk1><a:srgbClr val="1B3550"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="000000"/></a:dk2><a:lt2><a:srgbClr val="F4EFEC"/></a:lt2>${['1B3550', '0B5A3A', 'F2B8A6', 'CCD0D3', 'CCDCD6', 'FAE5DD'].map((c, i) => `<a:accent${i + 1}><a:srgbClr val="${c}"/></a:accent${i + 1}>`).join('')}</a:clrScheme><a:fontScheme name="f"><a:majorFont><a:latin typeface="Arial"/></a:majorFont><a:minorFont><a:latin typeface="Arial"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>`,
         'ppt/slideMasters/slideMaster1.xml': `<p:sldMaster ${P}><p:cSld><p:spTree>${ph('title', 'Modifiez le style du titre')}${ph('ftr', 'Titre de la présentation')}</p:spTree></p:cSld><p:txStyles><p:titleStyle><a:lvl1pPr><a:defRPr>${fill('tx1')}</a:defRPr></a:lvl1pPr></p:titleStyle><p:bodyStyle><a:lvl1pPr><a:defRPr sz="1800">${fill('tx1')}</a:defRPr></a:lvl1pPr></p:bodyStyle></p:txStyles></p:sldMaster>`,
         'ppt/slideMasters/_rels/slideMaster1.xml.rels': R(['rId1', 'theme', '../theme/theme1.xml']),
         'ppt/slideLayouts/slideLayout1.xml': `<p:sldLayout ${P} type="title"><p:cSld name="Titre"><p:spTree>${pic('rId2', xf(254000, 254000, 1100000, 1234000))}${ph('ctrTitle', 'Titre de la présentation', xf(254000, 3088323, 6087836, 2387600))}</p:spTree></p:cSld></p:sldLayout>`,
         'ppt/slideLayouts/_rels/slideLayout1.xml.rels': R(['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml'], ['rId2', 'image', '../media/logo.png']),
-        'ppt/slideLayouts/slideLayout2.xml': chapter('Titre de section_Bleu', 'accent1', 'accent3', 'accent3'),
+        'ppt/slideLayouts/slideLayout2.xml': chapter('Titre de section_Bleu', 'accent1', 'accent3', 'accent3', arrow),
         'ppt/slideLayouts/slideLayout3.xml': chapter('Titre de section_Vert', 'accent2', 'bg2', 'bg2'),
         'ppt/slideLayouts/slideLayout4.xml': `<p:sldLayout ${P}><p:cSld name="Conclusion_Blanc"><p:spTree>${pic('rId2', xf(4000000, 1300000, 4192000, 2600000))}<p:sp><p:nvSpPr><p:cNvPr id="4" name="Adresse"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${xf(5077933, 5617277, 2036135, 859723)}</p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>Immeuble Exemple</a:t></a:r><a:br/><a:r><a:t>1 rue de l'Exemple</a:t></a:r></a:p><a:p><a:r><a:t>75000 Paris</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sldLayout>`,
         'ppt/slideLayouts/_rels/slideLayout4.xml.rels': R(['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml'], ['rId2', 'image', '../media/logo.png']),
         'ppt/slides/slide1.xml': `<p:sld ${P}><p:cSld><p:spTree>${pic('rId2', xf(6677313, 1270000, 5514687, 4549503))}${ph('ctrTitle', 'Titre de la présentation sur deux lignes')}</p:spTree></p:cSld></p:sld>`,
         'ppt/slides/_rels/slide1.xml.rels': R(['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'image', '../media/photo.jpeg']),
+        /* the ordinary page (2026-11-19): a grey band of 40 pt across the foot, the logo small at its left, nothing at the top */
+        'ppt/slideLayouts/slideLayout5.xml': `<p:sldLayout ${P}><p:cSld name="Titre et contenu"><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="9" name="Rectangle"/><p:cNvSpPr/><p:nvPr userDrawn="1"/></p:nvSpPr><p:spPr>${xf(0, 6350000, 12192000, 508000)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="F6F1EE"/></a:solidFill></p:spPr></p:sp>${ph('title', 'Titre principal', xf(254000, 254000, 11684000, 431800))}${pic('rId2', xf(190500, 6388100, 609600, 431800))}</p:spTree></p:cSld></p:sldLayout>`,
+        'ppt/slideLayouts/_rels/slideLayout5.xml.rels': R(['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml'], ['rId2', 'image', '../media/logo.png']),
+        'ppt/slides/slide2.xml': `<p:sld ${P}><p:cSld><p:spTree>${ph('title', 'Une page')}</p:spTree></p:cSld></p:sld>`,
+        'ppt/slides/_rels/slide2.xml.rels': R(['rId1', 'slideLayout', '../slideLayouts/slideLayout5.xml']),
         'ppt/media/photo.jpeg': jpg, 'ppt/media/logo.png': logoPng,
       }, { paths: true }), { fonts: ['Arial'] });
       const val = k => (lender.found.find(f => f.key === k) || {}).value;
@@ -1487,6 +1543,9 @@ try {
         'PowerPoint → brand: the photograph on the first slide becomes the cover picture, on the right, at its 45% of the width — its bytes handed over as they are, the logo not taken for it');
       ok(val('end-page') === 'logo' && val('end-text') === 'Immeuble Exemple · 1 rue de l\'Exemple · 75000 Paris' && !/Conclusion/.test(lender.missing.map(m => m.en).join(' ')),
         'PowerPoint → brand: the « Conclusion » layout gives the end page — its logo large in the middle, its address line by line under it', val('end-text'));
+      ok(val('footer-band') === 'fill' && val('footer-band-color') === '#f6f1ee' && lender.found.filter(f => f.key === 'footer-band').length === 1 && val('logo-place') === 'foot' && val('logo-size') === '6%' && val('section-mark') === 'arrow'
+        && /^footer-band: fill$/m.test(lender.spec) && /^footer-band-color: "#f6f1ee"$/m.test(lender.spec) && /^logo-place: foot$/m.test(lender.spec) && /^section-mark: arrow$/m.test(lender.spec) && validateBrand(parseBrand(lender.spec.replace(/^logo:.*$/m, ''))),
+        'PowerPoint → brand: the grey rectangle across the foot of the ordinary layout is a band of colour, the small picture at its left is the logo at the foot, and the chapter\'s four-cornered tip an arrow (SFIL, Nicolas 2026-11-19)', lender.spec);
     }
   }
 
@@ -1932,6 +1991,15 @@ try {
     const widths = async src => { await pm.eval(`jamesJmd.load(${JSON.stringify(src)}, "w.jmd"); true`); await pm.settle(400); return JSON.parse(await pm.eval(`JSON.stringify([...document.querySelectorAll('.table-wrap')].map(w => ({ over: w.querySelector('table').scrollWidth - w.clientWidth, tight: w.classList.contains('is-tight') })))`)); };
     const slashed = await widths(wideTable('Annual (trimestrielleannuelle/semestriellemensuelle if > 500 €)')), long = await widths(wideTable('Annual (trimestrielleannuellesemestriellemensuelleintergouvernementale if > 500 €)')), plain = await widths(wideTable('Annual'));
     ok(slashed.every(t => t.over <= 1 && !t.tight) && long.every(t => t.over <= 1 && t.tight) && plain.every(t => !t.tight), 'table: a long word breaks at its `/`; one with none breaks inside rather than push the last column off the page; a table that fits is left alone', JSON.stringify({ slashed, long, plain }));
+    /* A card is never narrower than its longest word (#135, Clara's webinar: five cards beside a `.right` picture, « Pseudonymisation »
+       across the next card). And the yellow column of a `problem` compare keeps its bullets (yellow dots on yellow, gone). */
+    const fiveCards = (right) => '---\nformat: jmd/3\nlayout: slide\n---\n\n---\nintent: prove\n---\n## SafeBrain au service des collectivités\n\n::: cards\n### Souveraineté\nVos données restent en France.\n\n### Pseudonymisation\nVous respectez le RGPD.\n\n### Multi-LLM\nLa bonne IA pour le bon usage.\n\n### Agents dédiés\nVous automatisez les tâches répétitives de votre équipe.\n\n### Tableaux de bord\nVous pilotez les usages et maîtrisez les coûts.\n:::\n' + (right ? '\n![](shot.png){.right}\n' : '');
+    const cardsOf = async src => { await pm.eval(`jamesJmd.load(${JSON.stringify(src)}, "c.jmd"); true`); await pm.settle(400); return JSON.parse(await pm.eval(`JSON.stringify({ over: [...document.querySelectorAll('.card :is(h3,p,li)')].filter(t => t.scrollWidth > t.clientWidth + 1).map(t => t.textContent), cols: getComputedStyle(document.querySelector('.cards')).gridTemplateColumns.split(' ').length, fit: jamesJmd.state.lint.filter(f => f.rule === 'fit' && f.block === 'cards').length })`)); };
+    const narrow = await cardsOf(fiveCards(true)), roomy = await cardsOf(fiveCards(false).replace(/\n### Agents dédiés[\s\S]*?(?=:::)/, '\n'));
+    ok(!narrow.over.length && narrow.cols < 5 && narrow.fit === 1 && roomy.cols === 3 && !roomy.fit, 'cards: beside a `.right` picture, five cards whose words do not fit are set on fewer columns, said as a fit warning; cards whose words fit are left alone', JSON.stringify({ narrow, roomy }));
+    await pm.eval(`jamesJmd.load(${JSON.stringify('---\nformat: jmd/3\nlayout: slide\n---\n\n---\nintent: problem\n---\n## Les enjeux\n\n::: compare\n### En interne\n- Des outils modernes\n\n### L’État\n- Diminuer votre budget\n:::\n')}, "p.jmd"); true`); await pm.settle(300);
+    const dots = JSON.parse(await pm.eval(`JSON.stringify([...document.querySelectorAll('.compare .col')].map(c => ({ bg: getComputedStyle(c).backgroundColor, dot: getComputedStyle(c.querySelector('li'), '::before').backgroundColor })))`));
+    ok(dots.length === 2 && dots.every(d => d.dot !== d.bg), 'compare: on a `problem` slide each column\'s bullets stand out from its own background', JSON.stringify(dots));
     await pm.close();
     const emptyPage = '---\nformat: jmd/3\nlayout: memo\npages: fixed\ntitle: E\n---\n\n---\n---\n## Half a page\n\n- One line.\n';
     const pe = await open('file://' + join(root, 'build/note.james-jmd.html')); await pe.settle(200);

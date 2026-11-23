@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.56.1';
+  var VERSION = '1.57.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -1942,9 +1942,13 @@ globalThis.JMD = (function () {
     // the cover's logo in a bottom corner (iteration 3: VYV3's, large, inside the cover's flower), at its own distance from the corner
     if (ctx.layout === 'slide' && (b['cover-logo-place'] === 'bottom-left' || b['cover-logo-place'] === 'bottom-right')) out.push('brand-cover-logo-bottom', 'brand-cover-logo-' + (b['cover-logo-place'] === 'bottom-left' ? 'bl' : 'br'));
     if (hasBand(ctx)) out.push('brand-band');
+    // …a band of colour rather than a rule (2026-11-19, SFIL): on the ordinary pages; a cover, a chapter page and the end page keep none
+    if (hasBand(ctx) && b['footer-band'] === 'fill') out.push('brand-band-fill');
+    // the logo at the foot, bottom left, none at the top (2026-11-19, SFIL) — a Slide's pages; the cover keeps its own
+    if (ctx.layout === 'slide' && b['logo-place'] === 'foot') out.push('brand-logo-foot');
     if (b['cover-logo'] === 'large') out.push('brand-logo-large');
     // the logo at the height the charter draws it (2026-11-16), a share of a Slide's page: the build sets the size, the page says it
-    if (ctx.layout === 'slide' && isSize(b['logo-size'])) out.push('brand-logo-sized');
+    if (ctx.layout === 'slide' && isSize(b['logo-size']) && b['logo-place'] !== 'foot') out.push('brand-logo-sized'); // at the foot, engine.css sizes it there
     if (ctx.layout === 'slide' && isSize(b['cover-logo-size'])) out.push('brand-cover-logo-sized');
     if (b['table-head'] === 'light') out.push('brand-thead-light');
     if (b['chrome-label'] === 'body') out.push('brand-label-body');
@@ -1953,6 +1957,7 @@ globalThis.JMD = (function () {
     if (b['title-color']) out.push('brand-title');
     if (b['cover-case'] === 'upper') out.push('brand-cover-upper');
     if (b['section-number'] === 'large') out.push('brand-secnum-large');
+    if (b['section-mark'] === 'arrow') out.push('brand-secmark-arrow'); // the chapter's mark drawn as the charter's arrow (2026-11-19, SFIL)
     return out;
   }
   /* The chapter pages of a brand as the page knows them: the build hands [{ dark, mark }] (the colours are custom properties); a
@@ -1968,7 +1973,7 @@ globalThis.JMD = (function () {
     }).filter(Boolean);
   }
   function isSize(v) { var m = /^\s*(\d{1,2}(?:\.\d)?)\s*%?\s*$/.exec(String(v == null ? '' : v)); return !!m && +m[1] >= 3 && +m[1] <= 60; }
-  function hasBand(ctx) { return (ctx.brand || {})['footer-band'] === 'line' && (ctx.layout === 'slide' || ctx.layout === 'story'); }
+  function hasBand(ctx) { var f = (ctx.brand || {})['footer-band']; return (f === 'line' || f === 'fill') && (ctx.layout === 'slide' || ctx.layout === 'story'); }
   /* A thin rule at the foot of the page: the brand's `footer:` on the left (the organisation's full name), the deck's `date:`
      and the page number on the right, in the body font. The number is marked so that the PowerPoint export writes it as the
      slide-number field of the layout the band becomes there (lib/pptx.mjs). */
@@ -2413,6 +2418,28 @@ globalThis.JMD = (function () {
       if (t && t.scrollWidth > w.clientWidth + 1) w.classList.add('is-tight');
     });
   }
+  /* A card is never narrower than its longest word (#135): five cards beside a `.right` picture got some 100px each, and
+     « Pseudonymisation » ran out of its card over the next one — the linter read heights only. A row of cards with a word wider
+     than its card is set again on fewer columns (half as many, down to two), and a word still too long after that breaks inside
+     itself rather than cross into the next card. Said as a `fit` warning: the slide is shown, not as it was written. */
+  function fitCards(track, out) {
+    var slides = [].slice.call(track.querySelectorAll('.slide'));
+    Array.prototype.forEach.call(track.querySelectorAll('.cards'), function (c) {
+      c.style.gridTemplateColumns = ''; c.classList.remove('is-tight');
+      var cards = [].slice.call(c.children).filter(function (el) { return el.classList.contains('card'); });
+      var over = function () {
+        return cards.some(function (k) {
+          return [].some.call(k.querySelectorAll('h3, p, li'), function (t) { return t.scrollWidth > t.clientWidth + 1; });
+        });
+      };
+      if (cards.length < 3 || !over()) return;
+      var cols = getComputedStyle(c).gridTemplateColumns.split(' ').filter(Boolean).length, k = cols;
+      while (k > 2 && over()) { k = Math.max(2, Math.ceil(k / 2)); c.style.gridTemplateColumns = 'repeat(' + k + ', minmax(0, 1fr))'; }
+      if (over()) c.classList.add('is-tight');
+      if (out) out.push({ level: 'warning', slide: slides.indexOf(c.closest('.slide')) + 1, block: 'cards', rule: 'fit', message: 'a word is wider than its card: the ' + cards.length + ' cards are shown on ' + k + ' columns' + (c.classList.contains('is-tight') ? ', the word broken' : '') + ' — fewer cards, shorter titles, or the picture on a slide of its own keeps the row' });
+    });
+    return out;
+  }
   function fitOverflow(track, out, lay) {
     var page = PAGES[lay] || PAGES.slide, slides = track.querySelectorAll('.slide');
     if (!page.limit || page.sheets) return out; // a long document is never shrunk: its text goes on to the next sheet
@@ -2640,5 +2667,5 @@ globalThis.JMD = (function () {
     return out;
   }
 
-  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, layoutWord: layoutWord, memoFlows: memoFlows, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withoutChapter: withoutChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, fitTables: fitTables, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
+  return { VERSION: VERSION, FORMAT_MAX: FORMAT_MAX, upgrade: upgrade, LAYOUTS: LAYOUTS, PAGES: PAGES, layout: layout, layoutWord: layoutWord, memoFlows: memoFlows, fileName: fileName, withTitle: withTitle, withChapter: withChapter, withoutChapter: withoutChapter, withHeader: withHeader, parse: parse, render: render, lint: lint, fitOverflow: fitOverflow, fitTables: fitTables, fitCards: fitCards, lintOverflow: lintOverflow, paginate: paginate, placeGlyphs: placeGlyphs, FIT_MIN: FIT_MIN, assets: assets, BLOCKS: BLOCKS, BGS: BGS, INTENTS: INTENTS, INTENT_BG: INTENT_BG, INTENT_ABOUT: INTENT_ABOUT, SHAPES: SHAPES, CONTEXT_HINTS: CONTEXT_HINTS, esc: esc, inline: inline };
 })();
