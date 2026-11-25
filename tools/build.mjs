@@ -68,6 +68,13 @@ export const DEFAULT_BRAND = process.env.JMD_DEFAULT_BRAND || 'mono';
    there fails differently from a file that is not — an oracle for which paths exist. Hosted, the answer is the same
    sentence whether or not the file is there, which is what closes the last of the three. mcp/tools.mjs setHosted flips it. */
 let brandPaths = true;
+/* What reaches the brands folder is an id, and only an id: lowercase letters, digits and dashes, no dot, no slash, no
+   backslash, no `%`, no NUL — nothing `join()` could walk out of themes/brands with. Before, `../../somewhere/x` (no `.yaml`
+   at the end, so not taken for a path, so never stopped by setBrandPaths) was joined onto the folder and read, hosted too:
+   any .yaml of the server's disk as a brand, one of its lines quoted back by a shape error, and which files exist. The same
+   sentence answers every such name, wherever it came from (an argument, a deck's `brand:` line, the CLI, the editor). */
+export const BRAND_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const BRAND_NOT_A_PATH = () => 'brand: a path is not a brand on this server, which has no disk of yours to read — name one of the brands (' + brands().map(b => b.id).join(', ') + '), the https URL of a brand.yaml, or pass the YAML itself';
 export function setBrandPaths(v) { brandPaths = !!v; }
 
 export function loadBrand(name = DEFAULT_BRAND) {
@@ -76,9 +83,11 @@ export function loadBrand(name = DEFAULT_BRAND) {
   if (ALIASES[name]) name = ALIASES[name];
   if (/\n/.test(name) || /^[a-z][\w-]*:\s/i.test(name)) return customBrand(parseBrand(name), 'custom');
   if (/\.ya?ml$/.test(name)) {
-    if (!brandPaths) throw new Error('brand: a path is not a brand on this server, which has no disk of yours to read — name one of the brands (' + brands().map(b => b.id).join(', ') + '), the https URL of a brand.yaml, or pass the YAML itself');
+    if (!brandPaths) throw new Error(BRAND_NOT_A_PATH());
     if (existsSync(name)) { const b = customBrand(parseBrand(readFileSync(name, 'utf8')), basename(name).replace(/\.ya?ml$/, '')); b.decorDir = dirname(realpathSync(name)); return b; } // a decor .svg beside it is read from there
+    throw new Error(`brand file not found: ${name}`); // locally only: the disk is the caller's own
   }
+  if (!BRAND_ID.test(name)) throw new Error(BRAND_NOT_A_PATH());
   const file = join(brandsDir, name + '.yaml');
   if (!existsSync(file)) throw new Error(`unknown brand "${name}": not one of ${brands().map(b => b.id).join(', ')}, nor a .yaml path, URL or YAML text`);
   const b = withDecor(validateBrand(parseBrand(readFileSync(file, 'utf8')), { marks: marks() })); b.id = name; b.decorDir = brandsDir; return b;

@@ -1657,6 +1657,29 @@ try {
       'hosted a path is not a brand at all, and the refusal is one sentence whether the file is there or not: no file read, no line of it quoted back, no way to learn which paths exist', JSON.stringify([there.slice(0, 40), notThere === there]));
     ok(!lineOf.includes('A-LINE-OF-A-FILE-NOBODY-ASKED-FOR') && loadBrand('mono').id === 'mono' && loadBrand('primary: "#112233"').id === 'custom',
       'and what still works is what a caller is meant to name: an id, or the YAML itself', lineOf.slice(0, 60));
+    /* A name that is not a `.yaml` was taken for an id and joined onto themes/brands as it came — `../../x` walked out of the
+       folder and read x.yaml wherever it was, hosted too, since setBrandPaths only stopped names ending in `.yaml` (confirmed
+       hole, closed: reproduced here first). An id is `[a-z0-9-]`, nothing else; every other shape gets the one sentence, in
+       both modes, from every door: loadBrand, resolveBrand, buildHtml on a deck's `brand:` line, the CLI's --brand. */
+    const { mkdirSync: mkd, rmSync: rmd } = await import('node:fs');
+    const walkDir = join(root, 'build/brand-walk'); mkd(walkDir, { recursive: true });
+    writeFileSync(join(walkDir, 'outside.yaml'), 'name: READ-FROM-DISK\nprimary: "#010203"\n');
+    const walk = '../../build/brand-walk/outside', jl = await import('../lib/jmd.mjs');
+    const shapes = [walk, '..\\..\\build\\brand-walk\\outside', '%2e%2e/%2e%2e/build/brand-walk/outside', join(walkDir, 'outside'), './outside', '.hidden', 'ocean/../ocean', 'ocean\0', 'marks/dot', 'legacy/jamespot-2025', 'a b'];
+    const says = async (f, mode) => { setBrandPaths(mode); try { const b = await f(); return '(read it: ' + (b && (b.primary || b.length)) + ')'; } catch (e) { return e.message; } finally { setBrandPaths(true); } };
+    const refusals = [];
+    for (const mode of [true, false]) for (const sh of shapes) {
+      refusals.push(await says(() => loadBrand(sh), mode), await says(() => jl.resolveBrand(sh), mode));
+      if (sh.includes('\0')) continue; // a deck's line carries no NUL to test
+      refusals.push(await says(() => jl.resolveBrand(null, `---\nformat: jmd/3\nbrand: ${sh}\n---\n# T\n`), mode), await says(() => buildHtml({ jmd: `---\nformat: jmd/3\nbrand: ${sh}\n---\n# T\n` }), mode));
+    }
+    const notAPath = refusals.every(r => r === refusals[0]) && /a path is not a brand/.test(refusals[0]) && !refusals.some(r => /READ-FROM-DISK|010203|read it/.test(r));
+    ok(notAPath, 'adversarial: a brand that looks like a path (`../`, `\\`, `%2e`, absolute, a leading dot, NUL, a sub-folder) never reaches the disk — one refusal, local or hosted, as an argument or a deck\'s `brand:` line', JSON.stringify([...new Set(refusals)]).slice(0, 300));
+    let cliSays = ''; try { execSync(`node bin/jmd.mjs build decks/samples/four-blocks.jmd -o ${join(tmp, 'walk.html')} --brand ${walk}`, { cwd: root, stdio: 'pipe' }); cliSays = '(built)'; } catch (e) { cliSays = e.stderr.toString(); }
+    ok(/a path is not a brand/.test(cliSays) && !existsSync(join(tmp, 'walk.html')), 'adversarial: the CLI\'s --brand refuses a path that is not a .yaml, same sentence', cliSays.slice(0, 160));
+    ok(loadBrand('Ocean').id === 'ocean' && (!HOUSE || loadBrand('jamespot-basic').id === 'jamespot') && loadBrand(join(walkDir, 'outside.yaml')).name === 'READ-FROM-DISK', // the house brand is not in the public tree
+      'and the ids (any case, the old aliases) still resolve, and locally a .yaml path still does');
+    rmd(walkDir, { recursive: true, force: true });
     ok(!/["<>{};]/.test(cssStr(fontAttack)) && cssStr('Helvetica Neue') === 'Helvetica Neue', 'interpolation escapes CSS anyway: nothing can close a string, a rule or the <style>');
     const built0 = buildHtml({ jmd: adversarial, name: 'x"><script>alert(0)</script>.jmd', brand: 'name: "Acme */</style><script>alert(0)</script>"\nprimary: "#112233"', dir: deckDir });
     ok(!built0.includes('<script>alert(0)') && built0.includes('data-name="x&quot;&gt;&lt;script&gt;'), 'the deck name and the brand name are escaped where they land (attribute, CSS comment)');
