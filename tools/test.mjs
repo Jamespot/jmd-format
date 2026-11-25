@@ -862,6 +862,10 @@ try {
     ok(bad.some(f => f.level === 'info' && f.rule === 'intent-bg'), 'intent + bg: the bg is ignored, said as info');
     const story = bad.filter(f => f.rule.startsWith('story-')).map(f => f.rule).sort();
     ok(JSON.stringify(story) === JSON.stringify(['story-close', 'story-open', 'story-tension']), 'the story linter warns: no hook to open, no act/recap to close, two problems without a reveal (' + story.join(' ') + ')');
+    // #145: the deck's name written as a quote never gets the theme's cover — said, with the `#` to write instead
+    const quoted = r => JMD.lint(JMD.parse('---\nformat: jmd/3\nlayout: ' + r + '\ntitle: t\n---\n---\nnotes: n\n---\n::: statement\nThe Beatles story\nFour lads from Liverpool.\n:::\n---\n\n---\n## Next\nText.\n')).filter(f => f.rule === 'cover-quote');
+    ok(quoted('slide').length === 1 && quoted('slide')[0].level === 'warning' && quoted('slide')[0].message.includes('# The Beatles story'), 'a deck that opens on a statement is told to open on a `#` cover, its words given back');
+    ok(quoted('webpage').length === 0 && JMD.lint(JMD.parse('---\nformat: jmd/3\nlayout: slide\ntitle: t\n---\n# The Beatles\nLead.\n---\n::: statement\nA quote\n:::\n')).every(f => f.rule !== 'cover-quote'), 'a `#` cover, a statement further on, or a webpage: nothing said');
     const team = readFileSync(join(root, 'decks/samples/team-update.jmd'), 'utf8');
     ok(JMD.lint(JMD.parse(team)).filter(f => f.level !== 'info').length === 0, 'team-update (ten intents, one each) has no warning at all');
     // a statement never takes what else was written on its page (1.37.1: Circuit's cover lost its title, lead and cards)
@@ -1199,8 +1203,9 @@ try {
         label: cs(s[1].querySelector('.chrome-meta'), 'textTransform'), labelInk: cs(s[1].querySelector('.chrome-meta'), 'color'), labelDark: cs(s[3].querySelector('.chrome-meta'), 'color'), labelFont: cs(s[1].querySelector('.chrome-meta'), 'fontFamily') === cs(s[0], 'fontFamily'),
         thBg: cs(s[4].querySelector('.table thead th'), 'backgroundColor'), thInk: cs(s[4].querySelector('.table thead th'), 'color') }); })()`));
     await cp.close();
+    // Chrome 158 serialises `align-items: flex-start` as `flow-start` (2026-11-25, seen on the CI and a laptop alike): the same start
     const rgbHex = h => 'rgb(' + [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)).join(', ') + ')';
-    ok(got.cover === 'left' && got.coverItems === 'flex-start' && got.divider === 'left' && got.act === 'left', 'align: left — the cover, a divider and a centred intent (act) start on the left', JSON.stringify(got));
+    ok(got.cover === 'left' && /^(flex|flow)-start$/.test(got.coverItems) && got.divider === 'left' && got.act === 'left', 'align: left — the cover, a divider and a centred intent (act) start on the left', JSON.stringify(got));
     ok(got.tag === 'none' && got.band && got.bandBottom < 0, 'footer-band: line — the band is in the body font, inside the page, and the corner number gives way to it', JSON.stringify(got));
     ok(Math.abs(got.logoW / got.logoH - 3) < 0.05 && Math.abs(got.logoH / got.smallH - 76 / 30) < 0.1, 'cover-logo: large — the block is 76 against 30 px high on the cover (the page is scaled to the window), at its own proportions, small in the other pages\' header', JSON.stringify(got));
     ok(got.thBg === rgbHex(th.bg) && got.thInk === rgbHex(th.ink), 'table-head: light — the header in the tint, its words in ink', JSON.stringify(got));

@@ -4,7 +4,7 @@
 globalThis.JMD = (function () {
   'use strict';
 
-  var VERSION = '1.58.0';
+  var VERSION = '1.59.0';
   var FORMAT_MAX = 3;
   /* What the words of a past format meant (spec/jmd.md § Versioning). A word that changes meaning moves the format up and
      leaves a step here: parse() brings a document up to the current meaning, step after step, so a deck written in an older
@@ -2364,6 +2364,12 @@ globalThis.JMD = (function () {
       if ((counts.fun || 0) > Math.max(1, Math.floor(N / 10))) warn(0, null, 'story-fun', counts.fun + ' fun slides in ' + N + ': one per ten is plenty');
       if ((counts.hook || 0) > 1) warn(0, null, 'story-hook', counts.hook + ' hook slides: one opens the deck');
     }
+    /* The deck's name written as a quote (2026-11-24, #145): a first slide that is a `statement` or a `quote` and nothing else
+       is drawn as a quotation — its mark, no title page — and the theme's cover (its picture, its logo, its title page) never
+       comes: a charter's cover is drawn on a `#` title only. Said whether or not the deck uses intents. */
+    var first = doc.slides[0];
+    if (first && ['slide', 'story'].indexOf(layout(doc)) >= 0 && doc.slides.length > 1 && first.nodes.length === 1 && first.nodes[0].type === 'block' && ['statement', 'quote'].indexOf(first.nodes[0].name) >= 0)
+      warn(1, first.nodes[0].name, 'cover-quote', 'the deck opens on a `::: ' + first.nodes[0].name + '`, drawn as a quotation: the theme\'s cover (its title page, its picture, its logo) is drawn on a `#` title — open with `# ' + cut(String(first.nodes[0].lines.find(function (l) { return l.trim(); }) || 'Title').trim(), 50) + '` and its lead on the next line');
 
     if (ctx && ctx.assets) {
       assets(doc).forEach(function (a) {

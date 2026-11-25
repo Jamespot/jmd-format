@@ -55,7 +55,7 @@ A slide may carry `intent:` in its frontmatter — one of ten, what you want the
 | make people laugh | `fun` | tilted title, leaning cards, the brand glyph winking |
 | trigger the action | `act` | one CTA, and it dominates |
 
-The arc matters: open on `hook` (or a cover), close on `act` or `recap`, never two `hook`s, at most one `fun` per ten slides, a `problem` deserves a `reveal`. The linter reads the story and warns.
+The arc matters: open on a cover — a `#` title and its lead, which the theme draws as its title page (a charter's picture and logo come there, never on a `statement`) — or on `hook`; close on `act` or `recap`, never two `hook`s, at most one `fun` per ten slides, a `problem` deserves a `reveal`. The linter reads the story and warns.
 
 ## Form: the block follows the meaning
 
